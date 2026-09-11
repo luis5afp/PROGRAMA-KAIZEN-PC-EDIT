@@ -80,9 +80,10 @@ async function append(entry, body, opts = {}) {
       row.bodyBytes = buf.length
       row.bodySha256 = hash(buf)
       row.bodyEncoding = opts.encoding || "raw-bytes"
-      if (opts.text || textMime(mime)) row.bodyText = buf.toString("utf8")
+      if ((opts.text || textMime(mime)) && buf.length <= 256 * 1024) row.bodyText = buf.toString("utf8")
       learnProfileNamesFromBody(buf, mime)
     }
+    if (body == null && row.bodyText && textMime(entry.mimeType || "")) { try { learnProfileNamesFromBody(Buffer.from(String(row.bodyText), "utf8"), entry.mimeType || "") } catch {} }
     const line = `${JSON.stringify(row)}\n`
     await fsp.appendFile(path.join(dir, "conexion"), line, "utf8")
     await fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8")
@@ -120,7 +121,7 @@ function collector(name, mime) {
         bytes += b.length
         h.update(b)
         if (stream) stream.write(b)
-        if (keepText) { texts.push(b); textBytes += b.length }
+        if (keepText && textBytes < 256 * 1024) { const remain = 256 * 1024 - textBytes; texts.push(b.subarray(0, remain)); textBytes += Math.min(remain, b.length) }
       } catch {}
     },
     end(cb) {
@@ -128,7 +129,7 @@ function collector(name, mime) {
         let bodySha256 = ""
         try { bodySha256 = h.digest("hex") } catch {}
         const meta = { bodyFile: relative, bodyBytes: bytes, bodySha256, bodyEncoding: "raw-bytes" }
-        if (keepText) { try { meta.bodyText = Buffer.concat(texts, textBytes).toString("utf8") } catch {} }
+        if (keepText && bytes <= 256 * 1024) { try { meta.bodyText = Buffer.concat(texts, textBytes).toString("utf8") } catch {} }
         cb(meta)
       }
       try { stream ? stream.end(done) : done() } catch { done() }
