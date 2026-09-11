@@ -1,5 +1,9 @@
-owner: clubbusinesslatam526-glitch
-repo: appcbl
+# KAIZEN custom build.
+# Automatic update checks are disabled by app/main.no-updates.js.
+# This metadata no longer points at the upstream appcbl repository, so an
+# accidental future re-enable cannot silently pull upstream builds.
+owner: luis5afp
+repo: PROGRAMA-KAIZEN-PC-EDIT
 provider: github
-private: false
-updaterCacheDirName: kaizen-updater
+private: true
+updaterCacheDirName: kaizen-updater-disabled
