@@ -37,12 +37,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! gh release view v1.5.2 >/dev/null 2>&1; then
+          if ! gh release view v1.5.2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create v1.5.2 \
+              --repo "$GITHUB_REPOSITORY" \
               --title "KAIZEN 1.5.2" \
               --notes "Mirror de la versión KAIZEN v1.5.2 publicada originalmente en clubbusinesslatam526-glitch/appcbl. Assets copiados y verificados automáticamente."
           fi
           gh release upload v1.5.2 \
+            --repo "$GITHUB_REPOSITORY" \
             KAIZEN-Setup-1.5.2.exe \
             KAIZEN-Setup-1.5.2.exe.blockmap \
             latest.yml \
