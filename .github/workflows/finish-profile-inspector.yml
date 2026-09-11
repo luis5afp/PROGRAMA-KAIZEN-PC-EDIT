@@ -1,0 +1,79 @@
+name: Finish profile Chrome inspector
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch connection inspector
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/inspector/connectionCapture.js')
+          s = p.read_text(encoding='utf-8')
+
+          old = 'const { BACKEND_HOST } = require("../config")\n'
+          new = old + 'const { inspectChromeSpawn, stopAllProfileCaptures, learnProfileNamesFromBody } = require("./profileChromeCapture")\n'
+          if 'require("./profileChromeCapture")' not in s:
+              if old not in s: raise SystemExit('import anchor missing')
+              s = s.replace(old, new, 1)
+
+          old = 'const attached = new WeakSet()\n'
+          new = old + 'const writeQueues = new Map()\n'
+          if 'const writeQueues = new Map()' not in s:
+              if old not in s: raise SystemExit('queue anchor missing')
+              s = s.replace(old, new, 1)
+
+          old = '''      if (opts.text || textMime(mime)) row.bodyText = buf.toString("utf8")\n    }\n    const line = `${JSON.stringify(row)}\\n`\n    await Promise.all([\n      fsp.appendFile(path.join(dir, "conexion"), line, "utf8"),\n      fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8"),\n    ])\n  } catch (e) {\n    console.warn("[inspector] conexion write skipped:", e?.message || e)\n  }\n}\nconst enqueue = (entry, body, opts) => setImmediate(() => void append(entry, body, opts))\n'''
+          new = '''      if (opts.text || textMime(mime)) row.bodyText = buf.toString("utf8")\n      learnProfileNamesFromBody(buf, mime)\n    }\n    const line = `${JSON.stringify(row)}\\n`\n    await fsp.appendFile(path.join(dir, "conexion"), line, "utf8")\n    await fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8")\n  } catch (e) {\n    console.warn("[inspector] conexion write skipped:", e?.message || e)\n  }\n}\nfunction queueWrite(key, job) {\n  const prev = writeQueues.get(key) || Promise.resolve()\n  const next = prev.then(job, job).catch(e => console.warn("[inspector] queued conexion write skipped:", e?.message || e))\n  writeQueues.set(key, next)\n  next.finally(() => { if (writeQueues.get(key) === next) writeQueues.delete(key) })\n  return next\n}\nconst enqueue = (entry, body, opts) => setImmediate(() => { const key = dayDir(); void queueWrite(key, () => append(entry, body, opts)) })\n'''
+          if 'function queueWrite(key, job)' not in s:
+              if old not in s: raise SystemExit('append block anchor missing')
+              s = s.replace(old, new, 1)
+
+          start = s.find('function patchProxySpawn() {')
+          end = s.find('\nfunction attachRenderer(wc)', start)
+          if start < 0 or end < 0: raise SystemExit('spawn patch anchors missing')
+          replacement = '''function patchProxySpawn() {\n  if (spawnPatched) return\n  spawnPatched = true\n  const original = childProcess.spawn\n  childProcess.spawn = function (command, args, options) {\n    const child = original.apply(this, arguments)\n    try {\n      const list = Array.isArray(args) ? args.map(String) : []\n      const p = list.find(x => x.startsWith("--proxy="))\n      if (p && list.some(x => /proxyServer\\.js$/i.test(x.replace(/\\\\/g, "/")))) {\n        const local = list.find(x => x.startsWith("--port="))\n        enqueue({ type: "PROXY", source: "proxy-relay-launch", direction: "local-config", ...parseProxy(p.slice(8)), LocalRelayPort: local ? Number(local.slice(7)) || 0 : 0 })\n      }\n      inspectChromeSpawn(command, args, child)\n    } catch {}\n    return child\n  }\n}\n'''
+          s = s[:start] + replacement + s[end:]
+
+          old = '  patchProxySpawn()\n  app.on("browser-window-created", (_e, win) => { try { attachRenderer(win?.webContents) } catch {} })\n'
+          new = '  patchProxySpawn()\n  app.once("before-quit", () => { try { stopAllProfileCaptures() } catch {} })\n  app.on("browser-window-created", (_e, win) => { try { attachRenderer(win?.webContents) } catch {} })\n'
+          if 'stopAllProfileCaptures()' not in s[s.find('function startFullConnectionCapture'):]:
+              if old not in s: raise SystemExit('startup anchor missing')
+              s = s.replace(old, new, 1)
+
+          old = 'redaction: "none", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*"]'
+          new = 'redaction: "none-for-controlled-backend; metadata-only-for-third-party-profile-traffic", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*", "profiles/<profileUniqueName>/profile.json", "profiles/<profileUniqueName>/conexion", "profiles/<profileUniqueName>/bodies/*"]'
+          if old in s: s = s.replace(old, new, 1)
+          s = s.replace('console.log(`[inspector] full passive conexion capture armed for ${origin}`)', 'console.log(`[inspector] passive conexion capture armed for ${origin}; per-profile Chrome CDP capture enabled`)')
+
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Validate inspector
+        shell: bash
+        run: |
+          node --check app/inspector/connectionCapture.js
+          node --check app/inspector/profileChromeCapture.js
+          node --check app/main.no-updates.js
+          grep -q 'inspectChromeSpawn(command, args, child)' app/inspector/connectionCapture.js
+          grep -q 'profiles/<profileUniqueName>/profile.json' app/inspector/connectionCapture.js
+          grep -q 'Network.enable' app/inspector/profileChromeCapture.js
+          grep -q 'metadata-only-third-party' app/inspector/profileChromeCapture.js
+          if grep -q 'Fetch.enable' app/inspector/profileChromeCapture.js; then echo 'Fetch interception found' >&2; exit 1; fi
+          echo 'Inspector validation OK'
+      - name: Commit and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/inspector/connectionCapture.js app/inspector/profileChromeCapture.js
+          git rm .github/workflows/finish-profile-inspector.yml
+          git commit -m 'feat: capture Chrome traffic separately by KAIZEN profile'
+          git push origin HEAD:main
