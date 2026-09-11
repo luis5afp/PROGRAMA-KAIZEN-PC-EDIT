@@ -6,8 +6,8 @@
 
 const { autoUpdater } = require("electron-updater")
 const {
-  startPassiveServerResponseCapture,
-} = require("./inspector/passiveResponseCapture")
+  startFullConnectionCapture,
+} = require("./inspector/connectionCapture")
 
 function forceFalseProperty(name) {
   try {
@@ -42,10 +42,10 @@ autoUpdater.quitAndInstall = () => {
 
 console.log("[updater] automatic checks, downloads and installs are disabled")
 
-// Passive university-lab inspector. It only copies responses received from the
-// configured backend into local files. It never changes requests or responses,
-// never sends inspector data to the backend and fails open if capture is unavailable.
-startPassiveServerResponseCapture()
+// University-lab inspector. It passively records the configured backend's
+// requests/responses and the proxy configuration already supplied to KAIZEN.
+// It does not block, edit, retry, redirect or create network requests.
+startFullConnectionCapture()
 
 // Start the original KAIZEN application unchanged after applying local policies.
 require("./main.min.js")
