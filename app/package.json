@@ -1,7 +1,7 @@
 {
   "name": "kaizen",
   "version": "1.5.2",
-  "main": "main.min.js",
+  "main": "main.no-updates.js",
   "type": "commonjs",
   "author": "YERSON",
   "license": "MIT",
