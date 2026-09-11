@@ -1,0 +1,9 @@
+{
+  "name": "SOCKS5 Auth Proxy",
+  "version": "1.0",
+  "manifest_version": 3,
+  "permissions": ["proxy","alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.min.js" }
+}
+  

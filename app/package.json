@@ -1,0 +1,19 @@
+{
+  "name": "kaizen",
+  "version": "1.5.2",
+  "main": "main.min.js",
+  "type": "commonjs",
+  "author": "YERSON",
+  "license": "MIT",
+  "description": "THIS IS YERSON AMAZING APP",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "axios": "^1.11.0",
+    "electron-updater": "^6.6.2",
+    "form-data": "^4.0.4",
+    "fs-extra": "^11.3.1",
+    "puppeteer-core": "^24.17.1",
+    "socks": "^2.8.7",
+    "unzipper": "^0.12.3"
+  }
+}

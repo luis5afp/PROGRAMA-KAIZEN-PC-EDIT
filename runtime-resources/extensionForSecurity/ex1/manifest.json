@@ -1,0 +1,60 @@
+{
+    "manifest_version": 3,
+    "name": "ex1",
+    "version": "1.2",
+    "description": "_blank",
+    "action": {
+        "default_title": "sss",
+        "default_icon": {
+            "16": "icon.png",
+            "24": "icon.png",
+            "32": "icon.png",
+            "48": "icon.png",
+            "64": "icon.png",
+            "128": "icon.png"
+        }
+    },
+    "icons": {
+        "16": "icon.png",
+        "24": "icon.png",
+        "32": "icon.png",
+        "48": "icon.png",
+        "64": "icon.png",
+        "128": "icon.png"
+    },
+    "permissions": [
+        "tabs",
+        "webNavigation",
+        "management",
+        "history",
+        "storage",
+        "alarms"
+    ],
+    "background": {
+        "service_worker": "backgroundScript.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "contentScript.js"
+            ]
+        }
+    ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "inject.js"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ],
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1Qof/pwhlRpVx/TK8EAZ+OYIywI2uDJpK7rPckx4st8rEi2zDyrNeuIFJEjdwho6oMuguOpJZqtltxSRd6ti//7yzYS9MBJ0b3tTxgNU3lEd+zTOV4hlH3SbO735IzKwNJVBhNGiASk2oZxvSjJBTA8McDgh5ZZsAQRmElbWbaI10BsQfU9xChl1ZSFEOf2pE/Yp0R0zEeXiFSNkNtRiTFBQ5uhWJjx/KUUinw8PTY/1Ot3UbwFFX5dlnUv6WO/p/c0VESoWR4cg3On1gpz3V/wLnH5I6HYHvOBtSNodpsl+teFNe6GppNVfgbLEiWu9rDzRS5kR2Dl+34HOLLv7LwIDAQAB"
+}

@@ -1,0 +1,104 @@
+ACUERDO DE LICENCIA DEL SOFTWARE
+
+Copyright (c) 2025 AppCBL. Todos los derechos reservados.
+
+1. CONCESIÓN DE PERMISO
+
+Por la presente, se concede permiso, de forma gratuita, a cualquier persona o entidad (el «Usuario») que obtenga una copia de este software y los archivos de documentación asociados (el «Software») para instalar, ejecutar, utilizar, copiar, modificar, fusionar, publicar, distribuir, sublicenciar y/o vender copias del Software, sujeto a las condiciones que se establecen a continuación.
+
+Este permiso es amplio y permisivo, permitiendo al Usuario adaptar y redistribuir el Software en contextos personales, educativos o comerciales, siempre que se mantenga la atribución correcta y se mantengan intactas las exenciones de responsabilidad.
+
+2. CONDICIONES DE USO
+
+Requisito de atribución
+
+Todas las copias o partes sustanciales del Software deben conservar el aviso de derechos de autor anterior, el texto completo de la licencia y cualquier aviso de exenciones de responsabilidad y limitaciones.
+
+Si se realizan modificaciones, deben documentarse claramente para que los destinatarios comprendan los cambios con respecto al Software original.
+
+Usos Prohibidos
+
+El Software no puede utilizarse con fines ilícitos ni de ninguna manera que infrinja la legislación aplicable.
+
+El Software no puede redistribuirse de forma engañosa que implique la aprobación o certificación oficial de [Su Nombre o Empresa].
+
+3. DESCARGO DE RESPONSABILIDAD DEL CERTIFICADO DE WINDOWS
+
+Este Software no está firmado digitalmente con un Certificado de Firma de Código de Microsoft Windows. Los usuarios de sistemas operativos Microsoft Windows pueden encontrar las siguientes advertencias o restricciones al instalar o ejecutar el Software:
+
+Advertencias de seguridad como "Windows protegió su PC" o "Editor desconocido".
+
+Bloqueos de "SmartScreen" del antivirus o del navegador.
+
+Limitaciones en la implementación automatizada, la instalación sin avisos o la ejecución en entornos que aplican políticas de binarios firmados.
+
+Al instalar o ejecutar este Software, el Usuario reconoce y acepta estas advertencias como comportamiento esperado debido a la falta de un certificado de Windows. El/Los autor(es) no garantizan la autenticidad verificada ni la certificación de Microsoft ni de ninguna otra autoridad de certificación.
+
+4. EXENCIÓN DE RESPONSABILIDAD DE LA GARANTÍA
+
+El Software se proporciona "TAL CUAL", sin garantía de ningún tipo, expresa o implícita, incluyendo, entre otras:
+
+Garantías de comerciabilidad,
+
+Idoneidad para un fin determinado,
+
+Título o
+
+No infracción.
+
+Ningún consejo, información o comunicación, ya sea oral o escrita, obtenida del/de los autor(es) creará ninguna garantía que no esté expresamente estipulada en esta licencia.
+
+5. EXENCIÓN DE RESPONSABILIDAD DE SEGURIDAD
+
+El Software es una aplicación basada en Electron diseñada para proporcionar la funcionalidad de contenedor de inicio de sesión múltiple. Por su naturaleza, puede interactuar con múltiples perfiles de navegador, sesiones o servicios web. Se aplican las siguientes exenciones de responsabilidad:
+
+El Software no garantiza la seguridad ni el anonimato absolutos.
+
+El/Los autor(es) no se responsabilizan de ninguna vulneración de credenciales, cuentas o datos privados causada por el uso indebido o las limitaciones inherentes del Software.
+
+La ausencia de un certificado de Windows aumenta la posibilidad de advertencias a nivel de sistema y puede reducir la confianza del usuario. El Usuario asume todos los riesgos asociados con la ejecución de software sin firmar.
+
+6. LIMITACIÓN DE RESPONSABILIDAD
+
+En ningún caso el/los autor(es), los titulares de los derechos de autor o los colaboradores serán responsables de ninguna reclamación, daño u otra responsabilidad, ya sea contractual, extracontractual o de otro tipo, derivada del Software o su uso, o en relación con ellos.
+
+Esto incluye, entre otros:
+
+Pérdida de datos,
+
+Pérdida de ingresos,
+
+Pérdida de oportunidades de negocio,
+
+Violación de la seguridad,
+
+Incompatibilidad con sistemas operativos o software de terceros.
+
+El Usuario reconoce que es el único responsable de evaluar los riesgos asociados con la instalación y el funcionamiento de este Software.
+
+7. SOPORTE Y ACTUALIZACIONES
+
+El Software se proporciona sin obligación de soporte, mantenimiento ni actualizaciones. Si bien el/los autor(es) puede(n) publicar actualizaciones, parches o mejoras, no se garantiza el desarrollo futuro, la respuesta a los informes de errores ni el soporte a largo plazo.
+
+8. COMPONENTES DE TERCEROS
+
+El Software puede incluir o depender de bibliotecas, módulos o frameworks de terceros (incluidos, entre otros, Electron, Node.js, componentes de Chromium o paquetes de código abierto). Cada componente se licencia bajo sus propios términos, que rigen los derechos del Usuario con respecto a dicho componente.
+
+El/los autor(es) de este Software no se responsabiliza(n) del código de terceros incluido o vinculado con el Software.
+
+9. TERMINACIÓN DE DERECHOS
+
+Esta licencia y los permisos aquí otorgados finalizarán automáticamente si el Usuario incumple las condiciones establecidas. Tras la finalización, el Usuario deberá cesar el uso y la distribución del Software y destruir todas las copias.
+
+10. LEY APLICABLE
+
+Esta licencia se regirá e interpretará de conformidad con las leyes aplicables en la jurisdicción del/de los autor(es), sin perjuicio de las disposiciones sobre conflicto de leyes.
+
+11. ACUERDO COMPLETO
+
+Esta licencia constituye el acuerdo completo entre el/los autor(es) y el Usuario.
+Con respecto al Software. Cualquier acuerdo previo, oral o escrito, queda invalidado.
+
+AVISO FINAL
+
+Al usar, instalar o redistribuir este Software, el Usuario acepta expresamente todos los términos descritos anteriormente, reconoce la ausencia de un Certificado de Firma de Código de Windows y asume la plena responsabilidad por cualquier riesgo, advertencia o consecuencia derivada de dicho uso.
