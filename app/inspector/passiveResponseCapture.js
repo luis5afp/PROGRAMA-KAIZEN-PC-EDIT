@@ -68,8 +68,7 @@ function normalizeHeaders(headers) {
   return out
 }
 
-function extensionForMime(mimeType, isBase64) {
-  if (isBase64) return ".b64"
+function extensionForMime(mimeType) {
   const mime = String(mimeType || "").toLowerCase()
   if (mime.includes("json")) return ".json"
   if (mime.includes("html")) return ".html"
@@ -77,7 +76,13 @@ function extensionForMime(mimeType, isBase64) {
   if (mime.includes("css")) return ".css"
   if (mime.startsWith("text/")) return ".txt"
   if (mime.includes("xml")) return ".xml"
-  return ".txt"
+  if (mime.includes("png")) return ".png"
+  if (mime.includes("jpeg") || mime.includes("jpg")) return ".jpg"
+  if (mime.includes("webp")) return ".webp"
+  if (mime.includes("gif")) return ".gif"
+  if (mime.includes("pdf")) return ".pdf"
+  if (mime.includes("zip")) return ".zip"
+  return ".bin"
 }
 
 async function persistCapture(record, bodyBuffer, bodyOptions = {}) {
@@ -89,12 +94,11 @@ async function persistCapture(record, bodyBuffer, bodyOptions = {}) {
 
     const id = record.id || nextId(record.source || "capture")
     const mimeType = bodyOptions.mimeType || record.mimeType || ""
-    const isBase64 = Boolean(bodyOptions.base64Encoded)
-    const extension = extensionForMime(mimeType, isBase64)
+    const extension = extensionForMime(mimeType)
     const bodyName = `${id}${extension}`
     const bodyPath = path.join(bodiesDir, bodyName)
 
-    let storedBuffer = Buffer.isBuffer(bodyBuffer)
+    const storedBuffer = Buffer.isBuffer(bodyBuffer)
       ? bodyBuffer
       : Buffer.from(bodyBuffer == null ? "" : String(bodyBuffer), "utf8")
 
@@ -106,7 +110,7 @@ async function persistCapture(record, bodyBuffer, bodyOptions = {}) {
       capturedAt: record.capturedAt || nowIso(),
       backendOrigin: backendOrigin(),
       bodyFile: path.join("bodies", bodyName).replace(/\\/g, "/"),
-      bodyEncoding: isBase64 ? "base64-text" : "utf8-or-binary-buffer",
+      bodyEncoding: bodyOptions.decodedFromBase64 ? "binary-decoded-from-cdp-base64" : "raw-local-bytes",
       bodyBytes: storedBuffer.length,
       bodySha256: hashBuffer(storedBuffer),
     }
@@ -217,6 +221,7 @@ function attachRendererNetworkCapture(webContents) {
   attachedWebContents.add(webContents)
 
   const pending = new Map()
+  const requestMethods = new Map()
 
   try {
     if (!webContents.debugger.isAttached()) {
@@ -227,6 +232,14 @@ function attachRendererNetworkCapture(webContents) {
 
     webContents.debugger.on("message", (_event, method, params) => {
       try {
+        if (method === "Network.requestWillBeSent") {
+          const request = params?.request
+          if (request && isBackendUrl(request.url)) {
+            requestMethods.set(params.requestId, String(request.method || ""))
+          }
+          return
+        }
+
         if (method === "Network.responseReceived") {
           const response = params?.response
           if (!response || !isBackendUrl(response.url)) return
@@ -235,7 +248,7 @@ function attachRendererNetworkCapture(webContents) {
             source: "electron-renderer-cdp",
             direction: "server-to-client",
             url: String(response.url),
-            method: "",
+            method: requestMethods.get(params.requestId) || "",
             status: Number(response.status || 0),
             statusText: String(response.statusText || ""),
             mimeType: String(response.mimeType || ""),
@@ -249,37 +262,36 @@ function attachRendererNetworkCapture(webContents) {
           return
         }
 
-        if (method === "Network.requestWillBeSent") {
-          const request = params?.request
-          const current = pending.get(params.requestId)
-          if (current && request) {
-            current.method = String(request.method || "")
-          }
-          return
-        }
-
         if (method === "Network.loadingFailed") {
           pending.delete(params?.requestId)
+          requestMethods.delete(params?.requestId)
           return
         }
 
         if (method !== "Network.loadingFinished") return
         const record = pending.get(params.requestId)
-        if (!record) return
+        if (!record) {
+          requestMethods.delete(params.requestId)
+          return
+        }
         pending.delete(params.requestId)
+        requestMethods.delete(params.requestId)
 
         webContents.debugger
           .sendCommand("Network.getResponseBody", { requestId: params.requestId })
           .then(result => {
             const text = result?.body == null ? "" : String(result.body)
-            // Keep base64 exactly as DevTools returned it. For text responses this is
-            // the raw decoded response body exposed by Chromium.
+            const base64Encoded = Boolean(result?.base64Encoded)
+            const rawBytes = base64Encoded
+              ? Buffer.from(text, "base64")
+              : Buffer.from(text, "utf8")
+
             persistWithoutBlocking(
               record,
-              Buffer.from(text, "utf8"),
+              rawBytes,
               {
                 mimeType: record.mimeType,
-                base64Encoded: Boolean(result?.base64Encoded),
+                decodedFromBase64: base64Encoded,
               },
             )
           })
@@ -299,6 +311,7 @@ function attachRendererNetworkCapture(webContents) {
 
     webContents.once("destroyed", () => {
       pending.clear()
+      requestMethods.clear()
     })
 
     console.log("[inspector] passive renderer response capture enabled")
