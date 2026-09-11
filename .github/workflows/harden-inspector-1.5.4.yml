@@ -1,0 +1,47 @@
+name: Harden inspector logging 1.5.4
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch logging memory behavior
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/inspector/connectionCapture.js')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('if (opts.text || textMime(mime)) row.bodyText = buf.toString("utf8")\n      learnProfileNamesFromBody(buf, mime)', 'if ((opts.text || textMime(mime)) && buf.length <= 256 * 1024) row.bodyText = buf.toString("utf8")\n      learnProfileNamesFromBody(buf, mime)', 1)
+          s = s.replace('if (keepText) { texts.push(b); textBytes += b.length }', 'if (keepText && textBytes < 256 * 1024) { const remain = 256 * 1024 - textBytes; texts.push(b.subarray(0, remain)); textBytes += Math.min(remain, b.length) }', 1)
+          s = s.replace('if (keepText) { try { meta.bodyText = Buffer.concat(texts, textBytes).toString("utf8") } catch {} }', 'if (keepText && bytes <= 256 * 1024) { try { meta.bodyText = Buffer.concat(texts, textBytes).toString("utf8") } catch {} }', 1)
+          anchor = '    const line = `${JSON.stringify(row)}\\n`\n'
+          insert = '    if (body == null && row.bodyText && textMime(entry.mimeType || "")) { try { learnProfileNamesFromBody(Buffer.from(String(row.bodyText), "utf8"), entry.mimeType || "") } catch {} }\n' + anchor
+          if 'body == null && row.bodyText' not in s:
+              if anchor not in s: raise SystemExit('append line anchor missing')
+              s = s.replace(anchor, insert, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Validate
+        shell: bash
+        run: |
+          node --check app/inspector/connectionCapture.js
+          node --check app/inspector/profileChromeCapture.js
+          grep -q '256 \* 1024' app/inspector/connectionCapture.js
+          grep -q 'body == null && row.bodyText' app/inspector/connectionCapture.js
+          if grep -q 'Fetch.enable' app/inspector/profileChromeCapture.js; then exit 1; fi
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/inspector/connectionCapture.js
+          git rm .github/workflows/harden-inspector-1.5.4.yml
+          git commit -m 'fix: reduce inspector memory overhead without losing body files'
+          git push origin HEAD:main
