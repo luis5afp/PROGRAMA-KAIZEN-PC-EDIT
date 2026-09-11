@@ -27,16 +27,15 @@ jobs:
             "https://github.com/clubbusinesslatam526-glitch/appcbl/releases/download/v1.5.2/KAIZEN-Setup-1.5.2.exe"
           echo "40ce19782ebf4411cce8dd4ee2cdaa54d1887abc336286ecd9886c03db1e0d8d  /tmp/KAIZEN-Setup-1.5.2.exe" | sha256sum -c -
 
-      - name: Extract Electron application
+      - name: Extract application files
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq p7zip-full
 
-          rm -rf /tmp/kaizen-installer /tmp/kaizen-unpacked /tmp/kaizen-source
-          mkdir -p /tmp/kaizen-installer /tmp/kaizen-unpacked /tmp/kaizen-source
-
+          rm -rf /tmp/kaizen-installer /tmp/kaizen-unpacked
+          mkdir -p /tmp/kaizen-installer /tmp/kaizen-unpacked
           7z x -y /tmp/KAIZEN-Setup-1.5.2.exe -o/tmp/kaizen-installer >/tmp/7z-installer.log
 
           APP_ARCHIVE="$(find /tmp/kaizen-installer -type f \( -name 'app-64.7z' -o -name 'app-32.7z' -o -name 'app.7z' \) | head -n 1 || true)"
@@ -46,33 +45,32 @@ jobs:
             cp -a /tmp/kaizen-installer/. /tmp/kaizen-unpacked/
           fi
 
-          ASAR="$(find /tmp/kaizen-unpacked -type f -path '*/resources/app.asar' | head -n 1 || true)"
-          if [ -z "$ASAR" ]; then
-            ASAR="$(find /tmp/kaizen-installer -type f -path '*/resources/app.asar' | head -n 1 || true)"
-          fi
-          if [ -z "$ASAR" ]; then
-            echo "No se encontró resources/app.asar" >&2
-            find /tmp/kaizen-unpacked -maxdepth 4 -type f | head -n 200
+          APP_DIR="/tmp/kaizen-unpacked/resources/app"
+          if [ ! -d "$APP_DIR" ]; then
+            echo "No se encontró resources/app en el instalador extraído" >&2
             exit 1
           fi
 
-          npx --yes @electron/asar extract "$ASAR" /tmp/kaizen-source
+          rm -rf app runtime-resources
+          mkdir -p app runtime-resources
+          cp -a "$APP_DIR"/. app/
 
-          rm -rf app
-          mkdir -p app
-          cp -a /tmp/kaizen-source/. app/
+          [ -f /tmp/kaizen-unpacked/resources/app-update.yml ] && cp /tmp/kaizen-unpacked/resources/app-update.yml runtime-resources/
+          [ -d /tmp/kaizen-unpacked/resources/extensionForSecurity ] && cp -a /tmp/kaizen-unpacked/resources/extensionForSecurity runtime-resources/
+          [ -d /tmp/kaizen-unpacked/resources/extensionsData ] && cp -a /tmp/kaizen-unpacked/resources/extensionsData runtime-resources/
+          [ -d /tmp/kaizen-unpacked/resources/browserProfilesData ] && cp -a /tmp/kaizen-unpacked/resources/browserProfilesData runtime-resources/
+          [ -d /tmp/kaizen-unpacked/resources/syncPath ] && cp -a /tmp/kaizen-unpacked/resources/syncPath runtime-resources/
 
           printf '%s\n' \
-            '# KAIZEN 1.5.2 - aplicación extraída' \
+            '# KAIZEN 1.5.2 - programa extraído' \
             '' \
-            'Esta carpeta contiene el contenido de `resources/app.asar` extraído del instalador oficial `KAIZEN-Setup-1.5.2.exe`.' \
+            'La carpeta `app/` contiene los archivos reales de `resources/app` extraídos del instalador oficial KAIZEN 1.5.2.' \
+            '' \
+            'La carpeta `runtime-resources/` contiene recursos auxiliares de la aplicación que no forman parte del runtime pesado de Chromium/Electron.' \
             '' \
             'SHA-256 del instalador de origen: `40ce19782ebf4411cce8dd4ee2cdaa54d1887abc336286ecd9886c03db1e0d8d`.' \
-            '' \
-            'Los archivos binarios del runtime de Electron y el instalador de 401 MB no se guardan en Git normal porque GitHub limita cada archivo a 100 MB. El instalador completo permanece disponible en la Release v1.5.2.' \
             > KAIZEN-1.5.2.md
 
-          # Evitar que un único archivo mayor al límite de GitHub haga fallar todo el push.
           : > EXCLUDED-LARGE-FILES.txt
           while IFS= read -r -d '' f; do
             size=$(stat -c%s "$f")
@@ -80,7 +78,7 @@ jobs:
               printf '%s\t%s bytes\n' "$f" "$size" >> EXCLUDED-LARGE-FILES.txt
               rm -f "$f"
             fi
-          done < <(find app -type f -print0)
+          done < <(find app runtime-resources -type f -print0)
           if [ ! -s EXCLUDED-LARGE-FILES.txt ]; then
             rm -f EXCLUDED-LARGE-FILES.txt
           fi
@@ -93,5 +91,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "feat: add extracted KAIZEN v1.5.2 application"
+          git commit -m "feat: add extracted KAIZEN v1.5.2 program files"
           git push origin main
