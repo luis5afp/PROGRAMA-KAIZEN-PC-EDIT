@@ -1,0 +1,157 @@
+name: Build KAIZEN 1.5.4
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate custom source
+        shell: pwsh
+        run: |
+          node --check app/main.no-updates.js
+          node --check app/inspector/connectionCapture.js
+          node --check app/inspector/profileChromeCapture.js
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.4') { throw "Expected app version 1.5.4, got $($pkg.version)" }
+          if ($pkg.main -ne 'main.no-updates.js') { throw "Unexpected main entry: $($pkg.main)" }
+          $mainCapture = Get-Content app/inspector/connectionCapture.js -Raw
+          $profileCapture = Get-Content app/inspector/profileChromeCapture.js -Raw
+          if (-not $mainCapture.Contains('inspectChromeSpawn(command, args, child)')) { throw 'Chrome spawn inspector hook missing' }
+          if (-not $profileCapture.Contains('Network.enable')) { throw 'Profile Network observer missing' }
+          if ($profileCapture.Contains('Fetch.enable')) { throw 'Active Fetch interception is not allowed' }
+          if (-not $profileCapture.Contains('metadata-only-third-party')) { throw 'Third-party metadata-only policy missing' }
+          Write-Host 'Source validation OK'
+
+      - name: Download and unpack 1.5.3 runtime
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force work | Out-Null
+          gh release download v1.5.3 -p 'KAIZEN-Setup-1.5.3.exe' -D work
+          New-Item -ItemType Directory -Force work/nsis | Out-Null
+          7z x -y work/KAIZEN-Setup-1.5.3.exe '-owork/nsis' | Out-Host
+          if (-not (Test-Path 'work/nsis/$PLUGINSDIR/app-64.7z')) { throw 'Base app-64.7z not found' }
+          New-Item -ItemType Directory -Force work/runtime | Out-Null
+          7z x -y 'work/nsis/$PLUGINSDIR/app-64.7z' '-owork/runtime' | Out-Host
+          if (-not (Test-Path 'work/runtime/KAIZEN.exe')) { throw 'KAIZEN.exe missing from base runtime' }
+          if (-not (Test-Path 'work/runtime/resources/app')) { throw 'resources/app missing from base runtime' }
+          Write-Host 'Base runtime extracted successfully'
+
+      - name: Inject current KAIZEN app and runtime resources
+        shell: pwsh
+        run: |
+          Remove-Item 'work/runtime/resources/app' -Recurse -Force
+          New-Item -ItemType Directory -Force 'work/runtime/resources/app' | Out-Null
+          Copy-Item 'app/*' 'work/runtime/resources/app/' -Recurse -Force
+          if (Test-Path 'runtime-resources') {
+            Copy-Item 'runtime-resources/*' 'work/runtime/resources/' -Recurse -Force
+          }
+          $pkg = Get-Content 'work/runtime/resources/app/package.json' -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.4') { throw 'Injected app has wrong version' }
+          if ($pkg.main -ne 'main.no-updates.js') { throw 'Injected app has wrong entrypoint' }
+          if (-not (Test-Path 'work/runtime/resources/app/inspector/connectionCapture.js')) { throw 'Main inspector missing after injection' }
+          if (-not (Test-Path 'work/runtime/resources/app/inspector/profileChromeCapture.js')) { throw 'Profile inspector missing after injection' }
+          Write-Host 'Current app injected into Electron runtime'
+
+      - name: Prepare electron-builder wrapper
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force builder | Out-Null
+          @'
+          {
+            "name": "kaizen",
+            "version": "1.5.4",
+            "description": "KAIZEN PC custom laboratory build",
+            "author": "YERSON",
+            "license": "MIT"
+          }
+          '@ | Set-Content builder/package.json -Encoding utf8
+          @'
+          appId: com.electron.kaizen
+          productName: KAIZEN
+          electronVersion: 35.0.0
+          directories:
+            output: ../work/out
+          win:
+            target:
+              - target: nsis
+                arch:
+                  - x64
+            signAndEditExecutable: false
+          nsis:
+            oneClick: false
+            perMachine: false
+            allowToChangeInstallationDirectory: true
+            createDesktopShortcut: true
+            createStartMenuShortcut: true
+            installerIcon: ../app/assets/installer.ico
+            uninstallerIcon: ../app/assets/uninstaller.ico
+            artifactName: KAIZEN-Setup-${version}.${ext}
+          '@ | Set-Content builder/electron-builder.yml -Encoding utf8
+
+      - name: Build NSIS installer from prepackaged runtime
+        shell: pwsh
+        run: |
+          Push-Location builder
+          npm install --no-audit --no-fund --save-dev electron-builder@26.15.7
+          npx electron-builder --prepackaged '../work/runtime' --win nsis --x64 --config electron-builder.yml --publish never
+          Pop-Location
+          Get-ChildItem work/out | Select-Object Name,Length | Format-Table -AutoSize
+          if (-not (Test-Path 'work/out/KAIZEN-Setup-1.5.4.exe')) { throw 'Expected installer was not produced' }
+
+      - name: Verify generated installer contains profile inspector
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force work/verify-nsis | Out-Null
+          7z x -y 'work/out/KAIZEN-Setup-1.5.4.exe' '-owork/verify-nsis' | Out-Host
+          if (-not (Test-Path 'work/verify-nsis/$PLUGINSDIR/app-64.7z')) { throw 'Generated NSIS payload missing app-64.7z' }
+          New-Item -ItemType Directory -Force work/verify-runtime | Out-Null
+          7z x -y 'work/verify-nsis/$PLUGINSDIR/app-64.7z' '-owork/verify-runtime' | Out-Host
+          $pkg = Get-Content 'work/verify-runtime/resources/app/package.json' -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.4') { throw 'Packaged version verification failed' }
+          if ($pkg.main -ne 'main.no-updates.js') { throw 'Packaged entrypoint verification failed' }
+          if (-not (Test-Path 'work/verify-runtime/resources/app/inspector/profileChromeCapture.js')) { throw 'Packaged profile inspector missing' }
+          $mainCapture = Get-Content 'work/verify-runtime/resources/app/inspector/connectionCapture.js' -Raw
+          $profileCapture = Get-Content 'work/verify-runtime/resources/app/inspector/profileChromeCapture.js' -Raw
+          if (-not $mainCapture.Contains('inspectChromeSpawn(command, args, child)')) { throw 'Packaged Chrome hook verification failed' }
+          if (-not $profileCapture.Contains('Network.enable')) { throw 'Packaged Network observer verification failed' }
+          if ($profileCapture.Contains('Fetch.enable')) { throw 'Packaged inspector unexpectedly contains active Fetch interception' }
+          if (-not $profileCapture.Contains('metadata-only-third-party')) { throw 'Packaged third-party metadata policy missing' }
+          Write-Host 'Installer payload verification OK'
+
+      - name: Hash installer
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash 'work/out/KAIZEN-Setup-1.5.4.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  KAIZEN-Setup-1.5.4.exe" | Set-Content 'work/out/KAIZEN-Setup-1.5.4.exe.sha256' -Encoding ascii
+          Write-Host "SHA256=$hash"
+
+      - name: Remove one-shot build workflow from main
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm '.github/workflows/build-kaizen-1.5.4.yml'
+          git commit -m 'chore: remove one-shot KAIZEN 1.5.4 build workflow'
+          git push origin HEAD:main
+
+      - name: Publish KAIZEN 1.5.4 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (gh release view v1.5.4 2>$null) { throw 'Release v1.5.4 already exists' }
+          gh release create v1.5.4 `
+            'work/out/KAIZEN-Setup-1.5.4.exe' `
+            'work/out/KAIZEN-Setup-1.5.4.exe.sha256' `
+            --target main `
+            --title 'KAIZEN 1.5.4' `
+            --notes 'KAIZEN PC 1.5.4 laboratory build. Adds passive CDP diagnostics separated by Chrome profile, profile metadata files, serialized connection logging, and lower inspector memory overhead. Full sensitive capture remains limited to the configured backend/lab origins; third-party Chrome traffic is metadata-only. Automatic updates remain disabled.'
