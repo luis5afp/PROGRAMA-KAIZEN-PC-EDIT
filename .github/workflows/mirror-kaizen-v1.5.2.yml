@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "40ce19782ebf4411cce8dd4ee2cdaa54d1887abc336286ecd9886c03db1e0d8d  KAIZEN-Setup-1.5.2.exe" | sha256sum -c -
-          echo "0fdd39c4362f6bc07e1c7c1f61b21a500896bc72396783bc56752c7ff97d8f  KAIZEN-Setup-1.5.2.exe.blockmap" | sha256sum -c - || true
+          echo "0fdd39c4362f6bc07ccd9954bce832802eeb00e1095bf7015c8a57466461d874  KAIZEN-Setup-1.5.2.exe.blockmap" | sha256sum -c -
           echo "27abe88361ac49e9a6d2739fbdc2f3fadc1ba5a18144d58d0d8b13ea5891a10d  latest.yml" | sha256sum -c -
 
       - name: Create or update v1.5.2 release
