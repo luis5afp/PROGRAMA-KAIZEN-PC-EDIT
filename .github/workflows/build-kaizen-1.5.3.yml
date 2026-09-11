@@ -73,6 +73,7 @@ jobs:
           @'
           appId: com.electron.kaizen
           productName: KAIZEN
+          electronVersion: 35.0.0
           directories:
             output: ../work/out
           win:
@@ -97,7 +98,7 @@ jobs:
         run: |
           Push-Location builder
           npm install --no-audit --no-fund --save-dev electron-builder@26.15.7
-          npx electron-builder --prepackaged '../work/runtime' --win nsis --x64 --config electron-builder.yml
+          npx electron-builder --prepackaged '../work/runtime' --win nsis --x64 --config electron-builder.yml --publish never
           Pop-Location
           Get-ChildItem work/out | Select-Object Name,Length | Format-Table -AutoSize
           if (-not (Test-Path 'work/out/KAIZEN-Setup-1.5.3.exe')) { throw 'Expected installer was not produced' }
