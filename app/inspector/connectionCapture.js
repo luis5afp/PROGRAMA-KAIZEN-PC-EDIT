@@ -33,6 +33,15 @@ const header = (h, name) => {
   for (const [k, v] of Object.entries(h || {})) if (String(k).toLowerCase() === wanted) return Array.isArray(v) ? v.join(", ") : String(v)
   return ""
 }
+const rawResponseHead = res => {
+  try {
+    const status = `HTTP/${String(res?.httpVersion || "")} ${Number(res?.statusCode || 0)} ${String(res?.statusMessage || "")}`.trimEnd()
+    const raw = Array.isArray(res?.rawHeaders) ? res.rawHeaders : []
+    const lines = [status]
+    for (let i = 0; i < raw.length; i += 2) lines.push(`${String(raw[i] ?? "")}: ${String(raw[i + 1] ?? "")}`)
+    return `${lines.join("\r\n")}\r\n\r\n`
+  } catch { return "" }
+}
 const textMime = mime => /^(text\/)|json|javascript|xml|x-www-form-urlencoded|graphql/i.test(String(mime || ""))
 const ext = mime => {
   const m = String(mime || "").toLowerCase()
@@ -59,7 +68,7 @@ async function append(entry, body, opts = {}) {
   try {
     const dir = dayDir()
     const eventId = entry.id || id(String(entry.type || "event").toLowerCase())
-    const row = { format: "KAIZZEN_CONNECTION_V1", id: eventId, capturedAt: entry.capturedAt || now(), backendOrigin: origin, ...entry }
+    const row = { format: "KAIZZEN_CONNECTION_V2", id: eventId, capturedAt: entry.capturedAt || now(), backendOrigin: origin, ...entry }
     if (body != null) {
       const buf = Buffer.isBuffer(body) ? body : Buffer.from(String(body), "utf8")
       const mime = String(opts.mimeType || entry.mimeType || "")
@@ -71,7 +80,11 @@ async function append(entry, body, opts = {}) {
       row.bodyEncoding = opts.encoding || "raw-bytes"
       if (opts.text || textMime(mime)) row.bodyText = buf.toString("utf8")
     }
-    await fsp.appendFile(path.join(dir, "conexion.ndjson"), `${JSON.stringify(row)}\n`, "utf8")
+    const line = `${JSON.stringify(row)}\n`
+    await Promise.all([
+      fsp.appendFile(path.join(dir, "conexion"), line, "utf8"),
+      fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8"),
+    ])
   } catch (e) {
     console.warn("[inspector] conexion write skipped:", e?.message || e)
   }
@@ -160,7 +173,12 @@ function patchTransport(mod, protocol) {
 
     req.once("finish", () => {
       const hs = headers(req.getHeaders?.() || {})
-      const base = { type: "REQUEST", connectionId, source: "electron-main-node", direction: "client-to-server", method: String(req.method || "GET").toUpperCase(), url, headers: hs }
+      const base = {
+        type: "REQUEST", connectionId, source: "electron-main-node", direction: "client-to-server",
+        method: String(req.method || "GET").toUpperCase(), url, headers: hs,
+        rawRequestHead: typeof req._header === "string" ? req._header : "",
+        captureLevel: "application-plaintext-after-TLS",
+      }
       if (reqBody) reqBody.end(meta => enqueue({ ...base, ...meta }))
       else enqueue(base, Buffer.alloc(0), { mimeType: header(hs, "content-type"), text: true })
     })
@@ -174,7 +192,10 @@ function patchTransport(mod, protocol) {
         type: "RESPONSE", connectionId, source: "electron-main-node", direction: "server-to-client",
         method: String(req.method || "GET").toUpperCase(), url, status: Number(res.statusCode || 0),
         statusText: String(res.statusMessage || ""), headers: hs,
-        rawHeaders: Array.isArray(res.rawHeaders) ? res.rawHeaders.map(String) : [], mimeType: mime, ...meta,
+        httpVersion: String(res.httpVersion || ""),
+        rawHeaders: Array.isArray(res.rawHeaders) ? res.rawHeaders.map(String) : [],
+        rawResponseHead: rawResponseHead(res),
+        mimeType: mime, captureLevel: "application-plaintext-after-TLS", ...meta,
       })))
     })
     req.on("error", e => enqueue({ type: "REQUEST_ERROR", connectionId, source: "electron-main-node", direction: "client-to-server", method: String(req.method || "GET").toUpperCase(), url, error: String(e?.message || e || "unknown") }))
@@ -224,7 +245,7 @@ function patchProxySpawn() {
 function attachRenderer(wc) {
   if (!wc || wc.isDestroyed?.() || attached.has(wc)) return
   attached.add(wc)
-  const reqs = new Map(), resps = new Map()
+  const reqs = new Map(), resps = new Map(), sockets = new Map()
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach("1.3")
     wc.debugger.sendCommand("Network.enable", { maxTotalBufferSize: 100 * 1024 * 1024, maxResourceBufferSize: 50 * 1024 * 1024, maxPostDataSize: 50 * 1024 * 1024 }).catch(() => {})
@@ -235,7 +256,16 @@ function attachRenderer(wc) {
           const r = p?.request
           if (!r || !isBackend(r.url)) return
           const connectionId = id("renderer")
-          const row = { type: "REQUEST", connectionId, requestId, source: "electron-renderer-cdp", direction: "client-to-server", method: String(r.method || "GET").toUpperCase(), url: String(r.url), headers: headers(r.headers), resourceType: String(p?.type || ""), hasPostData: Boolean(r.hasPostData) }
+          const row = {
+            type: "REQUEST", connectionId, requestId, source: "electron-renderer-cdp", direction: "client-to-server",
+            method: String(r.method || "GET").toUpperCase(), url: String(r.url), headers: headers(r.headers),
+            resourceType: String(p?.type || ""), hasPostData: Boolean(r.hasPostData),
+            postDataEntries: Array.isArray(r.postDataEntries) ? r.postDataEntries : null,
+            documentURL: String(p?.documentURL || ""), initiator: p?.initiator || null,
+            timestamp: p?.timestamp ?? null, wallTime: p?.wallTime ?? null,
+            mixedContentType: String(r.mixedContentType || ""), referrerPolicy: String(r.referrerPolicy || ""),
+            captureLevel: "application-plaintext-after-TLS",
+          }
           reqs.set(requestId, row)
           if (typeof r.postData === "string") enqueue(row, Buffer.from(r.postData, "utf8"), { mimeType: header(row.headers, "content-type"), encoding: "cdp-postData", text: true })
           else if (r.hasPostData) wc.debugger.sendCommand("Network.getRequestPostData", { requestId })
@@ -253,12 +283,59 @@ function attachRenderer(wc) {
           const r = p?.response
           if (!r || !isBackend(r.url)) return
           const base = reqs.get(requestId)
-          resps.set(requestId, { type: "RESPONSE", connectionId: base?.connectionId || id("renderer"), requestId, source: "electron-renderer-cdp", direction: "server-to-client", method: base?.method || "", url: String(r.url), status: Number(r.status || 0), statusText: String(r.statusText || ""), headers: headers(r.headers), mimeType: String(r.mimeType || ""), protocol: String(r.protocol || ""), remoteIPAddress: String(r.remoteIPAddress || ""), remotePort: Number(r.remotePort || 0), fromDiskCache: Boolean(r.fromDiskCache), fromServiceWorker: Boolean(r.fromServiceWorker), resourceType: String(p?.type || "") })
+          resps.set(requestId, {
+            type: "RESPONSE", connectionId: base?.connectionId || id("renderer"), requestId,
+            source: "electron-renderer-cdp", direction: "server-to-client", method: base?.method || "",
+            url: String(r.url), status: Number(r.status || 0), statusText: String(r.statusText || ""),
+            headers: headers(r.headers), mimeType: String(r.mimeType || ""), protocol: String(r.protocol || ""),
+            remoteIPAddress: String(r.remoteIPAddress || ""), remotePort: Number(r.remotePort || 0),
+            fromDiskCache: Boolean(r.fromDiskCache), fromServiceWorker: Boolean(r.fromServiceWorker),
+            resourceType: String(p?.type || ""), timing: r.timing || null, securityDetails: r.securityDetails || null,
+            securityState: String(r.securityState || ""), encodedDataLength: Number(r.encodedDataLength || 0),
+            timestamp: p?.timestamp ?? null, captureLevel: "application-plaintext-after-TLS",
+          })
           return
         }
         if (method === "Network.responseReceivedExtraInfo") {
           const base = resps.get(requestId) || reqs.get(requestId)
           if (base) enqueue({ type: "RESPONSE_EXTRA", connectionId: base.connectionId, requestId, source: "electron-renderer-cdp", direction: "server-to-client", method: base.method || "", url: base.url || "", statusCode: Number(p?.statusCode || 0), headers: headers(p?.headers), headersText: String(p?.headersText || ""), blockedCookies: p?.blockedCookies || [] })
+          return
+        }
+        if (method === "Network.webSocketCreated") {
+          if (!isBackend(p?.url)) return
+          sockets.set(requestId, { connectionId: id("websocket"), requestId, url: String(p?.url || "") })
+          enqueue({ type: "WEBSOCKET_CREATED", ...sockets.get(requestId), source: "electron-renderer-cdp", direction: "bidirectional", initiator: p?.initiator || null, captureLevel: "application-plaintext-after-TLS" })
+          return
+        }
+        if (method === "Network.webSocketWillSendHandshakeRequest") {
+          const ws = sockets.get(requestId); if (!ws) return
+          enqueue({ type: "WEBSOCKET_HANDSHAKE_REQUEST", ...ws, source: "electron-renderer-cdp", direction: "client-to-server", headers: headers(p?.request?.headers), requestTime: p?.request?.requestTime ?? null, wallTime: p?.wallTime ?? null })
+          return
+        }
+        if (method === "Network.webSocketHandshakeResponseReceived") {
+          const ws = sockets.get(requestId); if (!ws) return
+          enqueue({ type: "WEBSOCKET_HANDSHAKE_RESPONSE", ...ws, source: "electron-renderer-cdp", direction: "server-to-client", status: Number(p?.response?.status || 0), statusText: String(p?.response?.statusText || ""), headers: headers(p?.response?.headers), headersText: String(p?.response?.headersText || "") })
+          return
+        }
+        if (method === "Network.webSocketFrameSent" || method === "Network.webSocketFrameReceived") {
+          const ws = sockets.get(requestId); if (!ws) return
+          const frame = p?.response || {}
+          const binary = Number(frame.opcode) === 2
+          const payload = String(frame.payloadData || "")
+          const body = binary ? Buffer.from(payload, "base64") : Buffer.from(payload, "utf8")
+          enqueue({ type: method.endsWith("Sent") ? "WEBSOCKET_FRAME_SENT" : "WEBSOCKET_FRAME_RECEIVED", ...ws, source: "electron-renderer-cdp", direction: method.endsWith("Sent") ? "client-to-server" : "server-to-client", opcode: Number(frame.opcode || 0), mask: Boolean(frame.mask), captureLevel: "application-plaintext-after-TLS" }, body, { mimeType: binary ? "application/octet-stream" : "text/plain", encoding: binary ? "decoded-from-cdp-base64" : "utf8", text: !binary })
+          return
+        }
+        if (method === "Network.webSocketClosed" || method === "Network.webSocketFrameError") {
+          const ws = sockets.get(requestId); if (!ws) return
+          enqueue({ type: method === "Network.webSocketClosed" ? "WEBSOCKET_CLOSED" : "WEBSOCKET_FRAME_ERROR", ...ws, source: "electron-renderer-cdp", direction: "local", timestamp: p?.timestamp ?? null, errorMessage: String(p?.errorMessage || "") })
+          if (method === "Network.webSocketClosed") sockets.delete(requestId)
+          return
+        }
+        if (method === "Network.eventSourceMessageReceived") {
+          const base = resps.get(requestId) || reqs.get(requestId)
+          if (!base) return
+          enqueue({ type: "EVENTSOURCE_MESSAGE", connectionId: base.connectionId, requestId, source: "electron-renderer-cdp", direction: "server-to-client", url: base.url, eventName: String(p?.eventName || ""), eventId: String(p?.eventId || ""), timestamp: p?.timestamp ?? null, captureLevel: "application-plaintext-after-TLS" }, Buffer.from(String(p?.data || ""), "utf8"), { mimeType: "text/event-stream", encoding: "utf8", text: true })
           return
         }
         if (method === "Network.loadingFailed") {
@@ -279,7 +356,7 @@ function attachRenderer(wc) {
         }
       } catch {}
     })
-    wc.once("destroyed", () => { reqs.clear(); resps.clear() })
+    wc.once("destroyed", () => { reqs.clear(); resps.clear(); sockets.clear() })
   } catch (e) { console.warn("[inspector] renderer conexion capture unavailable:", e?.message || e) }
 }
 
@@ -290,7 +367,7 @@ function startFullConnectionCapture() {
   patchTransport(https, "https:")
   patchProxySpawn()
   app.on("browser-window-created", (_e, win) => { try { attachRenderer(win?.webContents) } catch {} })
-  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", output: "conexion.ndjson" })
+  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", captureLevel: "application-plaintext-after-TLS", redaction: "none", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*"] })
   console.log(`[inspector] full passive conexion capture armed for ${origin}`)
 }
 
