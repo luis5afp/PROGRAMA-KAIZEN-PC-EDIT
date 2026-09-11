@@ -9,12 +9,14 @@ const http = require("http")
 const https = require("https")
 const childProcess = require("child_process")
 const { BACKEND_HOST } = require("../config")
+const { inspectChromeSpawn, stopAllProfileCaptures, learnProfileNamesFromBody } = require("./profileChromeCapture")
 
 let started = false
 let seq = 0
 let spawnPatched = false
 const patched = new WeakSet()
 const attached = new WeakSet()
+const writeQueues = new Map()
 
 const origin = (() => { try { return new URL(BACKEND_HOST).origin } catch { return String(BACKEND_HOST || "").replace(/\/$/, "") } })()
 const isBackend = value => { try { return new URL(String(value || "")).origin === new URL(BACKEND_HOST).origin } catch { return false } }
@@ -79,17 +81,23 @@ async function append(entry, body, opts = {}) {
       row.bodySha256 = hash(buf)
       row.bodyEncoding = opts.encoding || "raw-bytes"
       if (opts.text || textMime(mime)) row.bodyText = buf.toString("utf8")
+      learnProfileNamesFromBody(buf, mime)
     }
     const line = `${JSON.stringify(row)}\n`
-    await Promise.all([
-      fsp.appendFile(path.join(dir, "conexion"), line, "utf8"),
-      fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8"),
-    ])
+    await fsp.appendFile(path.join(dir, "conexion"), line, "utf8")
+    await fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8")
   } catch (e) {
     console.warn("[inspector] conexion write skipped:", e?.message || e)
   }
 }
-const enqueue = (entry, body, opts) => setImmediate(() => void append(entry, body, opts))
+function queueWrite(key, job) {
+  const prev = writeQueues.get(key) || Promise.resolve()
+  const next = prev.then(job, job).catch(e => console.warn("[inspector] queued conexion write skipped:", e?.message || e))
+  writeQueues.set(key, next)
+  next.finally(() => { if (writeQueues.get(key) === next) writeQueues.delete(key) })
+  return next
+}
+const enqueue = (entry, body, opts) => setImmediate(() => { const key = dayDir(); void queueWrite(key, () => append(entry, body, opts)) })
 
 function collector(name, mime) {
   let stream = null
@@ -230,6 +238,7 @@ function patchProxySpawn() {
   spawnPatched = true
   const original = childProcess.spawn
   childProcess.spawn = function (command, args, options) {
+    const child = original.apply(this, arguments)
     try {
       const list = Array.isArray(args) ? args.map(String) : []
       const p = list.find(x => x.startsWith("--proxy="))
@@ -237,8 +246,9 @@ function patchProxySpawn() {
         const local = list.find(x => x.startsWith("--port="))
         enqueue({ type: "PROXY", source: "proxy-relay-launch", direction: "local-config", ...parseProxy(p.slice(8)), LocalRelayPort: local ? Number(local.slice(7)) || 0 : 0 })
       }
+      inspectChromeSpawn(command, args, child)
     } catch {}
-    return original.apply(this, arguments)
+    return child
   }
 }
 
@@ -366,9 +376,10 @@ function startFullConnectionCapture() {
   patchTransport(http, "http:")
   patchTransport(https, "https:")
   patchProxySpawn()
+  app.once("before-quit", () => { try { stopAllProfileCaptures() } catch {} })
   app.on("browser-window-created", (_e, win) => { try { attachRenderer(win?.webContents) } catch {} })
-  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", captureLevel: "application-plaintext-after-TLS", redaction: "none", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*"] })
-  console.log(`[inspector] full passive conexion capture armed for ${origin}`)
+  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", captureLevel: "application-plaintext-after-TLS", redaction: "none-for-controlled-backend; metadata-only-for-third-party-profile-traffic", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*", "profiles/<profileUniqueName>/profile.json", "profiles/<profileUniqueName>/conexion", "profiles/<profileUniqueName>/bodies/*"] })
+  console.log(`[inspector] passive conexion capture armed for ${origin}; per-profile Chrome CDP capture enabled`)
 }
 
 module.exports = { startFullConnectionCapture, isBackendUrl: isBackend, parseProxyRaw: parseProxy }
