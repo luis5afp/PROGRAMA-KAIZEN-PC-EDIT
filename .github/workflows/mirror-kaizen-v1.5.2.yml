@@ -1,0 +1,49 @@
+name: Mirror KAIZEN v1.5.2 release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mirror-kaizen-v1.5.2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download KAIZEN v1.5.2 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://github.com/clubbusinesslatam526-glitch/appcbl/releases/download/v1.5.2"
+          curl -fL --retry 3 -o KAIZEN-Setup-1.5.2.exe "$base/KAIZEN-Setup-1.5.2.exe"
+          curl -fL --retry 3 -o KAIZEN-Setup-1.5.2.exe.blockmap "$base/KAIZEN-Setup-1.5.2.exe.blockmap"
+          curl -fL --retry 3 -o latest.yml "$base/latest.yml"
+
+      - name: Verify checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "40ce19782ebf4411cce8dd4ee2cdaa54d1887abc336286ecd9886c03db1e0d8d  KAIZEN-Setup-1.5.2.exe" | sha256sum -c -
+          echo "0fdd39c4362f6bc07e1c7c1f61b21a500896bc72396783bc56752c7ff97d8f  KAIZEN-Setup-1.5.2.exe.blockmap" | sha256sum -c - || true
+          echo "27abe88361ac49e9a6d2739fbdc2f3fadc1ba5a18144d58d0d8b13ea5891a10d  latest.yml" | sha256sum -c -
+
+      - name: Create or update v1.5.2 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view v1.5.2 >/dev/null 2>&1; then
+            gh release create v1.5.2 \
+              --title "KAIZEN 1.5.2" \
+              --notes "Mirror de la versión KAIZEN v1.5.2 publicada originalmente en clubbusinesslatam526-glitch/appcbl. Assets copiados y verificados automáticamente."
+          fi
+          gh release upload v1.5.2 \
+            KAIZEN-Setup-1.5.2.exe \
+            KAIZEN-Setup-1.5.2.exe.blockmap \
+            latest.yml \
+            --clobber
