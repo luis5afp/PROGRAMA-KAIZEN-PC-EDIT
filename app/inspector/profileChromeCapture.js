@@ -32,6 +32,17 @@ const ext = mime => {
   if (m.startsWith("text/")) return ".txt"
   return ".bin"
 }
+function eventFile(entry) {
+  const t = String(entry?.type || "EVENT").toUpperCase()
+  if (t === "PROXY") return "proxy.ndjson"
+  if (t.includes("ERROR") || t.includes("FAILED")) return "errors.ndjson"
+  if (t.startsWith("WEBSOCKET")) return "websocket.ndjson"
+  if (t.startsWith("EVENTSOURCE")) return "sse.ndjson"
+  if (t === "REQUEST" || t === "REQUEST_EXTRA") return "requests.ndjson"
+  if (t === "RESPONSE" || t === "RESPONSE_EXTRA") return "responses.ndjson"
+  return "events.ndjson"
+}
+
 const headers = h => {
   const out = {}
   for (const [k, v] of Object.entries(h || {})) {
@@ -109,8 +120,7 @@ async function append(meta, entry, body, opts = {}) {
     if ((opts.text || textMime(mime)) && buf.length <= 256 * 1024) row.bodyText = buf.toString("utf8")
   }
   const line = `${JSON.stringify(row)}\n`
-  await fsp.appendFile(path.join(dir, "conexion"), line, "utf8")
-  await fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8")
+  await fsp.appendFile(path.join(dir, eventFile(row)), line, "utf8")
 }
 function enqueue(meta, entry, body, opts) {
   const dir = profileDir(meta)
