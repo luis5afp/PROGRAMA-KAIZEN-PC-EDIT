@@ -12,6 +12,7 @@ let seq = 0
 const captures = new Map()
 const profileNames = new Map()
 const writeQueues = new Map()
+const timelineSeqByDir = new Map()
 
 const now = () => new Date().toISOString()
 const id = source => `${now().replace(/[:.]/g, "-")}_${process.pid}_${String(++seq).padStart(6, "0")}_${source}`
@@ -41,6 +42,39 @@ function eventFile(entry) {
   if (t === "REQUEST" || t === "REQUEST_EXTRA") return "requests.ndjson"
   if (t === "RESPONSE" || t === "RESPONSE_EXTRA") return "responses.ndjson"
   return "events.ndjson"
+}
+
+function nextTimelineSeq(dir) {
+  const next = (timelineSeqByDir.get(dir) || 0) + 1
+  timelineSeqByDir.set(dir, next)
+  return next
+}
+function makeTimelineEntry(row, file, timelineSeq) {
+  return {
+    format: "KAIZZEN_TIMELINE_V1",
+    seq: timelineSeq,
+    capturedAt: row.capturedAt || now(),
+    type: String(row.type || "EVENT"),
+    id: row.id || null,
+    connectionId: row.connectionId || null,
+    requestId: row.requestId || null,
+    source: row.source || null,
+    direction: row.direction || null,
+    method: row.method || null,
+    url: row.url || null,
+    status: row.status ?? row.statusCode ?? null,
+    protocol: row.protocol || null,
+    resourceType: row.resourceType || null,
+    captureMode: row.captureMode || null,
+    error: row.error || row.bodyError || row.postDataError || null,
+    file,
+    bodyFile: row.bodyFile || null,
+    bodyBytes: Number.isFinite(row.bodyBytes) ? row.bodyBytes : null,
+    bodySha256: row.bodySha256 || null,
+    profileName: row.profileName || null,
+    profileUniqueName: row.profileUniqueName || null,
+    debugPort: row.debugPort ?? null,
+  }
 }
 
 const headers = h => {
@@ -119,8 +153,13 @@ async function append(meta, entry, body, opts = {}) {
     row.bodyEncoding = opts.encoding || "raw-bytes"
     if ((opts.text || textMime(mime)) && buf.length <= 256 * 1024) row.bodyText = buf.toString("utf8")
   }
+  const file = eventFile(row)
+  const timelineSeq = nextTimelineSeq(dir)
+  row.timelineSeq = timelineSeq
   const line = `${JSON.stringify(row)}\n`
-  await fsp.appendFile(path.join(dir, eventFile(row)), line, "utf8")
+  await fsp.appendFile(path.join(dir, file), line, "utf8")
+  const timeline = makeTimelineEntry(row, file, timelineSeq)
+  await fsp.appendFile(path.join(dir, "timeline.ndjson"), `${JSON.stringify(timeline)}\n`, "utf8")
 }
 function enqueue(meta, entry, body, opts) {
   const dir = profileDir(meta)
