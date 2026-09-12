@@ -1,0 +1,281 @@
+name: Build KAIZEN 1.5.9
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve downloaded extension ZIPs exactly
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import json
+
+          p = Path('app/inspector/connectionCapture.js')
+          s = p.read_text(encoding='utf-8')
+
+          marker = 'const hash = b => crypto.createHash("sha256").update(b).digest("hex")\n'
+          if 'const safeName = value =>' not in s:
+              if marker not in s:
+                  raise SystemExit('hash marker missing in connectionCapture.js')
+              s = s.replace(marker, marker + 'const safeName = value => String(value || "extension").replace(/[^a-z0-9._-]+/gi, "_").replace(/^_+|_+$/g, "").slice(0, 140) || "extension"\n', 1)
+
+          helper = r'''function extensionDownloadInfo(value) {
+  try {
+    const u = new URL(String(value || ""))
+    const raw = u.searchParams.get("filepath") || ""
+    let decoded = raw
+    try { decoded = decodeURIComponent(raw) } catch {}
+    const normalized = decoded.replace(/\\/g, "/").replace(/^\/+/, "")
+    const marker = "extensionsData/"
+    const index = normalized.toLowerCase().indexOf(marker.toLowerCase())
+    if (index === -1) return null
+    const tail = normalized.slice(index + marker.length).replace(/^\/+/, "")
+    if (!tail || tail.includes("../")) return null
+    const fileName = path.posix.basename(tail)
+    const baseName = safeName(fileName.replace(/\.zip$/i, ""))
+    return { fileName: fileName || `${baseName}.zip`, baseName, filepath: normalized }
+  } catch { return null }
+}
+
+async function preserveExtensionArchive(dir, row) {
+  try {
+    if (String(row?.type || "").toUpperCase() !== "RESPONSE") return
+    const status = Number(row?.status ?? row?.statusCode ?? 0)
+    if (status < 200 || status >= 300 || !row?.bodyFile || !row?.bodySha256) return
+    const info = extensionDownloadInfo(row.url)
+    if (!info) return
+
+    const src = path.join(dir, String(row.bodyFile))
+    const extRoot = path.join(dir, "extensions")
+    const originalRoot = path.join(extRoot, "original")
+    const immutableRoot = path.join(originalRoot, info.baseName)
+    await fsp.mkdir(immutableRoot, { recursive: true })
+
+    const immutableName = `${row.bodySha256}.zip`
+    const immutableDest = path.join(immutableRoot, immutableName)
+    try {
+      await fsp.link(src, immutableDest)
+    } catch (error) {
+      if (error?.code !== "EEXIST") await fsp.copyFile(src, immutableDest)
+    }
+
+    const alias = path.join(originalRoot, `${info.baseName}.zip`)
+    try { await fsp.unlink(alias) } catch (error) { if (error?.code !== "ENOENT") throw error }
+    try { await fsp.link(src, alias) } catch { await fsp.copyFile(src, alias) }
+
+    const record = {
+      format: "KAIZZEN_EXTENSION_ORIGINAL_V1",
+      capturedAt: row.capturedAt || now(),
+      extensionName: info.baseName,
+      requestedFilepath: info.filepath,
+      sourceUrl: row.url || "",
+      connectionId: row.connectionId || null,
+      bodyFile: row.bodyFile,
+      originalFile: `original/${info.baseName}.zip`,
+      immutableFile: `original/${info.baseName}/${immutableName}`,
+      bytes: Number(row.bodyBytes || 0),
+      sha256: row.bodySha256,
+      preservation: "exact-response-bytes; hard-link-when-possible",
+    }
+    await fsp.mkdir(extRoot, { recursive: true })
+    await fsp.appendFile(path.join(extRoot, "original-downloads.ndjson"), `${JSON.stringify(record)}\n`, "utf8")
+  } catch (error) {
+    console.warn("[inspector-ext] original extension archive skipped:", error?.message || error)
+  }
+}
+
+'''
+          anchor = 'async function append(entry, body, opts = {}) {'
+          if 'function extensionDownloadInfo(value)' not in s:
+              if anchor not in s:
+                  raise SystemExit('append anchor missing in connectionCapture.js')
+              s = s.replace(anchor, helper + anchor, 1)
+
+          call_anchor = '    if (body == null && row.bodyText && textMime(entry.mimeType || "")) { try { learnProfileNamesFromBody(Buffer.from(String(row.bodyText), "utf8"), entry.mimeType || "") } catch {} }\n    const file = eventFile(row)'
+          call_new = '    if (body == null && row.bodyText && textMime(entry.mimeType || "")) { try { learnProfileNamesFromBody(Buffer.from(String(row.bodyText), "utf8"), entry.mimeType || "") } catch {} }\n    await preserveExtensionArchive(dir, row)\n    const file = eventFile(row)'
+          if 'await preserveExtensionArchive(dir, row)' not in s:
+              if call_anchor not in s:
+                  raise SystemExit('append preservation insertion point missing')
+              s = s.replace(call_anchor, call_new, 1)
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('app/inspector/extensionSnapshot.js')
+          s = p.read_text(encoding='utf-8')
+          old = '''      const siblingZip = `${dir}.zip`\n      const id = extensionIdForDir(dir, manifest)'''
+          new = '''      const siblingZip = `${dir}.zip`\n      const capturedZip = path.join(originalDir, `${baseName}.zip`)\n      const id = extensionIdForDir(dir, manifest)'''
+          if 'const capturedZip = path.join(originalDir' not in s:
+              if old not in s:
+                  raise SystemExit('siblingZip marker missing in extensionSnapshot.js')
+              s = s.replace(old, new, 1)
+
+          old_block = '''      try {\n        const stat = await fsp.stat(siblingZip)\n        if (stat.isFile()) {\n          const destName = `${baseName}.zip`\n          const dest = path.join(originalDir, destName)\n          await fsp.copyFile(siblingZip, dest)\n          item.preservation = {\n            type: "original-zip-byte-for-byte",\n            file: `original/${destName}`,\n            bytes: stat.size,\n            sha256: await sha256File(dest),\n          }\n        }\n      } catch {}'''
+          new_block = '''      for (const sourceZip of [capturedZip, siblingZip]) {\n        try {\n          const stat = await fsp.stat(sourceZip)\n          if (!stat.isFile()) continue\n          const destName = `${baseName}.zip`\n          const dest = path.join(originalDir, destName)\n          if (path.resolve(sourceZip).toLowerCase() !== path.resolve(dest).toLowerCase()) await fsp.copyFile(sourceZip, dest)\n          item.preservation = {\n            type: "original-zip-byte-for-byte",\n            file: `original/${destName}`,\n            bytes: stat.size,\n            sha256: await sha256File(dest),\n            source: sourceZip === capturedZip ? "diagnostic-response-archive" : "runtime-sibling-zip",\n          }\n          break\n        } catch {}\n      }'''
+          if 'source: sourceZip === capturedZip ? "diagnostic-response-archive"' not in s:
+              if old_block not in s:
+                  raise SystemExit('ZIP preservation block missing in extensionSnapshot.js')
+              s = s.replace(old_block, new_block, 1)
+
+          s = s.replace('Original ZIP files are copied byte-for-byte when available. Folder-only extensions preserve each file byte-for-byte with per-file SHA-256.', 'Downloaded ZIP responses are preserved as exact bytes when available. Folder-only extensions preserve each file byte-for-byte with per-file SHA-256.')
+          p.write_text(s, encoding='utf-8')
+
+          pkgp = Path('app/package.json')
+          pkg = json.loads(pkgp.read_text(encoding='utf-8'))
+          pkg['version'] = '1.5.9'
+          pkgp.write_text(json.dumps(pkg, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          '@ | Set-Content patch_159.py -Encoding utf8
+          python patch_159.py
+          Remove-Item patch_159.py -Force
+
+      - name: Validate source
+        shell: pwsh
+        run: |
+          node --check app/main.no-updates.js
+          node --check app/preload.min.js
+          node --check app/inspector/connectionCapture.js
+          node --check app/inspector/profileChromeCapture.js
+          node --check app/inspector/extensionSnapshot.js
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.9') { throw "Expected 1.5.9, got $($pkg.version)" }
+          $main = Get-Content app/inspector/connectionCapture.js -Raw
+          $ext = Get-Content app/inspector/extensionSnapshot.js -Raw
+          $profile = Get-Content app/inspector/profileChromeCapture.js -Raw
+          if (-not $main.Contains('KAIZZEN_EXTENSION_ORIGINAL_V1')) { throw 'Exact original extension archive marker missing' }
+          if (-not $main.Contains('original-downloads.ndjson')) { throw 'Original extension download index missing' }
+          if (-not $main.Contains('fsp.link(src, immutableDest)')) { throw 'Hard-link preservation missing' }
+          if (-not $ext.Contains('diagnostic-response-archive')) { throw 'Extension library does not prefer captured original ZIP' }
+          if (-not $ext.Contains('original-zip-byte-for-byte')) { throw 'Reusable ZIP marker missing' }
+          if ($profile.Contains('Fetch.enable')) { throw 'Active Fetch interception is not allowed' }
+          if (-not $profile.Contains('Network.enable')) { throw 'Passive Network capture missing' }
+          if (-not (Get-Content app/preload.min.js -Raw).Contains('kaizen-diagnostics-folder-button')) { throw 'Diagnostics button missing' }
+          Write-Host 'Source validation OK'
+
+      - name: Download and unpack 1.5.8 runtime
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force work | Out-Null
+          gh release download v1.5.8 -p 'KAIZEN-Setup-1.5.8.exe' -D work
+          New-Item -ItemType Directory -Force work/nsis | Out-Null
+          7z x -y work/KAIZEN-Setup-1.5.8.exe '-owork/nsis' | Out-Host
+          if (-not (Test-Path 'work/nsis/$PLUGINSDIR/app-64.7z')) { throw 'Base app-64.7z not found' }
+          New-Item -ItemType Directory -Force work/runtime | Out-Null
+          7z x -y 'work/nsis/$PLUGINSDIR/app-64.7z' '-owork/runtime' | Out-Host
+          if (-not (Test-Path 'work/runtime/KAIZEN.exe')) { throw 'KAIZEN.exe missing from base runtime' }
+          if (-not (Test-Path 'work/runtime/resources/app')) { throw 'resources/app missing from base runtime' }
+
+      - name: Inject current KAIZEN app and runtime resources
+        shell: pwsh
+        run: |
+          Remove-Item 'work/runtime/resources/app' -Recurse -Force
+          New-Item -ItemType Directory -Force 'work/runtime/resources/app' | Out-Null
+          Copy-Item 'app/*' 'work/runtime/resources/app/' -Recurse -Force
+          if (Test-Path 'runtime-resources') { Copy-Item 'runtime-resources/*' 'work/runtime/resources/' -Recurse -Force }
+          $pkg = Get-Content 'work/runtime/resources/app/package.json' -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.9') { throw 'Injected app has wrong version' }
+          if ($pkg.main -ne 'main.no-updates.js') { throw 'Injected app has wrong entrypoint' }
+
+      - name: Prepare electron-builder wrapper
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force builder | Out-Null
+          @'
+          {
+            "name": "kaizen",
+            "version": "1.5.9",
+            "description": "KAIZEN PC custom laboratory build",
+            "author": "YERSON",
+            "license": "MIT"
+          }
+          '@ | Set-Content builder/package.json -Encoding utf8
+          @'
+          appId: com.electron.kaizen
+          productName: KAIZEN
+          electronVersion: 35.0.0
+          directories:
+            output: ../work/out
+          win:
+            target:
+              - target: nsis
+                arch:
+                  - x64
+            signAndEditExecutable: false
+          nsis:
+            oneClick: false
+            perMachine: false
+            allowToChangeInstallationDirectory: true
+            createDesktopShortcut: true
+            createStartMenuShortcut: true
+            installerIcon: ../app/assets/installer.ico
+            uninstallerIcon: ../app/assets/uninstaller.ico
+            artifactName: KAIZEN-Setup-${version}.${ext}
+          '@ | Set-Content builder/electron-builder.yml -Encoding utf8
+
+      - name: Build NSIS installer from prepackaged runtime
+        shell: pwsh
+        run: |
+          Push-Location builder
+          npm install --no-audit --no-fund --save-dev electron-builder@26.15.7
+          npx electron-builder --prepackaged '../work/runtime' --win nsis --x64 --config electron-builder.yml --publish never
+          Pop-Location
+          if (-not (Test-Path 'work/out/KAIZEN-Setup-1.5.9.exe')) { throw 'Expected installer was not produced' }
+
+      - name: Verify generated installer contains exact extension preservation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force work/verify-nsis | Out-Null
+          7z x -y 'work/out/KAIZEN-Setup-1.5.9.exe' '-owork/verify-nsis' | Out-Host
+          if (-not (Test-Path 'work/verify-nsis/$PLUGINSDIR/app-64.7z')) { throw 'Generated NSIS payload missing app-64.7z' }
+          New-Item -ItemType Directory -Force work/verify-runtime | Out-Null
+          7z x -y 'work/verify-nsis/$PLUGINSDIR/app-64.7z' '-owork/verify-runtime' | Out-Host
+          $root = 'work/verify-runtime/resources/app'
+          $pkg = Get-Content "$root/package.json" -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.9') { throw 'Packaged version verification failed' }
+          $main = Get-Content "$root/inspector/connectionCapture.js" -Raw
+          $ext = Get-Content "$root/inspector/extensionSnapshot.js" -Raw
+          $profile = Get-Content "$root/inspector/profileChromeCapture.js" -Raw
+          if (-not $main.Contains('KAIZZEN_EXTENSION_ORIGINAL_V1')) { throw 'Packaged original extension archive missing' }
+          if (-not $main.Contains('original-downloads.ndjson')) { throw 'Packaged original extension index missing' }
+          if (-not $ext.Contains('diagnostic-response-archive')) { throw 'Packaged extension library link missing' }
+          if ($profile.Contains('Fetch.enable')) { throw 'Packaged inspector unexpectedly contains Fetch.enable' }
+          if (-not (Get-Content "$root/preload.min.js" -Raw).Contains('kaizen-diagnostics-folder-button')) { throw 'Packaged diagnostics button missing' }
+          Write-Host 'Installer payload verification OK'
+
+      - name: Hash installer
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash 'work/out/KAIZEN-Setup-1.5.9.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  KAIZEN-Setup-1.5.9.exe" | Set-Content 'work/out/KAIZEN-Setup-1.5.9.exe.sha256' -Encoding ascii
+          Write-Host "SHA256=$hash"
+
+      - name: Commit source and remove one-shot workflow
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/inspector/connectionCapture.js app/inspector/extensionSnapshot.js app/package.json
+          git rm '.github/workflows/build-kaizen-1.5.9.yml'
+          git commit -m 'fix: preserve downloaded extension ZIPs exactly'
+          git push origin HEAD:main
+
+      - name: Publish KAIZEN 1.5.9 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (gh release view v1.5.9 2>$null) { throw 'Release v1.5.9 already exists' }
+          gh release create v1.5.9 `
+            'work/out/KAIZEN-Setup-1.5.9.exe' `
+            'work/out/KAIZEN-Setup-1.5.9.exe.sha256' `
+            --target main `
+            --title 'KAIZEN 1.5.9' `
+            --notes 'KAIZEN PC 1.5.9 laboratory build. Preserves KAIZEN-managed extension downloads from the already-observed backend response as exact reusable ZIP bytes before the application deletes its temporary archive. The diagnostic creates an immutable SHA-256-addressed copy plus a convenient original/<extension>.zip link and original-downloads.ndjson metadata. No extra server request, request modification, response modification or Fetch interception is introduced. Existing unpacked extension snapshots, per-profile extensions.json, categorized diagnostics, timelines and Diagnostics folder button remain enabled.'
