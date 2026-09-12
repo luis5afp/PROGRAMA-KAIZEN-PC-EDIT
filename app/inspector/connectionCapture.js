@@ -24,6 +24,7 @@ const isBackend = value => { try { return new URL(String(value || "")).origin ==
 const now = () => new Date().toISOString()
 const id = source => `${now().replace(/[:.]/g, "-")}_${process.pid}_${String(++seq).padStart(6, "0")}_${source}`
 const hash = b => crypto.createHash("sha256").update(b).digest("hex")
+const safeName = value => String(value || "extension").replace(/[^a-z0-9._-]+/gi, "_").replace(/^_+|_+$/g, "").slice(0, 140) || "extension"
 function eventFile(entry) {
   const t = String(entry?.type || "EVENT").toUpperCase()
   if (t === "PROXY") return "proxy.ndjson"
@@ -111,6 +112,71 @@ function dayDir() {
   return dir
 }
 
+function extensionDownloadInfo(value) {
+  try {
+    const u = new URL(String(value || ""))
+    const raw = u.searchParams.get("filepath") || ""
+    let decoded = raw
+    try { decoded = decodeURIComponent(raw) } catch {}
+    const normalized = decoded.replace(/\\/g, "/").replace(/^\/+/, "")
+    const marker = "extensionsData/"
+    const index = normalized.toLowerCase().indexOf(marker.toLowerCase())
+    if (index === -1) return null
+    const tail = normalized.slice(index + marker.length).replace(/^\/+/, "")
+    if (!tail || tail.includes("../")) return null
+    const fileName = path.posix.basename(tail)
+    const baseName = safeName(fileName.replace(/\.zip$/i, ""))
+    return { fileName: fileName || `${baseName}.zip`, baseName, filepath: normalized }
+  } catch { return null }
+}
+
+async function preserveExtensionArchive(dir, row) {
+  try {
+    if (String(row?.type || "").toUpperCase() !== "RESPONSE") return
+    const status = Number(row?.status ?? row?.statusCode ?? 0)
+    if (status < 200 || status >= 300 || !row?.bodyFile || !row?.bodySha256) return
+    const info = extensionDownloadInfo(row.url)
+    if (!info) return
+
+    const src = path.join(dir, String(row.bodyFile))
+    const extRoot = path.join(dir, "extensions")
+    const originalRoot = path.join(extRoot, "original")
+    const immutableRoot = path.join(originalRoot, info.baseName)
+    await fsp.mkdir(immutableRoot, { recursive: true })
+
+    const immutableName = `${row.bodySha256}.zip`
+    const immutableDest = path.join(immutableRoot, immutableName)
+    try {
+      await fsp.link(src, immutableDest)
+    } catch (error) {
+      if (error?.code !== "EEXIST") await fsp.copyFile(src, immutableDest)
+    }
+
+    const alias = path.join(originalRoot, `${info.baseName}.zip`)
+    try { await fsp.unlink(alias) } catch (error) { if (error?.code !== "ENOENT") throw error }
+    try { await fsp.link(src, alias) } catch { await fsp.copyFile(src, alias) }
+
+    const record = {
+      format: "KAIZZEN_EXTENSION_ORIGINAL_V1",
+      capturedAt: row.capturedAt || now(),
+      extensionName: info.baseName,
+      requestedFilepath: info.filepath,
+      sourceUrl: row.url || "",
+      connectionId: row.connectionId || null,
+      bodyFile: row.bodyFile,
+      originalFile: `original/${info.baseName}.zip`,
+      immutableFile: `original/${info.baseName}/${immutableName}`,
+      bytes: Number(row.bodyBytes || 0),
+      sha256: row.bodySha256,
+      preservation: "exact-response-bytes; hard-link-when-possible",
+    }
+    await fsp.mkdir(extRoot, { recursive: true })
+    await fsp.appendFile(path.join(extRoot, "original-downloads.ndjson"), `${JSON.stringify(record)}\n`, "utf8")
+  } catch (error) {
+    console.warn("[inspector-ext] original extension archive skipped:", error?.message || error)
+  }
+}
+
 async function append(entry, body, opts = {}) {
   try {
     const dir = dayDir()
@@ -129,6 +195,7 @@ async function append(entry, body, opts = {}) {
       learnProfileNamesFromBody(buf, mime)
     }
     if (body == null && row.bodyText && textMime(entry.mimeType || "")) { try { learnProfileNamesFromBody(Buffer.from(String(row.bodyText), "utf8"), entry.mimeType || "") } catch {} }
+    await preserveExtensionArchive(dir, row)
     const file = eventFile(row)
     const timelineSeq = nextTimelineSeq(dir)
     row.timelineSeq = timelineSeq

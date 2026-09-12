@@ -107,6 +107,7 @@ async function buildLibrary(root) {
       if (!manifest) continue
       const baseName = safeName(path.basename(dir))
       const siblingZip = `${dir}.zip`
+      const capturedZip = path.join(originalDir, `${baseName}.zip`)
       const id = extensionIdForDir(dir, manifest)
       const item = {
         id,
@@ -118,20 +119,23 @@ async function buildLibrary(root) {
         preservation: null,
       }
 
-      try {
-        const stat = await fsp.stat(siblingZip)
-        if (stat.isFile()) {
+      for (const sourceZip of [capturedZip, siblingZip]) {
+        try {
+          const stat = await fsp.stat(sourceZip)
+          if (!stat.isFile()) continue
           const destName = `${baseName}.zip`
           const dest = path.join(originalDir, destName)
-          await fsp.copyFile(siblingZip, dest)
+          if (path.resolve(sourceZip).toLowerCase() !== path.resolve(dest).toLowerCase()) await fsp.copyFile(sourceZip, dest)
           item.preservation = {
             type: "original-zip-byte-for-byte",
             file: `original/${destName}`,
             bytes: stat.size,
             sha256: await sha256File(dest),
+            source: sourceZip === capturedZip ? "diagnostic-response-archive" : "runtime-sibling-zip",
           }
-        }
-      } catch {}
+          break
+        } catch {}
+      }
 
       if (!item.preservation) {
         const dest = path.join(unpackedDir, baseName)
@@ -154,7 +158,7 @@ async function buildLibrary(root) {
     format: "KAIZZEN_EXTENSION_LIBRARY_V1",
     capturedAt: now(),
     scope: "KAIZEN-managed extensions only",
-    note: "Original ZIP files are copied byte-for-byte when available. Folder-only extensions preserve each file byte-for-byte with per-file SHA-256.",
+    note: "Downloaded ZIP responses are preserved as exact bytes when available. Folder-only extensions preserve each file byte-for-byte with per-file SHA-256.",
     extensions: catalog,
   }
   await fsp.writeFile(path.join(extRoot, "extensions.json"), JSON.stringify(index, null, 2), "utf8")
