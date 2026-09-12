@@ -11,6 +11,9 @@ const { autoUpdater } = require("electron-updater")
 const {
   startFullConnectionCapture,
 } = require("./inspector/connectionCapture")
+const {
+  startExtensionSnapshotCapture,
+} = require("./inspector/extensionSnapshot")
 
 function forceFalseProperty(name) {
   try {
@@ -58,6 +61,12 @@ ipcMain.handle("diagnostics-open-folder", async () => {
     return { ok: false, path: "", error: String(error?.message || error || "unknown") }
   }
 })
+
+// Preserve only extensions already managed/loaded by KAIZEN. This wrapper is
+// installed before the connection-capture wrapper so both can observe Chrome
+// launches without changing their arguments or blocking spawn(). Extension file
+// copying is delayed and local-only to avoid adding work to the critical launch.
+startExtensionSnapshotCapture()
 
 // University-lab inspector. It passively records the configured backend's
 // requests/responses and the proxy configuration already supplied to KAIZEN.
