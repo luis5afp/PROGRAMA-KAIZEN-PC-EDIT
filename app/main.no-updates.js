@@ -4,6 +4,9 @@
 // without changing the rest of the application. KAIZEN must remain usable even
 // when the installed version is older than the latest published version.
 
+const { app, ipcMain, shell } = require("electron")
+const fs = require("fs")
+const path = require("path")
 const { autoUpdater } = require("electron-updater")
 const {
   startFullConnectionCapture,
@@ -41,6 +44,20 @@ autoUpdater.quitAndInstall = () => {
 }
 
 console.log("[updater] automatic checks, downloads and installs are disabled")
+
+// UI helper: open the local diagnostics root in Windows Explorer.
+// This action is local-only: it does not send data, alter captures, or touch
+// profile/browser traffic. The directory is created on demand when necessary.
+ipcMain.handle("diagnostics-open-folder", async () => {
+  try {
+    const dir = path.join(app.getPath("userData"), "KAIZEN-Inspector", "conexion")
+    await fs.promises.mkdir(dir, { recursive: true })
+    const error = await shell.openPath(dir)
+    return { ok: !error, path: dir, error: error || "" }
+  } catch (error) {
+    return { ok: false, path: "", error: String(error?.message || error || "unknown") }
+  }
+})
 
 // University-lab inspector. It passively records the configured backend's
 // requests/responses and the proxy configuration already supplied to KAIZEN.
