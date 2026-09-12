@@ -1,0 +1,72 @@
+name: Organize diagnostics 1.5.6
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Split diagnostics into categorized files
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          def patch_file(path):
+              p = Path(path)
+              s = p.read_text(encoding='utf-8')
+              marker = '''const headers = h => {'''
+              if 'function eventFile(entry)' not in s:
+                  helper = '''function eventFile(entry) {\n  const t = String(entry?.type || "EVENT").toUpperCase()\n  if (t === "PROXY") return "proxy.ndjson"\n  if (t.includes("ERROR") || t.includes("FAILED")) return "errors.ndjson"\n  if (t.startsWith("WEBSOCKET")) return "websocket.ndjson"\n  if (t.startsWith("EVENTSOURCE")) return "sse.ndjson"\n  if (t === "REQUEST" || t === "REQUEST_EXTRA") return "requests.ndjson"\n  if (t === "RESPONSE" || t === "RESPONSE_EXTRA") return "responses.ndjson"\n  return "events.ndjson"\n}\n\n'''
+                  if marker not in s:
+                      raise SystemExit(f'marker not found in {path}')
+                  s = s.replace(marker, helper + marker, 1)
+
+              old = '''    const line = `${JSON.stringify(row)}\\n`\n    await fsp.appendFile(path.join(dir, "conexion"), line, "utf8")\n    await fsp.appendFile(path.join(dir, "conexion.ndjson"), line, "utf8")'''
+              new = '''    const line = `${JSON.stringify(row)}\\n`\n    await fsp.appendFile(path.join(dir, eventFile(row)), line, "utf8")'''
+              if old not in s:
+                  raise SystemExit(f'combined-output block not found in {path}')
+              s = s.replace(old, new, 1)
+              p.write_text(s, encoding='utf-8')
+
+          patch_file('app/inspector/connectionCapture.js')
+          patch_file('app/inspector/profileChromeCapture.js')
+
+          pkgp = Path('app/package.json')
+          pkg = json.loads(pkgp.read_text(encoding='utf-8'))
+          pkg['version'] = '1.5.6'
+          pkgp.write_text(json.dumps(pkg, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate organized diagnostics
+        shell: bash
+        run: |
+          node --check app/inspector/connectionCapture.js
+          node --check app/inspector/profileChromeCapture.js
+          node --check app/main.no-updates.js
+          grep -q 'return "requests.ndjson"' app/inspector/connectionCapture.js
+          grep -q 'return "responses.ndjson"' app/inspector/connectionCapture.js
+          grep -q 'return "proxy.ndjson"' app/inspector/connectionCapture.js
+          grep -q 'return "websocket.ndjson"' app/inspector/connectionCapture.js
+          grep -q 'return "sse.ndjson"' app/inspector/connectionCapture.js
+          grep -q 'return "errors.ndjson"' app/inspector/connectionCapture.js
+          grep -q 'return "events.ndjson"' app/inspector/connectionCapture.js
+          if grep -q 'path.join(dir, "conexion.ndjson")' app/inspector/connectionCapture.js; then exit 1; fi
+          if grep -q 'path.join(dir, "conexion.ndjson")' app/inspector/profileChromeCapture.js; then exit 1; fi
+          node -e "const p=require('./app/package.json'); if(p.version!=='1.5.6') process.exit(1)"
+
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/inspector/connectionCapture.js app/inspector/profileChromeCapture.js app/package.json
+          git rm .github/workflows/organize-diagnostics-1.5.6.yml
+          git commit -m 'feat: split diagnostics into organized files'
+          git push origin HEAD:main
