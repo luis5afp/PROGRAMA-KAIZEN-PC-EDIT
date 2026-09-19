@@ -1,0 +1,12 @@
+name: KAIZEN Actions Probe
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        run: echo "actions-runner-ok"
