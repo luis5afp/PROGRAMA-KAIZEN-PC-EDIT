@@ -2,6 +2,9 @@ name: Build KAIZEN 1.5.10
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
