@@ -505,7 +505,7 @@ function startFullConnectionCapture() {
   patchProxySpawn()
   app.once("before-quit", () => { try { stopAllProfileCaptures() } catch {} })
   app.on("browser-window-created", (_e, win) => { try { attachRenderer(win?.webContents) } catch {} })
-  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", captureLevel: "application-plaintext-after-TLS", redaction: "proxy-credentials-redacted; controlled-backend-capture-enabled; metadata-only-for-third-party-profile-traffic", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*", "profiles/<profileUniqueName>/profile.json", "profiles/<profileUniqueName>/conexion", "profiles/<profileUniqueName>/bodies/*"] })
+  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", captureLevel: "application-plaintext-after-TLS", redaction: "proxy-credentials-redacted; controlled-backend-capture-enabled; metadata-only-for-third-party-profile-traffic", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*", "extension-load.ndjson", "extensions/original-downloads.ndjson", "profiles/<profileUniqueName>/profile.json", "profiles/<profileUniqueName>/conexion", "profiles/<profileUniqueName>/bodies/*"] })
   console.log(`[inspector] passive conexion capture armed for ${origin}; per-profile Chrome CDP capture enabled`)
 }
 
