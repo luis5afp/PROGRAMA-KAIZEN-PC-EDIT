@@ -42,7 +42,9 @@ jobs:
           if (-not $capture.Contains('Password: Password ? "[REDACTED]"')) { throw 'Proxy password redaction missing' }
           if (-not $capture.Contains('proxy-credentials-redacted')) { throw 'Diagnostic redaction policy marker missing' }
           if (-not $main.Contains('KAIZZEN_EXTENSION_LOAD_V1')) { throw 'Managed extension load diagnostics missing' }
+          if (-not $main.Contains("'launch.log'")) { throw 'Original launch log mirror missing' }
           if (-not $capture.Contains('extension-load.ndjson')) { throw 'Extension load diagnostic output declaration missing' }
+          if (-not $capture.Contains('launch.log')) { throw 'Original launch log output declaration missing' }
 
           Write-Host 'KAIZEN 1.5.10 source validation OK'
 
@@ -144,7 +146,9 @@ jobs:
           if (-not $util.Contains('waitForProxyRelayReady')) { throw 'Packaged relay helper missing' }
           if (-not $capture.Contains('Password: Password ? "[REDACTED]"')) { throw 'Packaged diagnostic proxy redaction missing' }
           if (-not $main.Contains('KAIZZEN_EXTENSION_LOAD_V1')) { throw 'Packaged extension load diagnostics missing' }
+          if (-not $main.Contains("'launch.log'")) { throw 'Packaged original launch log mirror missing' }
           if (-not $capture.Contains('extension-load.ndjson')) { throw 'Packaged extension diagnostic output declaration missing' }
+          if (-not $capture.Contains('launch.log')) { throw 'Packaged original launch log output declaration missing' }
 
           node --check "$root/main.min.js"
           node --check "$root/util.min.js"
