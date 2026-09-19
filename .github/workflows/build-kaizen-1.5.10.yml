@@ -1,8 +1,7 @@
 name: Build KAIZEN 1.5.10
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -33,6 +32,9 @@ jobs:
           $capture = Get-Content app/inspector/connectionCapture.js -Raw
 
           if (-not $main.Contains('isUsableExtensionDir')) { throw 'Extension cache validation missing' }
+          if (-not $main.Contains('content_scripts')) { throw 'Extension referenced-file validation missing' }
+          if (-not $main.Contains('openBrowserGuarded')) { throw 'Duplicate profile launch guard missing' }
+          if (-not $main.Contains('browserLaunchPromises')) { throw 'Per-profile launch lock missing' }
           if (-not $main.Contains('_0x479fd5.ready')) { throw 'Proxy relay readiness wait missing in browser launcher' }
           if (-not $util.Contains('waitForProxyRelayReady')) { throw 'Proxy relay readiness helper missing' }
           if (-not $util.Contains('proc.ready = waitForProxyRelayReady')) { throw 'Proxy relay readiness promise missing' }
@@ -134,6 +136,8 @@ jobs:
           $capture = Get-Content "$root/inspector/connectionCapture.js" -Raw
 
           if (-not $main.Contains('isUsableExtensionDir')) { throw 'Packaged extension repair missing' }
+          if (-not $main.Contains('openBrowserGuarded')) { throw 'Packaged duplicate launch guard missing' }
+          if (-not $main.Contains('browserLaunchPromises')) { throw 'Packaged launch lock missing' }
           if (-not $main.Contains('_0x479fd5.ready')) { throw 'Packaged relay wait missing' }
           if (-not $util.Contains('waitForProxyRelayReady')) { throw 'Packaged relay helper missing' }
           if (-not $capture.Contains('Password: Password ? "[REDACTED]"')) { throw 'Packaged diagnostic proxy redaction missing' }
