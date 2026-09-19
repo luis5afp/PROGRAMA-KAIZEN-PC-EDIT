@@ -35,6 +35,10 @@ jobs:
           if (-not $main.Contains('content_scripts')) { throw 'Extension referenced-file validation missing' }
           if (-not $main.Contains('openBrowserGuarded')) { throw 'Duplicate profile launch guard missing' }
           if (-not $main.Contains('browserLaunchPromises')) { throw 'Per-profile launch lock missing' }
+          if (-not $main.Contains('withSharedExtensionLock')) { throw 'Shared extension preparation lock missing' }
+          if (-not $main.Contains('extensionLoadPromises')) { throw 'Shared extension lock registry missing' }
+          if (-not $main.Contains("_0xrequired.push('index.html')")) { throw 'KAIZZEN catalog index validation missing' }
+          if (-not $main.Contains('_0xassetRe=/(?:src|href)')) { throw 'KAIZZEN catalog asset validation missing' }
           if (-not $main.Contains('_0x479fd5.ready')) { throw 'Proxy relay readiness wait missing in browser launcher' }
           if (-not $util.Contains('waitForProxyRelayReady')) { throw 'Proxy relay readiness helper missing' }
           if (-not $util.Contains('proc.ready = waitForProxyRelayReady')) { throw 'Proxy relay readiness promise missing' }
@@ -142,6 +146,10 @@ jobs:
           if (-not $main.Contains('isUsableExtensionDir')) { throw 'Packaged extension repair missing' }
           if (-not $main.Contains('openBrowserGuarded')) { throw 'Packaged duplicate launch guard missing' }
           if (-not $main.Contains('browserLaunchPromises')) { throw 'Packaged launch lock missing' }
+          if (-not $main.Contains('withSharedExtensionLock')) { throw 'Packaged shared extension lock missing' }
+          if (-not $main.Contains('extensionLoadPromises')) { throw 'Packaged shared extension registry missing' }
+          if (-not $main.Contains("_0xrequired.push('index.html')")) { throw 'Packaged KAIZZEN catalog index validation missing' }
+          if (-not $main.Contains('_0xassetRe=/(?:src|href)')) { throw 'Packaged KAIZZEN catalog asset validation missing' }
           if (-not $main.Contains('_0x479fd5.ready')) { throw 'Packaged relay wait missing' }
           if (-not $util.Contains('waitForProxyRelayReady')) { throw 'Packaged relay helper missing' }
           if (-not $capture.Contains('Password: Password ? "[REDACTED]"')) { throw 'Packaged diagnostic proxy redaction missing' }
