@@ -348,9 +348,9 @@ function parseProxy(raw) {
     if (p.length >= 3) { Username = p[2] || ""; Password = p.slice(3).join(":") }
   }
   const HasCredentials = Boolean(Username || Password)
-  const raw = `${Protocol}://${HasCredentials ? "***:***@" : ""}${Host}${Port ? ":" + Port : ""}`
+  const SanitizedRaw = `${Protocol}://${HasCredentials ? "***:***@" : ""}${Host}${Port ? ":" + Port : ""}`
   return {
-    raw,
+    raw: SanitizedRaw,
     Protocol,
     Host,
     Port,
