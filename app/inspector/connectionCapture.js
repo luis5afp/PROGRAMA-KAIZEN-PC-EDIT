@@ -347,7 +347,17 @@ function parseProxy(raw) {
     Host = p[0] || ""; Port = Number(p[1]) || 0
     if (p.length >= 3) { Username = p[2] || ""; Password = p.slice(3).join(":") }
   }
-  return { raw: text, Protocol, Host, Port, Username, Password }
+  const HasCredentials = Boolean(Username || Password)
+  const raw = `${Protocol}://${HasCredentials ? "***:***@" : ""}${Host}${Port ? ":" + Port : ""}`
+  return {
+    raw,
+    Protocol,
+    Host,
+    Port,
+    Username: Username ? "[REDACTED]" : "",
+    Password: Password ? "[REDACTED]" : "",
+    HasCredentials,
+  }
 }
 
 function patchProxySpawn() {
@@ -495,7 +505,7 @@ function startFullConnectionCapture() {
   patchProxySpawn()
   app.once("before-quit", () => { try { stopAllProfileCaptures() } catch {} })
   app.on("browser-window-created", (_e, win) => { try { attachRenderer(win?.webContents) } catch {} })
-  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", captureLevel: "application-plaintext-after-TLS", redaction: "none-for-controlled-backend; metadata-only-for-third-party-profile-traffic", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*", "profiles/<profileUniqueName>/profile.json", "profiles/<profileUniqueName>/conexion", "profiles/<profileUniqueName>/bodies/*"] })
+  enqueue({ type: "INSPECTOR_START", source: "launcher", direction: "local", policy: "passive-no-network-modification", captureLevel: "application-plaintext-after-TLS", redaction: "proxy-credentials-redacted; controlled-backend-capture-enabled; metadata-only-for-third-party-profile-traffic", encryptionAtRest: "none", outputs: ["conexion", "conexion.ndjson", "bodies/*", "profiles/<profileUniqueName>/profile.json", "profiles/<profileUniqueName>/conexion", "profiles/<profileUniqueName>/bodies/*"] })
   console.log(`[inspector] passive conexion capture armed for ${origin}; per-profile Chrome CDP capture enabled`)
 }
 
