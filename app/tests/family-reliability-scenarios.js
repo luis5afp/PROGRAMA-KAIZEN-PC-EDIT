@@ -32,10 +32,12 @@ assert(bundle.includes("_kaizenDuplicateRetried"), "duplicate-request 401 retry 
 assert(bundle.includes("kaizenRememberedTwofa"), "secure 2FA migration missing");
 assert(main.includes("remembered-2fa.json"), "secure 2FA storage missing");
 assert(main.includes("extension-sessions-export"), "extension session export IPC missing");
-assert(main.includes("safeStorage.encryptString(JSON.stringify(_0xpayload))"), "extension session export is not safeStorage encrypted");
+assert(main.includes("extension-sessions-PLAINTEXT.json"), "plaintext LAB extension session export file missing");
+assert(main.includes("UNIVERSITY LAB / TEST DATA ONLY"), "plaintext LAB warning missing");
+assert(!main.includes("KAIZZEN_EXTENSION_SESSION_BACKUP_V1"), "legacy encrypted session export still present");
 assert(main.includes("/KAIZZEN/i.test(name)"), "extension session export is not restricted to KAIZZEN");
 assert(preload.includes("kaizen-extension-sessions-button"), "extension session export button missing");
-assert(preload.includes("⬇ Sesiones"), "extension session export button label missing");
+assert(preload.includes("⬇ Sesiones LAB"), "LAB extension session export button label missing");
 
 const canUseCatalogCache = (status) => !status || status === 404 || [408,425,429,500,502,503,504].includes(status);
 for (const status of [0,404,408,425,429,500,502,503,504]) {
@@ -55,4 +57,4 @@ console.log(" - 401/403 authority preserved: PASS");
 console.log(" - recoverable server fallback: PASS");
 console.log(" - local profile preservation: PASS");
 console.log(" - sync 404 recovery: PASS");
-console.log(" - encrypted KAIZZEN extension session export: PASS");
+console.log(" - plaintext KAIZZEN extension session LAB export: PASS");
