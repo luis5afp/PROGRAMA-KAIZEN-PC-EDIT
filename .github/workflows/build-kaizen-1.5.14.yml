@@ -1,0 +1,258 @@
+name: Build KAIZEN 1.5.14
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate corrected source
+        shell: pwsh
+        run: |
+          node --check app/main.no-updates.js
+          node --check app/main.min.js
+          node --check app/util.min.js
+          node --check app/proxyServer.js
+          node --check app/inspector/connectionCapture.js
+          node --check app/inspector/profileChromeCapture.js
+          node --check app/inspector/extensionSnapshot.js
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.14') { throw "Expected 1.5.14, got $($pkg.version)" }
+
+          $main = Get-Content app/main.min.js -Raw
+          $util = Get-Content app/util.min.js -Raw
+          $capture = Get-Content app/inspector/connectionCapture.js -Raw
+          $preload = Get-Content app/preload.min.js -Raw
+          $bundle = Get-Content app/app_view/dist/assets/index-DAX2BPbP.js -Raw
+          Get-Content app/app_view/dist/assets/index-DAX2BPbP.js -Raw | node --input-type=module --check
+          node app/tests/family-reliability-scenarios.js
+
+          if (-not $main.Contains('isUsableExtensionDir')) { throw 'Extension cache validation missing' }
+          if (-not $main.Contains('content_scripts')) { throw 'Extension referenced-file validation missing' }
+          if (-not $main.Contains('openBrowserGuarded')) { throw 'Duplicate profile launch guard missing' }
+          if (-not $main.Contains('browserLaunchPromises')) { throw 'Per-profile launch lock missing' }
+          if (-not $main.Contains('withSharedExtensionLock')) { throw 'Shared extension preparation lock missing' }
+          if (-not $main.Contains('extensionLoadPromises')) { throw 'Shared extension lock registry missing' }
+          if (-not $main.Contains("_0xrequired.push('index.html')")) { throw 'KAIZZEN catalog index validation missing' }
+          if (-not $main.Contains('_0xassetRe=/(?:src|href)')) { throw 'KAIZZEN catalog asset validation missing' }
+          if (-not $main.Contains('_0x479fd5.ready')) { throw 'Proxy relay readiness wait missing in browser launcher' }
+          if (-not $util.Contains('waitForProxyRelayReady')) { throw 'Proxy relay readiness helper missing' }
+          if (-not $util.Contains('proc.ready = waitForProxyRelayReady')) { throw 'Proxy relay readiness promise missing' }
+          if (-not $capture.Contains('Username: Username ? "[REDACTED]"')) { throw 'Proxy username redaction missing' }
+          if (-not $capture.Contains('Password: Password ? "[REDACTED]"')) { throw 'Proxy password redaction missing' }
+          if (-not $capture.Contains('proxy-credentials-redacted')) { throw 'Diagnostic redaction policy marker missing' }
+          if (-not $main.Contains('KAIZZEN_EXTENSION_LOAD_V1')) { throw 'Managed extension load diagnostics missing' }
+          if (-not $main.Contains("'launch.log'")) { throw 'Original launch log mirror missing' }
+          if (-not $capture.Contains('extension-load.ndjson')) { throw 'Extension load diagnostic output declaration missing' }
+          if (-not $capture.Contains('launch.log')) { throw 'Original launch log output declaration missing' }
+          if (-not $main.Contains("ipcMain.handle('session-refresh'")) { throw 'Session refresh IPC handler missing' }
+          if (-not $main.Contains("BACKEND_URL+'/api/users/login'")) { throw 'Session refresh does not use normal server login' }
+          if (-not $main.Contains('sessionRefreshPromise')) { throw 'Session refresh concurrency lock missing' }
+          if (-not $preload.Contains("refreshSession: (data) => ipcRenderer.invoke('session-refresh'")) { throw 'Renderer session refresh bridge missing' }
+          if (-not $bundle.Contains('kaizenRefreshSession')) { throw 'Renderer refresh helper missing' }
+          if (-not $bundle.Contains('_kaizenSessionRetried')) { throw 'Session retry-once guard missing' }
+          if (-not $bundle.Contains('_kaizenDuplicateRetried')) { throw 'Duplicate-request retry guard missing' }
+          if (-not $bundle.Contains('localStorage.getItem("token"),d=String(n.url||"")')) { throw 'Latest-token request synchronization missing' }
+          if (-not $bundle.Contains('A.includes("solicitud duplicada")')) { throw 'Duplicate-request auth guard tolerance missing' }
+          if (-not $bundle.Contains('setTimeout(()=>{m||y(!1)},5e3)')) { throw 'Transient verification retry missing' }
+          if (-not $main.Contains('remembered-2fa.json')) { throw 'Encrypted remembered 2FA storage missing' }
+          if (-not $main.Contains("ipcMain.handle('twofa-save'")) { throw '2FA secure save IPC missing' }
+          if (-not $main.Contains('fsp.unlink(rememberedTwofaFile())')) { throw 'Expired 2FA trust cleanup missing' }
+          if (-not $preload.Contains('saveTwofaToken')) { throw '2FA secure renderer bridge missing' }
+          if (-not $bundle.Contains('kaizenRememberedTwofa')) { throw '2FA localStorage migration helper missing' }
+          if (-not $bundle.Contains('kaizen_pending_2fa')) { throw 'Direct 2FA challenge restore missing' }
+          if (-not $bundle.Contains('kaizen_silent_login_blocked')) { throw 'Silent-login loop protection missing' }
+          if (-not $bundle.Contains('_kaizenTransientRetries')) { throw 'Safe transient GET retries missing' }
+          if (-not $bundle.Contains('Mantener sesión iniciada en este equipo')) { throw 'Persistent-session UI missing' }
+          if (-not $main.Contains('initializing a fresh local profile and remembering server version')) { throw 'Sync 404 fresh-profile marker missing' }
+          if (-not $util.Contains('[profile-version] check failed')) { throw 'Non-blocking profile version fallback missing' }
+          if (-not $main.Contains('family-catalog.json')) { throw 'Encrypted family catalog cache missing' }
+          if (-not $main.Contains('cleanup is intentionally non-destructive')) { throw 'Non-destructive local profile preservation missing' }
+          if (-not $preload.Contains('saveCatalogCache')) { throw 'Catalog cache renderer bridge missing' }
+          if (-not $bundle.Contains('Modo local: usando el último catálogo guardado')) { throw 'Recoverable catalog fallback missing' }
+          if (-not $main.Contains("extension-sessions-export")) { throw 'Encrypted extension session export IPC missing' }
+          if (-not $main.Contains('/KAIZZEN/i.test(name)')) { throw 'KAIZZEN-only extension export restriction missing' }
+          if (-not $preload.Contains('kaizen-extension-sessions-button')) { throw 'Extension session export button missing' }
+          if (-not $preload.Contains('⬇ Sesiones')) { throw 'Extension session export label missing' }
+
+          Write-Host 'KAIZEN 1.5.14 source validation OK'
+
+      - name: Download and unpack 1.5.13 runtime
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force work | Out-Null
+          gh release download v1.5.13 -p 'KAIZEN-Setup-1.5.13.exe' -D work
+          New-Item -ItemType Directory -Force work/nsis | Out-Null
+          7z x -y work/KAIZEN-Setup-1.5.13.exe '-owork/nsis' | Out-Host
+          if (-not (Test-Path 'work/nsis/$PLUGINSDIR/app-64.7z')) { throw 'Base app-64.7z not found' }
+          New-Item -ItemType Directory -Force work/runtime | Out-Null
+          7z x -y 'work/nsis/$PLUGINSDIR/app-64.7z' '-owork/runtime' | Out-Host
+          if (-not (Test-Path 'work/runtime/KAIZEN.exe')) { throw 'KAIZEN.exe missing from base runtime' }
+          if (-not (Test-Path 'work/runtime/resources/app')) { throw 'resources/app missing from base runtime' }
+
+      - name: Inject KAIZEN 1.5.14 app
+        shell: pwsh
+        run: |
+          Remove-Item 'work/runtime/resources/app' -Recurse -Force
+          New-Item -ItemType Directory -Force 'work/runtime/resources/app' | Out-Null
+          Copy-Item 'app/*' 'work/runtime/resources/app/' -Recurse -Force
+          if (Test-Path 'runtime-resources') {
+            Copy-Item 'runtime-resources/*' 'work/runtime/resources/' -Recurse -Force
+          }
+          $pkg = Get-Content 'work/runtime/resources/app/package.json' -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.14') { throw 'Injected app has wrong version' }
+          if ($pkg.main -ne 'main.no-updates.js') { throw 'Injected app has wrong entrypoint' }
+
+      - name: Prepare electron-builder wrapper
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force builder | Out-Null
+          @'
+          {
+            "name": "kaizen",
+            "version": "1.5.14",
+            "description": "KAIZEN PC custom laboratory build",
+            "author": "YERSON",
+            "license": "MIT"
+          }
+          '@ | Set-Content builder/package.json -Encoding utf8
+
+          @'
+          appId: com.electron.kaizen
+          productName: KAIZEN
+          electronVersion: 35.0.0
+          directories:
+            output: ../work/out
+          win:
+            target:
+              - target: nsis
+                arch:
+                  - x64
+            signAndEditExecutable: false
+          nsis:
+            oneClick: false
+            perMachine: false
+            allowToChangeInstallationDirectory: true
+            createDesktopShortcut: true
+            createStartMenuShortcut: true
+            installerIcon: ../app/assets/installer.ico
+            uninstallerIcon: ../app/assets/uninstaller.ico
+            artifactName: KAIZEN-Setup-${version}.${ext}
+          '@ | Set-Content builder/electron-builder.yml -Encoding utf8
+
+      - name: Build NSIS installer from prepackaged runtime
+        shell: pwsh
+        run: |
+          Push-Location builder
+          npm install --no-audit --no-fund --save-dev electron-builder@26.15.7
+          npx electron-builder --prepackaged '../work/runtime' --win nsis --x64 --config electron-builder.yml --publish never
+          Pop-Location
+          if (-not (Test-Path 'work/out/KAIZEN-Setup-1.5.14.exe')) { throw 'Expected installer was not produced' }
+
+      - name: Verify generated installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force work/verify-nsis | Out-Null
+          7z x -y 'work/out/KAIZEN-Setup-1.5.14.exe' '-owork/verify-nsis' | Out-Host
+          if (-not (Test-Path 'work/verify-nsis/$PLUGINSDIR/app-64.7z')) { throw 'Generated NSIS payload missing app-64.7z' }
+
+          New-Item -ItemType Directory -Force work/verify-runtime | Out-Null
+          7z x -y 'work/verify-nsis/$PLUGINSDIR/app-64.7z' '-owork/verify-runtime' | Out-Host
+          $root = 'work/verify-runtime/resources/app'
+          $pkg = Get-Content "$root/package.json" -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.14') { throw 'Packaged version verification failed' }
+
+          $main = Get-Content "$root/main.min.js" -Raw
+          $util = Get-Content "$root/util.min.js" -Raw
+          $capture = Get-Content "$root/inspector/connectionCapture.js" -Raw
+          $preload = Get-Content "$root/preload.min.js" -Raw
+          $bundle = Get-Content "$root/app_view/dist/assets/index-DAX2BPbP.js" -Raw
+
+          if (-not $main.Contains('isUsableExtensionDir')) { throw 'Packaged extension repair missing' }
+          if (-not $main.Contains('openBrowserGuarded')) { throw 'Packaged duplicate launch guard missing' }
+          if (-not $main.Contains('browserLaunchPromises')) { throw 'Packaged launch lock missing' }
+          if (-not $main.Contains('withSharedExtensionLock')) { throw 'Packaged shared extension lock missing' }
+          if (-not $main.Contains('extensionLoadPromises')) { throw 'Packaged shared extension registry missing' }
+          if (-not $main.Contains("_0xrequired.push('index.html')")) { throw 'Packaged KAIZZEN catalog index validation missing' }
+          if (-not $main.Contains('_0xassetRe=/(?:src|href)')) { throw 'Packaged KAIZZEN catalog asset validation missing' }
+          if (-not $main.Contains('_0x479fd5.ready')) { throw 'Packaged relay wait missing' }
+          if (-not $util.Contains('waitForProxyRelayReady')) { throw 'Packaged relay helper missing' }
+          if (-not $capture.Contains('Password: Password ? "[REDACTED]"')) { throw 'Packaged diagnostic proxy redaction missing' }
+          if (-not $main.Contains('KAIZZEN_EXTENSION_LOAD_V1')) { throw 'Packaged extension load diagnostics missing' }
+          if (-not $main.Contains("'launch.log'")) { throw 'Packaged original launch log mirror missing' }
+          if (-not $capture.Contains('extension-load.ndjson')) { throw 'Packaged extension diagnostic output declaration missing' }
+          if (-not $capture.Contains('launch.log')) { throw 'Packaged original launch log output declaration missing' }
+          if (-not $main.Contains("ipcMain.handle('session-refresh'")) { throw 'Packaged session refresh handler missing' }
+          if (-not $main.Contains('sessionRefreshPromise')) { throw 'Packaged session refresh lock missing' }
+          if (-not $preload.Contains("refreshSession: (data) => ipcRenderer.invoke('session-refresh'")) { throw 'Packaged session refresh bridge missing' }
+          if (-not $bundle.Contains('kaizenRefreshSession')) { throw 'Packaged renderer refresh helper missing' }
+          if (-not $bundle.Contains('_kaizenSessionRetried')) { throw 'Packaged session retry guard missing' }
+          if (-not $bundle.Contains('_kaizenDuplicateRetried')) { throw 'Packaged duplicate retry guard missing' }
+          if (-not $bundle.Contains('setTimeout(()=>{m||y(!1)},5e3)')) { throw 'Packaged transient verification retry missing' }
+          if (-not $main.Contains('remembered-2fa.json')) { throw 'Packaged encrypted remembered 2FA storage missing' }
+          if (-not $main.Contains("ipcMain.handle('twofa-save'")) { throw 'Packaged 2FA secure save IPC missing' }
+          if (-not $main.Contains('fsp.unlink(rememberedTwofaFile())')) { throw 'Packaged expired 2FA trust cleanup missing' }
+          if (-not $preload.Contains('saveTwofaToken')) { throw 'Packaged 2FA secure renderer bridge missing' }
+          if (-not $bundle.Contains('kaizenRememberedTwofa')) { throw 'Packaged 2FA migration helper missing' }
+          if (-not $bundle.Contains('kaizen_pending_2fa')) { throw 'Packaged direct 2FA restore missing' }
+          if (-not $bundle.Contains('kaizen_silent_login_blocked')) { throw 'Packaged silent-login loop protection missing' }
+          if (-not $bundle.Contains('_kaizenTransientRetries')) { throw 'Packaged transient GET retries missing' }
+          if (-not $bundle.Contains('Mantener sesión iniciada en este equipo')) { throw 'Packaged persistent-session UI missing' }
+          if (-not $main.Contains('initializing a fresh local profile and remembering server version')) { throw 'Packaged sync 404 fresh-profile marker missing' }
+          if (-not $util.Contains('[profile-version] check failed')) { throw 'Packaged non-blocking profile version fallback missing' }
+          if (-not $main.Contains('family-catalog.json')) { throw 'Packaged encrypted family catalog cache missing' }
+          if (-not $main.Contains('cleanup is intentionally non-destructive')) { throw 'Packaged non-destructive local profile preservation missing' }
+          if (-not $preload.Contains('saveCatalogCache')) { throw 'Packaged catalog cache bridge missing' }
+          if (-not $bundle.Contains('Modo local: usando el último catálogo guardado')) { throw 'Packaged recoverable catalog fallback missing' }
+          if (-not $main.Contains("extension-sessions-export")) { throw 'Packaged encrypted extension session export IPC missing' }
+          if (-not $main.Contains('/KAIZZEN/i.test(name)')) { throw 'Packaged KAIZZEN-only extension export restriction missing' }
+          if (-not $preload.Contains('kaizen-extension-sessions-button')) { throw 'Packaged extension session export button missing' }
+          if (-not $preload.Contains('⬇ Sesiones')) { throw 'Packaged extension session export label missing' }
+
+          node --check "$root/main.min.js"
+          node --check "$root/util.min.js"
+          node --check "$root/inspector/connectionCapture.js"
+          Get-Content "$root/app_view/dist/assets/index-DAX2BPbP.js" -Raw | node --input-type=module --check
+          Write-Host 'Installer payload verification OK'
+
+      - name: Hash installer
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash 'work/out/KAIZEN-Setup-1.5.14.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  KAIZEN-Setup-1.5.14.exe" | Set-Content 'work/out/KAIZEN-Setup-1.5.14.exe.sha256' -Encoding ascii
+          Write-Host "SHA256=$hash"
+
+      - name: Remove one-shot workflow
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm '.github/workflows/build-kaizen-1.5.14.yml'
+          git commit -m 'build: remove KAIZEN 1.5.14 one-shot workflow'
+          git push origin HEAD:main
+
+      - name: Publish KAIZEN 1.5.14 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (gh release view v1.5.14 2>$null) { throw 'Release v1.5.14 already exists' }
+          gh release create v1.5.14 `
+            'work/out/KAIZEN-Setup-1.5.14.exe' `
+            'work/out/KAIZEN-Setup-1.5.14.exe.sha256' `
+            --target main `
+            --title 'KAIZEN 1.5.14' `
+            --notes 'KAIZEN PC 1.5.14 adds a second desktop button, “⬇ Sesiones”, next to Diagnostics. It exports chrome.storage.local from active KAIZZEN extensions only, including the internal lastLogin/session state, into a Windows safeStorage-encrypted backup under Downloads/KAIZEN-Extension-Sessions. A separate summary.json contains only non-sensitive metadata. No passwords, tokens, device IDs or fingerprints are written in plaintext. Family catalog fallback, local-profile preservation and all 1.5.13 reliability protections remain enabled.'
