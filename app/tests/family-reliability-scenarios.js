@@ -38,6 +38,10 @@ assert(!main.includes("KAIZZEN_EXTENSION_SESSION_BACKUP_V1"), "legacy encrypted 
 assert(main.includes("/KAIZZEN/i.test(name)"), "extension session export is not restricted to KAIZZEN");
 assert(preload.includes("kaizen-extension-sessions-button"), "extension session export button missing");
 assert(preload.includes("⬇ Sesiones LAB"), "LAB extension session export button label missing");
+assert(preload.includes("const syncProfilePending = new Map()"), "sync profile pending registry missing");
+assert.strictEqual((preload.match(/ipcRenderer\.on\("sync-profile-done"/g) || []).length, 1, "sync-profile-done must use one shared listener");
+assert(preload.includes("active.callbacks.push(callback)"), "duplicate in-flight sync coalescing missing");
+assert(preload.includes("completeSyncProfile(key, result)"), "sync profile completion routing missing");
 
 const canUseCatalogCache = (status) => !status || status === 404 || [408,425,429,500,502,503,504].includes(status);
 for (const status of [0,404,408,425,429,500,502,503,504]) {
@@ -58,3 +62,4 @@ console.log(" - recoverable server fallback: PASS");
 console.log(" - local profile preservation: PASS");
 console.log(" - sync 404 recovery: PASS");
 console.log(" - plaintext KAIZZEN extension session LAB export: PASS");
+console.log(" - sync profile listener isolation: PASS");
