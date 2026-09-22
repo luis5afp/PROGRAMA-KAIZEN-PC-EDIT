@@ -8,14 +8,20 @@ const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 const main = read("main.min.js");
 const preload = read("preload.min.js");
 const bundle = read("app_view/dist/assets/index-DAX2BPbP.js");
+const util = read("util.min.js");
 
 new Function(main);
 new Function(preload);
 new Function(bundle.replaceAll("import.meta", "({})"));
+new Function(util);
 
 assert(main.includes("function profileUpdateFromCatalog"), "catalog version fast path missing");
 assert(main.includes("_0xcatalogUpdate===null?await isProfileUpdateAvailable"), "remote profile version check is not fallback-only");
 assert(main.includes("extra /getversion request skipped"), "fast-path diagnostic marker missing");
+assert(main.includes("_0xserverVersionToMark"), "downloaded profile version tracking missing");
+assert(main.includes("synchronized profile version"), "applied profile version persistence missing");
+assert(util.includes("return ok > 0"), "cookie import does not report application success");
+assert(util.includes("if (!fs.existsSync(cookiesPath)) return false"), "cookie import missing-file result must be false");
 
 assert(main.includes("async function prefetchExtensionsForProfiles"), "background extension prefetch helper missing");
 assert(main.includes("ipcMain.handle('prefetch-profile-extensions'"), "extension prefetch IPC missing");
@@ -38,6 +44,7 @@ assert(prefetchCall >= 0 && catalogApply > prefetchCall, "extension warmup must 
 console.log("KAIZEN faster profile-open scenarios: PASS");
 console.log(" - catalog profileVersion fast path: PASS");
 console.log(" - remote /getversion retained as fallback: PASS");
+console.log(" - applied profile version persisted after successful cookie import: PASS");
 console.log(" - assigned extensions warmed in background: PASS");
 console.log(" - proxy relay preparation overlaps other launch work: PASS");
 console.log(" - browser still waits for relay readiness before spawn: PASS");
