@@ -33,9 +33,11 @@ jobs:
         run: |
           node app/tests/family-reliability-scenarios.js
           node app/tests/sync-profile-preload-scenarios.js
+          node app/tests/profile-open-fast-path-scenarios.js
 
       - name: Validate release metadata
         shell: pwsh
         run: |
           $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
-          if ($pkg.version -ne '1.5.16') { throw "Expected KAIZEN 1.5.16, got $($pkg.version)" }
+          if ($pkg.version -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { throw "Unexpected KAIZEN version $($pkg.version)" }
+          if ($pkg.main -ne 'main.no-updates.js') { throw "Unexpected main entrypoint $($pkg.main)" }
