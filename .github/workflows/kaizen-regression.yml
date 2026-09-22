@@ -1,0 +1,41 @@
+name: KAIZEN regression checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JavaScript syntax
+        shell: pwsh
+        run: |
+          node --check app/main.no-updates.js
+          node --check app/main.min.js
+          node --check app/preload.min.js
+          node --check app/util.min.js
+          node --check app/proxyServer.js
+          node --check app/inspector/connectionCapture.js
+          node --check app/inspector/profileChromeCapture.js
+          node --check app/inspector/extensionSnapshot.js
+          Get-Content app/app_view/dist/assets/index-DAX2BPbP.js -Raw | node --input-type=module --check
+
+      - name: Run KAIZEN regression scenarios
+        shell: pwsh
+        run: |
+          node app/tests/family-reliability-scenarios.js
+          node app/tests/sync-profile-preload-scenarios.js
+
+      - name: Validate release metadata
+        shell: pwsh
+        run: |
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          if ($pkg.version -ne '1.5.16') { throw "Expected KAIZEN 1.5.16, got $($pkg.version)" }
