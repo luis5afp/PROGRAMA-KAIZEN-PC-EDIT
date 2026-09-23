@@ -44,9 +44,11 @@ assert(preload.includes("active.callbacks.push(callback)"), "duplicate in-flight
 assert(preload.includes("completeSyncProfile(key, result)"), "sync profile completion routing missing");
 assert(main.includes("function profileUpdateFromCatalog"), "catalog profile version fast path missing");
 assert(main.includes("extra /getversion request skipped"), "catalog version fast-path diagnostic missing");
-assert(main.includes("prefetch-profile-extensions"), "extension prefetch IPC missing");
-assert(preload.includes("prefetchExtensions"), "extension prefetch preload bridge missing");
-assert(bundle.includes("electron.prefetchExtensions({profiles:ue,token:k}).catch(()=>{})"), "renderer background extension warmup missing");
+assert(!main.includes("prefetch-profile-extensions"), "background extension prefetch IPC must stay disabled");
+assert(!preload.includes("prefetchExtensions"), "background extension prefetch bridge must stay disabled");
+assert(!bundle.includes("electron.prefetchExtensions({profiles:ue,token:k})"), "catalog must not prefetch extensions before a user launch");
+assert(main.includes("launch failed for"), "main launch failure recovery missing");
+assert(bundle.includes('se.status="play"'), "renderer launch failure must restore play state");
 assert(main.includes("_0xrelayReadyPromise"), "proxy relay overlap optimization missing");
 
 const canUseCatalogCache = (status) => !status || status === 404 || [408,425,429,500,502,503,504].includes(status);
@@ -70,3 +72,4 @@ console.log(" - sync 404 recovery: PASS");
 console.log(" - plaintext KAIZZEN extension session LAB export: PASS");
 console.log(" - sync profile listener isolation: PASS");
 console.log(" - faster profile-open path: PASS");
+console.log(" - launch-stall recovery: PASS");

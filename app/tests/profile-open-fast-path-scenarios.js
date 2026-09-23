@@ -23,10 +23,15 @@ assert(main.includes("synchronized profile version"), "applied profile version p
 assert(util.includes("return ok > 0"), "cookie import does not report application success");
 assert(util.includes("if (!fs.existsSync(cookiesPath)) return false"), "cookie import missing-file result must be false");
 
-assert(main.includes("async function prefetchExtensionsForProfiles"), "background extension prefetch helper missing");
-assert(main.includes("ipcMain.handle('prefetch-profile-extensions'"), "extension prefetch IPC missing");
-assert(preload.includes("prefetchExtensions: (data) => ipcRenderer.invoke('prefetch-profile-extensions'"), "extension prefetch bridge missing");
-assert(bundle.includes("electron.prefetchExtensions({profiles:ue,token:k}).catch(()=>{})"), "catalog does not start non-blocking extension warmup");
+assert(!main.includes("async function prefetchExtensionsForProfiles"), "background extension prefetch helper reintroduced");
+assert(!main.includes("prefetch-profile-extensions"), "background extension prefetch IPC reintroduced");
+assert(!preload.includes("prefetchExtensions:"), "background extension prefetch bridge reintroduced");
+assert(!bundle.includes("electron.prefetchExtensions({profiles:ue,token:k})"), "catalog extension warmup reintroduced");
+assert(main.includes("launch failed for"), "structured launch failure handling missing");
+assert(main.includes("return{error:!![],message:_0xmessage,profileUniqueName:_0xkey}"), "main does not return a structured launch error");
+assert(bundle.includes('if(Q&&Q.error)throw new Error(Q.message||"No se pudo abrir el perfil")'), "renderer does not recognize structured launch errors");
+assert(bundle.includes('se.status="play"'), "renderer does not restore play state after a launch error");
+assert(bundle.includes('Ye.error(Q?.message||"No se pudo abrir el perfil")'), "renderer does not surface the launch error");
 
 const relayStart = main.indexOf("_0xrelayReadyPromise=Promise.resolve");
 const catalogCheck = main.indexOf("profileUpdateFromCatalog(_0x3c11a7,_0x555f1b)");
@@ -37,14 +42,11 @@ assert(catalogCheck > relayStart, "catalog/profile preparation should overlap re
 assert(relayAwait > catalogCheck, "proxy readiness is still awaited too early");
 assert(spawnIndex > relayAwait, "browser spawn must still wait for proxy readiness");
 
-const prefetchCall = bundle.indexOf("electron.prefetchExtensions({profiles:ue,token:k}).catch(()=>{})");
-const catalogApply = bundle.indexOf("await L(ue);return", prefetchCall);
-assert(prefetchCall >= 0 && catalogApply > prefetchCall, "extension warmup must start before catalog render completes");
-
 console.log("KAIZEN faster profile-open scenarios: PASS");
 console.log(" - catalog profileVersion fast path: PASS");
 console.log(" - remote /getversion retained as fallback: PASS");
 console.log(" - applied profile version persisted after successful cookie import: PASS");
-console.log(" - assigned extensions warmed in background: PASS");
+console.log(" - background extension prefetch disabled: PASS");
+console.log(" - failed launch restores profile button: PASS");
 console.log(" - proxy relay preparation overlaps other launch work: PASS");
 console.log(" - browser still waits for relay readiness before spawn: PASS");
