@@ -44,7 +44,7 @@ jobs:
           $noUpdates = Get-Content app/main.no-updates.js -Raw
 
           if (-not $preload.Contains('function installGuestProfilesButton()')) { throw 'Guest button missing' }
-          if (-not $preload.Contains("ipcRenderer.invoke('guest-local-refresh')")) { throw 'Guest local refresh UI missing' }
+          if (-not $preload.Contains("ipcRenderer.invoke('guest-local-refresh'")) { throw 'Guest local refresh UI missing' }
           if (-not $preload.Contains("ipcRenderer.invoke('guest-local-folder-open')")) { throw 'Guest local folder UI missing' }
           if (-not $main.Contains("ipcMain.handle('guest-local-refresh'")) { throw 'Guest local refresh IPC missing' }
           if (-not $main.Contains("ipcMain.handle('guest-local-folder-open'")) { throw 'Guest local folder IPC missing' }
@@ -162,7 +162,7 @@ jobs:
           $main = Get-Content "$root/main.min.js" -Raw
           $preload = Get-Content "$root/preload.min.js" -Raw
           if (-not $preload.Contains('function installGuestProfilesButton()')) { throw 'Packaged guest button missing' }
-          if (-not $preload.Contains("ipcRenderer.invoke('guest-local-refresh')")) { throw 'Packaged guest local refresh missing' }
+          if (-not $preload.Contains("ipcRenderer.invoke('guest-local-refresh'")) { throw 'Packaged guest local refresh missing' }
           if (-not $main.Contains("ipcMain.handle('guest-local-refresh'")) { throw 'Packaged guest local refresh IPC missing' }
           if (-not $main.Contains("C:\\KAIZEN-PERFILES")) { throw 'Packaged local profile source missing' }
           if (-not $main.Contains('.kaizen-backup-')) { throw 'Packaged rollback protection missing' }
