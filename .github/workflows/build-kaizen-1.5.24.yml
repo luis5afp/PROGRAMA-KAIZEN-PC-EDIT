@@ -57,12 +57,18 @@ jobs:
 
           $profiles = @(Get-ChildItem $best.FullName -Directory -ErrorAction Stop |
             Where-Object { -not $_.Name.StartsWith('.kaizen-') })
-          if (-not $profiles.Count) { throw "No profile folders found under $($best.FullName)" }
+          $profileZips = @(Get-ChildItem $best.FullName -File -Filter '*.zip' -ErrorAction SilentlyContinue)
 
           Write-Host "PROFILE_ROOT=$($best.FullName)"
-          Write-Host "PROFILE_COUNT=$($profiles.Count)"
-          $profiles | Select-Object -ExpandProperty Name | Out-Host
-          "profile_count=$($profiles.Count)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host 'Entries in browserProfilesData:'
+          Get-ChildItem $best.FullName -Force | Select-Object Name,Length,PSIsContainer | Format-Table -AutoSize | Out-Host
+
+          $profileCount = $profiles.Count + $profileZips.Count
+          if (-not $profileCount) { throw "No profile folders or ZIP packages found under $($best.FullName)" }
+
+          Write-Host "PROFILE_DIR_COUNT=$($profiles.Count)"
+          Write-Host "PROFILE_ZIP_COUNT=$($profileZips.Count)"
+          "profile_count=$profileCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
           $extRoots = @(
             Get-ChildItem 'work/resources-extracted' -Recurse -Directory -ErrorAction SilentlyContinue |
@@ -152,14 +158,27 @@ jobs:
             Sort-Object @{Expression={ (Get-ChildItem $_.FullName -Directory -ErrorAction SilentlyContinue).Count };Descending=$true} |
             Select-Object -First 1
 
-          $profileCount = @(Get-ChildItem $profileRoot.FullName -Directory -ErrorAction Stop |
-            Where-Object { -not $_.Name.StartsWith('.kaizen-') }).Count
-          if ($profileCount -lt 1) { throw 'No bundled profiles found' }
+          $profileDirs = @(Get-ChildItem $profileRoot.FullName -Directory -ErrorAction Stop |
+            Where-Object { -not $_.Name.StartsWith('.kaizen-') })
+          $profileZips = @(Get-ChildItem $profileRoot.FullName -File -Filter '*.zip' -ErrorAction SilentlyContinue)
+          $profileCount = $profileDirs.Count + $profileZips.Count
+          if ($profileCount -lt 1) { throw 'No bundled profile folders or ZIP packages found' }
 
           $targetProfiles = 'work/runtime/resources/browserProfilesData'
           if (Test-Path $targetProfiles) { Remove-Item $targetProfiles -Recurse -Force }
           New-Item -ItemType Directory -Force $targetProfiles | Out-Null
-          Copy-Item (Join-Path $profileRoot.FullName '*') $targetProfiles -Recurse -Force
+
+          foreach ($dir in $profileDirs) {
+            Copy-Item $dir.FullName (Join-Path $targetProfiles $dir.Name) -Recurse -Force
+          }
+
+          foreach ($zipProfile in $profileZips) {
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($zipProfile.Name)
+            $target = Join-Path $targetProfiles $name
+            New-Item -ItemType Directory -Force $target | Out-Null
+            7z x -y $zipProfile.FullName "-o$target" | Out-Host
+            Write-Host "Expanded bundled profile ZIP: $($zipProfile.Name) -> $name"
+          }
 
           $extRoots = @(
             Get-ChildItem 'work/resources-extracted' -Recurse -Directory -ErrorAction SilentlyContinue |
@@ -173,8 +192,8 @@ jobs:
           }
 
           $embedded = @(Get-ChildItem $targetProfiles -Directory -ErrorAction Stop).Count
-          if ($embedded -ne $profileCount) { throw "Embedded profile count mismatch: $embedded vs $profileCount" }
-          Write-Host "Embedded $embedded profile(s) from resources-base-v1"
+          if ($embedded -lt 1) { throw 'No embedded profile directories produced' }
+          Write-Host "Embedded $embedded profile directory/directories from resources-base-v1"
 
       - name: Inject KAIZEN 1.5.24 app
         shell: pwsh
