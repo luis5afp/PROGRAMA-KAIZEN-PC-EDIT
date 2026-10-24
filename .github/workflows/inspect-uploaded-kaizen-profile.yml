@@ -1,0 +1,83 @@
+name: Inspect uploaded KAIZEN profile
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-profile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download split archive
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force work/parts | Out-Null
+          gh release download resources-base-v1 -p 'mrf6zykk2oghxfn5j2x.*' -D work/parts
+          $expected = @{
+            'mrf6zykk2oghxfn5j2x.z01' = 524288000
+            'mrf6zykk2oghxfn5j2x.z02' = 524288000
+            'mrf6zykk2oghxfn5j2x.zip' = 7114810
+          }
+          foreach ($entry in $expected.GetEnumerator()) {
+            $file = Join-Path 'work/parts' $entry.Key
+            if (-not (Test-Path -LiteralPath $file)) { throw "Missing part $($entry.Key)" }
+            if ((Get-Item -LiteralPath $file).Length -ne $entry.Value) {
+              throw "Incorrect size for part $($entry.Key)"
+            }
+          }
+          Write-Host 'All split archive parts present with expected sizes.'
+
+      - name: Test and inspect split profile without exposing contents
+        shell: pwsh
+        run: |
+          $archive = (Resolve-Path 'work/parts/mrf6zykk2oghxfn5j2x.zip').Path
+
+          & 7z t $archive 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw '7-Zip archive integrity test failed.' }
+          Write-Host 'Archive integrity: PASS'
+
+          New-Item -ItemType Directory -Force work/inspect | Out-Null
+          & 7z x -y $archive '-owork/inspect' 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw '7-Zip extraction failed.' }
+          Write-Host 'Archive extraction: PASS'
+
+          $allFiles = @(Get-ChildItem 'work/inspect' -Recurse -File -Force -ErrorAction SilentlyContinue)
+          $allDirectories = @(Get-ChildItem 'work/inspect' -Recurse -Directory -Force -ErrorAction SilentlyContinue)
+          $localStates = @($allFiles | Where-Object { $_.Name -eq 'Local State' })
+          $browserRoots = @($allDirectories | Where-Object { $_.Name -ieq 'browserProfilesData' })
+          $defaultDirs = @($allDirectories | Where-Object { $_.Name -eq 'Default' })
+          $prefs = @($allFiles | Where-Object { $_.Name -eq 'Preferences' })
+          $cookies = @($allFiles | Where-Object { $_.Name -eq 'Cookies' })
+          $loginData = @($allFiles | Where-Object { $_.Name -eq 'Login Data' })
+
+          Write-Host "Total files: $($allFiles.Count)"
+          Write-Host "Total directories: $($allDirectories.Count)"
+          Write-Host "browserProfilesData directories: $($browserRoots.Count)"
+          Write-Host "Local State markers: $($localStates.Count)"
+          Write-Host "Default directories: $($defaultDirs.Count)"
+          Write-Host "Preferences markers: $($prefs.Count)"
+          Write-Host "Cookies database markers: $($cookies.Count)"
+          Write-Host "Login Data database markers: $($loginData.Count)"
+
+          $validRoots = @()
+          foreach ($localState in $localStates) {
+            $dir = $localState.Directory.FullName
+            $hasDefault = (Test-Path (Join-Path $dir 'Default') -PathType Container)
+            $hasPreferences = (Test-Path (Join-Path $dir 'Default/Preferences') -PathType Leaf)
+            if ($hasDefault -and $hasPreferences) { $validRoots += $dir }
+          }
+
+          Write-Host "Structurally complete Chromium profile roots: $($validRoots.Count)"
+          if (-not $validRoots.Count) { throw 'Archive contains no complete Chromium profile root (Local State + Default/Preferences).' }
+          if ($cookies.Count -gt 0 -or $loginData.Count -gt 0) {
+            Write-Host 'SECURITY WARNING: Archive has private browser credential/session databases. Do not bundle into a publicly downloadable installer.'
+          }
+          Write-Host 'Profile archive structural inspection PASS.'
