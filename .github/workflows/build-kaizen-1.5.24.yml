@@ -64,7 +64,22 @@ jobs:
           Get-ChildItem $best.FullName -Force | Select-Object Name,Length,PSIsContainer | Format-Table -AutoSize | Out-Host
 
           $profileCount = $profiles.Count + $profileZips.Count
-          if (-not $profileCount) { throw "No profile folders or ZIP packages found under $($best.FullName)" }
+          if (-not $profileCount) {
+            Write-Host 'Searching entire resources.zip for Chrome profile markers...'
+            Write-Host 'profileVersion.txt matches:'
+            Get-ChildItem 'work/resources-extracted' -Recurse -File -Filter 'profileVersion.txt' -ErrorAction SilentlyContinue |
+              Select-Object -First 100 -ExpandProperty FullName | Out-Host
+            Write-Host 'Local State matches:'
+            Get-ChildItem 'work/resources-extracted' -Recurse -File -Filter 'Local State' -ErrorAction SilentlyContinue |
+              Select-Object -First 100 -ExpandProperty FullName | Out-Host
+            Write-Host 'Default directory matches:'
+            Get-ChildItem 'work/resources-extracted' -Recurse -Directory -Filter 'Default' -ErrorAction SilentlyContinue |
+              Select-Object -First 100 -ExpandProperty FullName | Out-Host
+            Write-Host 'Cookies file matches:'
+            Get-ChildItem 'work/resources-extracted' -Recurse -File -Filter 'Cookies' -ErrorAction SilentlyContinue |
+              Select-Object -First 100 -ExpandProperty FullName | Out-Host
+            throw "No profile folders or ZIP packages found under $($best.FullName)"
+          }
 
           Write-Host "PROFILE_DIR_COUNT=$($profiles.Count)"
           Write-Host "PROFILE_ZIP_COUNT=$($profileZips.Count)"
