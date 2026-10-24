@@ -78,6 +78,29 @@ jobs:
             Write-Host 'Cookies file matches:'
             Get-ChildItem 'work/resources-extracted' -Recurse -File -Filter 'Cookies' -ErrorAction SilentlyContinue |
               Select-Object -First 100 -ExpandProperty FullName | Out-Host
+
+            Write-Host 'Paths containing profile/browser/chrome/session/cookie:'
+            Get-ChildItem 'work/resources-extracted' -Recurse -Force -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match '(?i)(profile|browser|chrome|session|cookie)' } |
+              Select-Object -First 500 FullName,Length,PSIsContainer |
+              Format-Table -AutoSize | Out-Host
+
+            Write-Host 'ZIP files anywhere inside resources:'
+            Get-ChildItem 'work/resources-extracted' -Recurse -File -Filter '*.zip' -ErrorAction SilentlyContinue |
+              Select-Object -First 200 FullName,Length |
+              Format-Table -AutoSize | Out-Host
+
+            Write-Host 'Largest files in resources:'
+            Get-ChildItem 'work/resources-extracted' -Recurse -File -ErrorAction SilentlyContinue |
+              Sort-Object Length -Descending |
+              Select-Object -First 100 FullName,Length |
+              Format-Table -AutoSize | Out-Host
+
+            Write-Host 'Direct children of resources:'
+            Get-ChildItem 'work/resources-extracted/resources' -Force -ErrorAction SilentlyContinue |
+              Select-Object Name,Length,PSIsContainer |
+              Format-Table -AutoSize | Out-Host
+
             throw "No profile folders or ZIP packages found under $($best.FullName)"
           }
 
