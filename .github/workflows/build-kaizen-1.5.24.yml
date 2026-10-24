@@ -101,6 +101,21 @@ jobs:
               Select-Object Name,Length,PSIsContainer |
               Format-Table -AutoSize | Out-Host
 
+            Write-Host 'syncPath direct children:'
+            Get-ChildItem 'work/resources-extracted/resources/syncPath' -Force -ErrorAction SilentlyContinue |
+              Select-Object Name,Length,PSIsContainer |
+              Format-Table -AutoSize | Out-Host
+
+            Write-Host 'syncPath full tree:'
+            Get-ChildItem 'work/resources-extracted/resources/syncPath' -Recurse -Force -ErrorAction SilentlyContinue |
+              Select-Object -First 1000 FullName,Length,PSIsContainer |
+              Format-Table -AutoSize | Out-Host
+
+            Write-Host 'extensionsData direct children:'
+            Get-ChildItem 'work/resources-extracted/resources/extensionsData' -Force -ErrorAction SilentlyContinue |
+              Select-Object Name,Length,PSIsContainer |
+              Format-Table -AutoSize | Out-Host
+
             throw "No profile folders or ZIP packages found under $($best.FullName)"
           }
 
