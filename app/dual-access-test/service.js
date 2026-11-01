@@ -14,6 +14,45 @@ function metodos(value) {
   return Array.isArray(value) ? value.filter(x => x === "email" || x === "app") : [];
 }
 
+// Mostrar SOLO causas clasificadas: mensajes del servidor pueden incluir datos
+// sensibles y nunca deben copiarse íntegros a la interfaz ni a registros.
+function diagnosticarLogin(error) {
+  const status = httpStatus(error);
+  const response = error?.response?.data || {};
+  if (response?.requires2fa || response?.requires2faSetup) {
+    return paso("login", false, "El servidor exige verificación adicional para esta cuenta.",
+      { http: status, causa: "MFA_REQUERIDO", metodos: metodos(response.methods) });
+  }
+  const message = typeof response.message === "string" ? response.message.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "") : "";
+  if (/credenciales invalidas|contrasena incorrecta|correo electronico o la contrasena|invalid credentials|incorrect password/.test(message)) {
+    return paso("login", false,
+      "El servidor indica: credenciales inválidas. Revisa el correo y contraseña de esta cuenta.",
+      { http: status, causa: "CREDENCIALES_INVALIDAS" });
+  }
+  if (/verificacion|autenticador|two.factor|2fa|codigo por correo/.test(message)) {
+    return paso("login", false,
+      "El servidor necesita verificación adicional. Complétala en el flujo admitido por KAIZEN.",
+      { http: status, causa: "VERIFICACION_REQUERIDA" });
+  }
+  if (status === 429) {
+    return paso("login", false,
+      "Límite de intentos alcanzado. No repitas las solicitudes inmediatamente.",
+      { http: status, causa: "LIMITE_INTENTOS" });
+  }
+  if (status === 400) {
+    return paso("login", false,
+      "El servidor rechazó el inicio de sesión (HTTP 400). Comprueba la cuenta 1 en KAIZEN original; el mensaje no coincide con un caso reconocido.",
+      { http: status, causa: "SOLICITUD_RECHAZADA" });
+  }
+  if (status === 401 || status === 403) {
+    return paso("login", false, "El servidor no autorizó este inicio de sesión.",
+      { http: status, causa: "LOGIN_NO_AUTORIZADO" });
+  }
+  return paso("login", false,
+    status ? "El servidor rechazó la solicitud de inicio de sesión." : "No se pudo conectar con el servidor.",
+    { http: status, causa: status ? "LOGIN_ERROR" : "ERROR_RED" });
+}
+
 async function autenticar(http, baseUrl, email, password, id) {
   try {
     const response = await http.post(baseUrl + "/api/users/login",
@@ -31,9 +70,8 @@ async function autenticar(http, baseUrl, email, password, id) {
     return { token: null, resultado: paso(id, false,
       "El servidor no entregó un token de sesión.", { http: response.status || 200, causa: "SIN_TOKEN" }) };
   } catch (error) {
-    return { token: null, resultado: paso(id, false,
-      "La petición de inicio de sesión fue rechazada o falló.",
-      { http: httpStatus(error), causa: "LOGIN_ERROR" }) };
+    const diagnostico = diagnosticarLogin(error);
+    return { token: null, resultado: { ...diagnostico, id } };
   }
 }
 
