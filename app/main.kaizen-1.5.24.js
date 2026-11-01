@@ -94,3 +94,17 @@ function installDiagnosticMenu(){
 }
 app.whenReady().then(installDiagnosticMenu);
 app.on("browser-window-created",()=>setTimeout(installDiagnosticMenu,1000));
+
+// Suppress obsolete diagnostic UI controls in the production window.
+// The original preload may still define them, but their plaintext-export
+// IPC was disabled above; use Ctrl+Shift+D for sanitized diagnostics.
+app.on("browser-window-created",(_event,w)=>{
+  w.webContents.on("did-finish-load",()=>{
+    const url=String(w.webContents.getURL()||"").replace(/\\/g,"/");
+    if(url.toLowerCase().startsWith("file:") && url.includes("/app_view/dist/index.html")){
+      w.webContents.insertCSS(
+        "#kaizen-extension-sessions-button,#kaizen-diagnostics-folder-button{display:none!important;}"
+      ).catch(()=>{});
+    }
+  });
+});
