@@ -23,6 +23,13 @@ function checkResource(folder,relative){
      !fs.lstatSync(file).isFile()||fs.lstatSync(file).isSymbolicLink())
     throw Error("Falta archivo requerido: "+relative);
 }
+function checkResourceDirectory(folder,relative){
+  if(!relative||path.isAbsolute(relative)||relative.split(/[\\/]/).some(p=>!p||p==="."||p===".."))
+    throw Error("Ruta inválida en manifest.json");
+  const resolved=path.resolve(folder,relative);
+  if(!resolved.startsWith(folder+path.sep)||!fs.existsSync(resolved))
+    throw Error("No existe el directorio de recursos: "+relative);
+}
 function validateFolder(root){
   const base=path.resolve(root);
   for(const spec of EXPECTED){
@@ -44,7 +51,13 @@ function validateFolder(root){
       for(const file of [...(item.js||[]),...(item.css||[])])checkResource(folder,file);
     for(const file of Object.values(m.icons||{}))checkResource(folder,file);
     for(const entries of m.web_accessible_resources||[])
-      for(const file of entries.resources||[])checkResource(folder,file);
+      for(const file of entries.resources||[]){
+        // MV3 permite patrones como assets/*.png; para éstos validamos la carpeta.
+        if(typeof file==="string"&&file.includes("*")){
+          const prefix=file.slice(0,file.indexOf("*")).replace(/\/$/,"");
+          if(prefix)checkResourceDirectory(folder,prefix);
+        }else checkResource(folder,file);
+      }
   }
   return true;
 }
@@ -53,8 +66,9 @@ function splitEntryName(name){
      name.startsWith("/")||/^[A-Za-z]:/.test(name))throw Error("ZIP contiene rutas no permitidas");
   const pieces=name.replace(/\/$/,"").split("/");
   if(pieces.some(p=>!p||p==="."||p==="..")||
-     pieces[0]!=="KAIZEN_EXTENSIONS"||pieces.length<2||
-     !EXPECTED.some(x=>x.dir===pieces[1]))throw Error("ZIP contiene rutas ajenas a KAIZEN_EXTENSIONS");
+     pieces[0]!=="KAIZEN_EXTENSIONS"||
+     (pieces.length>=2&&!EXPECTED.some(x=>x.dir===pieces[1])))
+    throw Error("ZIP contiene rutas ajenas a KAIZEN_EXTENSIONS");
   return pieces;
 }
 async function installOriginalZip(zipFile,userDataPath){
