@@ -1,4 +1,4 @@
-name: KAIZEN offline prewarmed Chromium profiles Windows test
+name: KAIZEN PC v1.5.24 Windows release candidate
 
 on:
   pull_request:
@@ -9,6 +9,12 @@ on:
       - "app/extension-selector-preload.js"
       - "app/extension-session-identity.js"
       - "app/kaizen-original-extensions-host.js"
+      - "app/main.kaizen-1.5.24.js"
+      - "app/kaizen-diagnostics-1.5.24.js"
+      - "app/kaizen-diagnostics-preload-1.5.24.js"
+      - "app/kaizen-diagnostics-1.5.24.html"
+      - "app/kaizen-diagnostics-renderer-1.5.24.js"
+      - "app/tests/release-1.5.24-diagnostics.js"
       - "app/original-extension-selector-preload.js"
       - "app/tests/original-extension-integration-scenarios.js"
       - "app/tests/android-extension-selector-scenarios.js"
@@ -38,6 +44,11 @@ jobs:
         shell: pwsh
         run: |
           node --check app/main.member-test.js
+          node --check app/main.kaizen-1.5.24.js
+          node --check app/kaizen-diagnostics-1.5.24.js
+          node --check app/kaizen-diagnostics-preload-1.5.24.js
+          node --check app/kaizen-diagnostics-renderer-1.5.24.js
+          node app/tests/release-1.5.24-diagnostics.js
           node --check app/preload.min.js
           node --check app/apk-catalog-mode.js
           node --check app/android-extension-catalog.js
@@ -61,20 +72,20 @@ jobs:
         shell: pwsh
         run: |
           $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
-          $pkg.main = "main.member-test.js"
-          $pkg.name = "kaizen-perfiles-locales"
-          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-PERFILES-LOCALES" -Force
+          $pkg.main = "main.kaizen-1.5.24.js"
+          $pkg.name = "kaizen-pc"
+          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-PC-v1.5.24" -Force
           $pkg | ConvertTo-Json -Depth 10 | Set-Content app/package.json -Encoding utf8
 
       - name: Compilar aplicación portable Windows
         shell: pwsh
         run: |
-          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-PERFILES-LOCALES" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-          $target = "dist/KAIZEN-PERFILES-LOCALES-win32-x64/resources"
+          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-PC-v1.5.24" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $target = "dist/KAIZEN-PC-v1.5.24-win32-x64/resources"
           if (Test-Path "runtime-resources") {
             Copy-Item "runtime-resources/*" $target -Recurse -Force
           }
-          if (!(Test-Path "dist/KAIZEN-PERFILES-LOCALES-win32-x64/KAIZEN-PERFILES-LOCALES.exe")) { throw "Falta ejecutable" }
+          if (!(Test-Path "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN-PC-v1.5.24.exe")) { throw "Falta ejecutable" }
 
       - name: Incluir Chromium compatible con extensiones
         shell: pwsh
@@ -85,7 +96,7 @@ jobs:
           if (!$entry.url) { throw "No se encontro Chrome for Testing win64" }
           $zip = Join-Path $env:RUNNER_TEMP "chrome-for-testing-win64.zip"
           Invoke-WebRequest -Uri $entry.url -OutFile $zip -MaximumRedirection 8
-          $destination = "dist/KAIZEN-PERFILES-LOCALES-win32-x64/KAIZEN_CHROMIUM"
+          $destination = "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_CHROMIUM"
           New-Item -ItemType Directory -Force -Path $destination | Out-Null
           Expand-Archive -LiteralPath $zip -DestinationPath $destination -Force
           $chromium = Join-Path $destination "chrome-win64/chrome.exe"
@@ -95,7 +106,7 @@ jobs:
       - name: Publicar aplicación de prueba
         uses: actions/upload-artifact@v4
         with:
-          name: KAIZEN-PERFILES-LOCALES-Windows-x64
-          path: dist/KAIZEN-PERFILES-LOCALES-win32-x64/
-          retention-days: 7
+          name: KAIZEN-PC-v1.5.24-Windows-x64
+          path: dist/KAIZEN-PC-v1.5.24-win32-x64/
+          retention-days: 30
           if-no-files-found: error
