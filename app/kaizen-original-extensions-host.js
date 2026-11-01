@@ -95,7 +95,7 @@ async function unpackLocalExtensionArchive(){
       if(segments.length<3 || segments[0]!=="KAIZEN_EXTENSIONS" ||
          !validDirs.has(segments[1]) ||
          segments.some(x=>!x||x==="."||x==="..") ||
-         /^[A-Za-z]:/.test(name) || name.includes("\\0"))continue;
+         /^[A-Za-z]:/.test(name) || name.includes(String.fromCharCode(0)))continue;
       const length=Number(entry?.vars?.uncompressedSize||0);
       if(!Number.isFinite(length)||length<0||length>4_000_000)continue;
       total+=length;
