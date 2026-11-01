@@ -39,6 +39,11 @@ const sandbox={module:{exports:{}},exports:{},Buffer,process:{
 },console,require:mod=>{
   if(mod==="electron")return {app:{isPackaged:true,getPath:()=>userData}};
   if(mod==="node:child_process")return {spawn:spawnMock};
+  if(mod==="unzipper")return {Open:{file:async()=>({files:[
+    {path:"KAIZEN_EXTENSIONS/KAIZZEN_MAIN/manifest.json",
+      type:"File",vars:{uncompressedSize:fs.statSync(path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","manifest.json")).size},
+      buffer:async()=>Buffer.from(fs.readFileSync(path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","manifest.json"),"utf8").replace("KAIZZEN-GOOGLE","KAIZZEN-MAIN").replace("1.0.3","2.5.6"))}
+  ]})}};
   return require(mod);
 }};
 vm.runInNewContext(source,sandbox,{filename:"kaizen-original-extensions-host.js"});
@@ -49,7 +54,15 @@ async function main(){
   assert.deepEqual(items.map(x=>x.id),["main","google","custom"]);
   // Offline prewarm must prepare local storage WITHOUT starting the browser
   // or contacting the server. It can run before the KAIZEN login.
+  // Simulate the user placing the original ZIP beside the EXE.
+  // The application extracts only known local extension paths and then
+  // prepares the three profiles without contacting a server.
+  const restoreManifest=path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_MAIN","manifest.json");
+  const restoreBytes=fs.readFileSync(restoreManifest);
+  fs.unlinkSync(restoreManifest);
+  fs.writeFileSync(path.join(root,"KAIZEN_EXTENSIONS_Originales.zip"),"local fixture");
   const warm=await api.warmupOriginalProfiles();
+  assert.equal(fs.readFileSync(restoreManifest,"utf8"),restoreBytes.toString("utf8"));
   assert.equal(warm.ok,true);
   assert.equal(warm.prepared,3);
   assert.equal(calls.length,0);
