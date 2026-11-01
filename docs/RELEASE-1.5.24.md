@@ -90,3 +90,18 @@ En la nueva compilación aparece el botón **«Importar extensiones originales (
 **No es un generador de las extensiones originales**: estas funcionalidades necesitan el código real, autorizado y compatible de Principal v2.5.6, Google v1.0.3 y Streaming / Custom v1.0.6. Las pruebas automáticas usan archivos simulados para verificar la mecánica de instalación; no comprueban el funcionamiento del login, el catálogo o la compatibilidad con todos los navegadores. Se requiere una prueba funcional en Windows con los ZIP reales antes de publicar el Release.
 
 El flujo público de Actions sigue impidiendo adjuntar paquetes de distribución incompletos. `ex1` y `ex2` permanecen separadas e inactivas. La importación de originales NO activa `ex1` ni `ex2`.
+
+## Preparación automática incluida en el portable (sin importación manual)
+
+Al iniciar KAIZEN, `kaizen-original-extensions-host.js` intenta detectar un archivo **original autorizado y completo** `KAIZEN_EXTENSIONS_Originales.zip` en la carpeta del EXE o en `resources/`. Si existe y faltan perfiles, utiliza el mismo importador validado que la interfaz y lo almacena bajo `userData/kaizen-original-extensions/KAIZEN_EXTENSIONS`, sin escribir en Program Files. También detecta carpetas `KAIZEN_EXTENSIONS` entregadas en la raíz o en `resources/`.
+
+**El flujo de arranque listo al primer clic requiere que el distribuidor incluya el ZIP autorizado con MAIN, GOOGLE y CUSTOM.** Este repositorio no contiene esas tres extensiones, y la versión PREVIEW pública no puede presentarlas como instaladas. El usuario tampoco tiene que importar manualmente un ZIP si el paquete se distribuye correctamente desde el principio. La apertura sigue siendo por perfil aislado con Chromium (botón «Abrir perfil Chromium»).
+
+### Auditoría de los paquetes de seguridad
+
+Inspección real del contenido de `ex1.zip` y `ex2.zip` mediante el workflow `.github/workflows/kaizen-security-archive-audit.yml`:
+
+- `ex1.zip`: `backgroundScript.js`, `contentScript.js`, `icon.png`, `manifest.json`; **no incluye `inject.js`**, aunque el manifiesto lo declara.
+- `ex2.zip`: los mismos cuatro archivos sin referencias a `inject.js`.
+
+No afirmar que `ex1` está lista. **No activar silenciosamente `ex1` o `ex2`**: su código restringe la inspección y `ex1` puede transmitir URLs del historial a un servidor. Exigir una revisión de código, procedencia y consentimiento informado antes de habilitarlas. Las verificaciones de integridad de `main.min.js` permanecen activas.
