@@ -57,3 +57,21 @@ En un Pull Request no se descargan enlaces secretos. Si falta el paquete o su es
 ## Publicación en Releases
 
 **No crear ni publicar todavía `v1.5.24`** hasta que el ZIP de origen autorizado esté disponible y se hayan verificado los tres perfiles en un equipo Windows real. El workflow actual solo sube un artefacto de prueba; publicar un Release y/o un instalador `KAIZEN-Setup-1.5.24.exe` requiere una etapa adicional de distribución aprobada.
+
+
+## ex1 y ex2 — incorporadas como archivos, NO activadas
+
+Los dos paquetes de seguridad ya existen en el repositorio bajo:
+- `runtime-resources/extensionForSecurity/ex1` (manifest v1.2)
+- `runtime-resources/extensionForSecurity/ex2` (manifest v1.1)
+
+El workflow copia estos archivos al directorio portable `resources/extensionForSecurity/ex1` y `resources/extensionForSecurity/ex2` y el diagnóstico los busca ahí. **Ninguna se instala ni se ejecuta automáticamente**; el selector de perfiles únicamente abre MAIN, GOOGLE y CUSTOM. No las añadas a `--load-extension` sin revisar los riesgos y obtener autorización informada de quienes usen el navegador.
+
+Revisión del código existente:
+- **ex1:** tiene permiso de lectura del historial y envía ciertas URLs al servidor externo de la extensión. Además, sus scripts restringen opciones de inspección y navegación.
+- **ex2:** bloquea rutas y también restringe herramientas de inspección.
+- **Bloqueador adicional:** `ex1/manifest.json` declara `inject.js` en `web_accessible_resources`, pero ese recurso no está presente entre los archivos visibles de `runtime-resources/extensionForSecurity/ex1`. Debe aportarse y comprobarse una versión original completa, no crear un archivo vacío de reemplazo.
+
+`app/scripts/verify-security-extensions.js` verifica versiones y los archivos locales declarados, incluido `inject.js`. Si falta cualquier recurso, el workflow falla y no publica artefacto nuevo, aunque las otras tres extensiones estén disponibles. Las pruebas no activan ni se conectan a ninguna de estas extensiones.
+
+**Antes de activarlas:** revisar su código no ofuscado o auditado, destinatarios y retención de los datos transmitidos, permisos, comportamiento al desinstalar y consentimiento explícito. La incorporación inactiva no garantiza su seguridad ni su correcto funcionamiento en Windows.
