@@ -35,6 +35,7 @@ jobs:
           node app/tests/sync-profile-preload-scenarios.js
           node app/tests/profile-open-fast-path-scenarios.js
           node app/tests/guest-local-update-scenarios.js
+          node app/tests/app-only-twofa-scenarios.js
 
       - name: Validate release metadata
         shell: pwsh
