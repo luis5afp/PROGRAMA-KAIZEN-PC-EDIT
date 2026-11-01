@@ -75,3 +75,18 @@ Revisión del código existente:
 `app/scripts/verify-security-extensions.js` verifica versiones y los archivos locales declarados, incluido `inject.js`. Si falta cualquier recurso, el workflow falla y no publica artefacto nuevo, aunque las otras tres extensiones estén disponibles. Las pruebas no activan ni se conectan a ninguna de estas extensiones.
 
 **Antes de activarlas:** revisar su código no ofuscado o auditado, destinatarios y retención de los datos transmitidos, permisos, comportamiento al desinstalar y consentimiento explícito. La incorporación inactiva no garantiza su seguridad ni su correcto funcionamiento en Windows.
+
+
+## Importar las tres extensiones originales desde KAIZEN (nuevo)
+
+En la nueva compilación aparece el botón **«Importar extensiones originales (.zip)»** en **Perfiles Chromium**. Permite seleccionar un ZIP local provisto por el distribuidor autorizado, sin pedir permisos para escribir en Program Files y sin tener que copiarlo junto al ejecutable.
+
+1. Abrir KAIZEN PC y pulsar «Perfiles Chromium».
+2. Pulsar «Importar extensiones originales (.zip)», seleccionar un ZIP con la carpeta raíz `KAIZEN_EXTENSIONS/` y sus tres extensiones completas. Si hay perfiles Chromium abiertos, cerrarlos antes de reemplazar los paquetes.
+3. KAIZEN valida los nombres, versiones, manifiestos y archivos referenciados; rechaza rutas fuera de la carpeta, duplicados, tamaños excesivos y ZIP parciales.
+4. Si todo está correcto, instala en el almacenamiento de usuario de Windows `<userData>/kaizen-original-extensions/KAIZEN_EXTENSIONS/` y actualiza los tres botones para abrir cada perfil. Las sesiones y perfiles Chromium existentes NO se borran.
+5. Una importación rechazada no reemplaza los paquetes ya validados; el proceso usa un directorio temporal y sustitución por renombrado, con restauración del anterior si el renombrado del nuevo falla.
+
+**No es un generador de las extensiones originales**: estas funcionalidades necesitan el código real, autorizado y compatible de Principal v2.5.6, Google v1.0.3 y Streaming / Custom v1.0.6. Las pruebas automáticas usan archivos simulados para verificar la mecánica de instalación; no comprueban el funcionamiento del login, el catálogo o la compatibilidad con todos los navegadores. Se requiere una prueba funcional en Windows con los ZIP reales antes de publicar el Release.
+
+El flujo público de Actions sigue impidiendo adjuntar paquetes de distribución incompletos. `ex1` y `ex2` permanecen separadas e inactivas. La importación de originales NO activa `ex1` ni `ex2`.
