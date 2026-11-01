@@ -24,6 +24,9 @@ on:
       - "app/tests/member-role-compatibility-scenarios.js"
       - "app/tests/catalog-diagnostic-scenarios.js"
       - ".github/workflows/kaizen-member-test.yml"
+      - "app/scripts/verify-original-extensions.js"
+      - "runtime-resources/KAIZEN_EXTENSIONS/**"
+      - "runtime-resources/KAIZEN_EXTENSIONS_Originales.zip"
   workflow_dispatch:
 
 permissions:
@@ -102,6 +105,39 @@ jobs:
           $chromium = Join-Path $destination "chrome-win64/chrome.exe"
           if (!(Test-Path $chromium)) { throw "Falta Chrome for Testing compatible" }
           Write-Host "Chrome for Testing win64 incluido: version $($meta.channels.Stable.version)"
+
+      - name: Incorporar y verificar los paquetes originales en el portable
+        shell: pwsh
+        env:
+          KAIZEN_EXTENSIONS_BUNDLE_URL: ${{ github.event_name == 'workflow_dispatch' && secrets.KAIZEN_EXTENSIONS_BUNDLE_URL || '' }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sourceFolder = "runtime-resources/KAIZEN_EXTENSIONS"
+          $sourceZip = "runtime-resources/KAIZEN_EXTENSIONS_Originales.zip"
+          # Solo ejecuciones manuales confiables pueden utilizar el enlace privado configurado.
+          if (!(Test-Path $sourceFolder) -and !(Test-Path $sourceZip) -and $env:KAIZEN_EXTENSIONS_BUNDLE_URL) {
+            if ($env:KAIZEN_EXTENSIONS_BUNDLE_URL -notmatch '^https://') {
+              throw "KAIZEN_EXTENSIONS_BUNDLE_URL debe utilizar HTTPS"
+            }
+            $sourceZip = Join-Path $env:RUNNER_TEMP "KAIZEN_EXTENSIONS_Originales.zip"
+            Invoke-WebRequest -Uri $env:KAIZEN_EXTENSIONS_BUNDLE_URL -OutFile $sourceZip -MaximumRedirection 4
+          }
+          $target = "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_EXTENSIONS"
+          if (Test-Path $sourceFolder) {
+            Copy-Item -LiteralPath $sourceFolder -Destination $target -Recurse -Force
+          } elseif (Test-Path $sourceZip) {
+            $stage = Join-Path $env:RUNNER_TEMP "kaizen-extension-stage"
+            New-Item -ItemType Directory -Path $stage -Force | Out-Null
+            Expand-Archive -LiteralPath $sourceZip -DestinationPath $stage -Force
+            $unpacked = Join-Path $stage "KAIZEN_EXTENSIONS"
+            if (!(Test-Path $unpacked)) { throw "El ZIP no contiene KAIZEN_EXTENSIONS en su raíz" }
+            Copy-Item -LiteralPath $unpacked -Destination $target -Recurse -Force
+          } else {
+            throw "Faltan los tres paquetes originales. No se publica un portable incompleto. Consulte docs/RELEASE-1.5.24.md"
+          }
+          node app/scripts/verify-original-extensions.js $target
+          # El directorio validado debe estar AL LADO del EXE, no en resources/.
+          if (!(Test-Path "$target/KAIZZEN_MAIN/manifest.json")) { throw "Paquetes fuera de la ubicación del EXE" }
 
       - name: Publicar aplicación de prueba
         uses: actions/upload-artifact@v4
