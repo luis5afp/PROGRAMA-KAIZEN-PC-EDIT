@@ -1,0 +1,115 @@
+name: KAIZEN PC 1.5.24 PREVIEW portable (importador)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/kaizen-1524-preview.yml"
+      - "app/kaizen-original-extension-importer.js"
+      - "app/kaizen-original-extensions-host.js"
+      - "app/original-extension-selector-preload.js"
+      - "app/main.kaizen-1.5.24.js"
+      - "app/tests/original-extension-importer-scenarios.js"
+      - "app/tests/original-extension-integration-scenarios.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Comprobar el código y pruebas de importación
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          node --check app/main.kaizen-1.5.24.js
+          node --check app/kaizen-original-extensions-host.js
+          node --check app/kaizen-original-extension-importer.js
+          node --check app/original-extension-selector-preload.js
+          node app/tests/original-extension-importer-scenarios.js
+          node app/tests/original-extension-integration-scenarios.js
+          node app/tests/release-1.5.24-diagnostics.js
+
+      - name: Instalar dependencias
+        working-directory: app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm install --omit=dev --no-audit --no-fund
+
+      - name: Configurar punto de entrada preview
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          $pkg.main = 'main.kaizen-1.5.24.js'
+          $pkg.name = 'kaizen-pc'
+          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue 'KAIZEN-PC-v1.5.24' -Force
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content app/package.json -Encoding utf8
+
+      - name: Compilar EXE portable para pruebas
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          npx --yes @electron/packager@18.3.6 ./app 'KAIZEN-PC-v1.5.24' --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $output = 'dist/KAIZEN-PC-v1.5.24-win32-x64'
+          if (!(Test-Path "$output/KAIZEN-PC-v1.5.24.exe")) { throw 'No se genero el EXE portable' }
+          $resources = "$output/resources"
+          # Se copian recursos de programa, pero NO las extensiones ex1/ex2
+          # incompletas ni paquetes originales simulados.
+          foreach ($folder in @('browserProfilesData','extensionsData','syncPath')) {
+            $source = "runtime-resources/$folder"
+            if (Test-Path $source) {
+              Copy-Item -LiteralPath $source -Destination "$resources/$folder" -Recurse -Force
+            }
+          }
+          if (Test-Path "$resources/extensionForSecurity") { throw 'Preview no debe contener ex1/ex2' }
+          if (Test-Path "$output/KAIZEN_EXTENSIONS") { throw 'Preview no debe afirmar incluir extensiones originales' }
+
+      - name: Incluir Chrome for Testing (Windows)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $meta = Invoke-RestMethod 'https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json'
+          $entry = @($meta.channels.Stable.downloads.chrome | Where-Object { $_.platform -eq 'win64' })[0]
+          if (!$entry.url) { throw 'Falta la descarga de Chromium win64' }
+          $zip = Join-Path $env:RUNNER_TEMP 'chrome-for-testing-win64.zip'
+          Invoke-WebRequest -Uri $entry.url -OutFile $zip -MaximumRedirection 8
+          $dest = 'dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_CHROMIUM'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
+          if (!(Test-Path "$dest/chrome-win64/chrome.exe")) { throw 'Falta el navegador incluido' }
+
+      - name: Instrucciones para probar el portable
+        shell: pwsh
+        run: |
+          $folder='dist/KAIZEN-PC-v1.5.24-win32-x64'
+          @'
+          KAIZEN PC 1.5.24 — PREVIEW DE PRUEBA, NO RELEASE
+          Descomprime la carpeta completa y ejecuta KAIZEN-PC-v1.5.24.exe.
+          Esta prueba contiene el nuevo importador, pero NO los tres paquetes
+          originales MAIN/GOOGLE/CUSTOM ni las extensiones de seguridad ex1/ex2.
+          Para probar perfiles reales importa un ZIP original y autorizado
+          desde "Perfiles Chromium" > "Importar extensiones originales (.zip)".
+          No introduzcas credenciales reales hasta verificar la procedencia.
+          Si falta el ZIP, las tarjetas mostrarán "Falta el paquete local".
+          Este archivo no es un instalador Setup ni un Release definitivo.
+          '@ | Set-Content "$folder/LEEME-PRUEBA.txt" -Encoding utf8
+
+      - name: Publicar ZIP de prueba (no Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-PC-v1.5.24-PREVIEW-importador-Windows-x64
+          path: dist/KAIZEN-PC-v1.5.24-win32-x64/
+          if-no-files-found: error
+          retention-days: 14
