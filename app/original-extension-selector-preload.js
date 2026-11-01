@@ -37,6 +37,27 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
     exit.addEventListener("click",close);
     const info=el("p",shell,"Estos tres perfiles se preparan localmente al abrir KAIZEN, sin consultar el servidor. Al pulsar Abrir, Chromium inicia con la extensión original. Solo el catálogo y el inicio de sesión de la extensión podrían requerir internet o 2FA.",styles.text+"margin:20px 0;");
     const state=el("div",shell,"Buscando extensiones locales…",styles.text+"margin-bottom:13px;");
+    const importRow=el("div",shell,"","display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0 20px;");
+    const importButton=el("button",importRow,"📦 Importar extensiones originales (.zip)",styles.button);
+    el("span",importRow,"Elige un paquete autorizado con Principal, Google y Custom. Se guardará en tu perfil local de Windows.",styles.text);
+    importButton.addEventListener("click",async ()=>{
+      importButton.disabled=true;
+      state.textContent="Selecciona el ZIP original de las tres extensiones…";
+      try{
+        const result=await ipcRenderer.invoke("kaizen-original-extensions-import");
+        if(!state.isConnected)return;
+        if(result?.ok){
+          state.textContent=result.message||"Extensiones originales importadas";
+          // Vuelve a consultar el estado real y habilita los tres botones.
+          await open();
+          return;
+        }
+        state.textContent=result?.canceled?"No se importó ningún archivo":
+          String(result?.message||"El ZIP no contiene las extensiones requeridas");
+      }catch{
+        if(state.isConnected)state.textContent="No se pudo importar el paquete original";
+      }finally{importButton.disabled=false;}
+    });
     const cards=el("div",shell,"","display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;");
     pending=true;
     try {
@@ -95,7 +116,7 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
       const allAvailable=Array.isArray(extensions)&&extensions.length===3&&extensions.every(x=>x.available);
       el("p",shell,allAvailable?
         "Los tres paquetes se detectaron en esta instalación. Sus sesiones se conservan en carpetas Chromium independientes.":
-        "Faltan archivos locales para activar uno o más perfiles. Coloca KAIZEN_EXTENSIONS_Originales.zip o la carpeta KAIZEN_EXTENSIONS, con los tres paquetes originales autorizados, junto al archivo .exe de KAIZEN y reinicia la aplicación. No se pueden abrir perfiles sin estos archivos.",styles.text+"margin-top:22px;");
+        "Faltan archivos locales para activar uno o más perfiles. Usa «Importar extensiones originales (.zip)» para seleccionar un paquete autorizado con las tres extensiones. KAIZEN lo guardará en almacenamiento persistente, sin modificar la carpeta del programa.",styles.text+"margin-top:22px;");
       el("p",shell,"Estas extensiones pueden gestionar cookies y proxy dentro de sus propios perfiles Chromium aislados. El catálogo remoto sigue sujeto a los permisos del servidor.",styles.text+"margin-top:12px;");
     } catch {
       if(state.isConnected)state.textContent="No fue posible consultar los paquetes instalados.";
