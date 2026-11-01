@@ -44,6 +44,8 @@ const {record,overview,remoteChecks}=sandbox.module.exports;
  assert.equal(local.prepared,3);
  assert.equal(local.profiles.length,3);
  assert.equal(local.security.length,2);
+ assert.equal(local.security.every(x=>x.active===false),true);
+ assert.equal(local.security.map(x=>x.name).join(","),"ex1,ex2");
  const noToken=await remoteChecks("");
  assert.equal(noToken.ok,false);
  assert.equal(requests.length,0);
