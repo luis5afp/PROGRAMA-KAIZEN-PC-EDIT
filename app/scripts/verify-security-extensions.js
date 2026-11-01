@@ -35,10 +35,24 @@ function validate(rootPath){
       for(const file of [...(entry.js||[]),...(entry.css||[])])checkFile(folder,file);
     }
     for(const file of Object.values(manifest.icons||{}))checkFile(folder,file);
+    // EX1 1.2 original declara inject.js como recurso expuesto, pero no lo
+    // incluye en el RAR/ZIP. El usuario confirmó que Chromium la carga sin él.
+    // La excepción se limita a ESTA referencia, no a los scripts ejecutables.
+    // NO se crea inject.js ni se modifica manifest.json (integridad SHA-256).
+    const warnings=[];
     for(const entry of manifest.web_accessible_resources||[]){
-      for(const file of entry.resources||[])checkFile(folder,file);
+      for(const file of entry.resources||[]){
+        if(name==="ex1"&&file==="inject.js"&&!fs.existsSync(path.join(folder,file))){
+          warnings.push("ex1 declara inject.js pero el paquete original no lo incluye");
+        }else{
+          checkFile(folder,file);
+        }
+      }
     }
-    console.log("[extensiones de seguridad] "+name+" "+version+": manifiesto y recursos completos; INACTIVA");
+    console.log("[extensiones de seguridad] "+name+" "+version+
+      ": manifiesto y archivos de ejecución verificados; "+
+      (warnings.length?"advertencia: "+warnings.join("; "):"sin advertencias")+
+      "; no activada por este verificador");
   }
   return true;
 }
