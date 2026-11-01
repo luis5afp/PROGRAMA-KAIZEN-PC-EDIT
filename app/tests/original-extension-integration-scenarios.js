@@ -47,6 +47,14 @@ async function main(){
   const items=api.listOriginalExtensions();
   assert.equal(items.filter(x=>x.available).length,3);
   assert.deepEqual(items.map(x=>x.id),["main","google","custom"]);
+  // Offline prewarm must prepare local storage WITHOUT starting the browser
+  // or contacting the server. It can run before the KAIZEN login.
+  const warm=await api.warmupOriginalProfiles();
+  assert.equal(warm.ok,true);
+  assert.equal(warm.prepared,3);
+  assert.equal(calls.length,0);
+  assert.deepEqual(["main","google","custom"].map(id=>fs.existsSync(path.join(userData,"chromium-extension-profiles",id))),[true,true,true]);
+  assert.equal(api.listOriginalExtensions().filter(x=>x.prepared).length,3);
   const r=await api.openOriginalExtension("custom");
   assert.equal(r.ok,true);
   assert.equal(r.opened,"perfil Chromium");
@@ -82,6 +90,9 @@ async function main(){
   assert(!source.includes("session.loadExtension"));
   assert(!source.includes("api/users/login"));
   assert(!source.includes("switch-client"));
+  assert(!source.includes("fetch("));
+  assert(!source.includes("axios."));
+  assert(!source.includes("/api/browser/get"));
   console.log("KAIZEN three isolated Chromium extension profiles: PASS");
 }
 main().catch(err=>{console.error(err);process.exitCode=1;})
