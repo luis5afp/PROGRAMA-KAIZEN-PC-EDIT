@@ -37,7 +37,18 @@ function extensionSecurityState(){
       const m=JSON.parse(fs.readFileSync(file,"utf8"));
       const refs=[m.background?.service_worker];
       for(const x of m.content_scripts||[])refs.push(...(x.js||[]),...(x.css||[]));
-      for(const x of m.web_accessible_resources||[])refs.push(...(x.resources||[]));
+      // El EX1 original carga en Chromium sin inject.js: su declaración
+      // residual no es prueba de que el paquete no pueda ejecutarse.
+      // No se alteran los seis archivos protegidos por hashes SHA-256.
+      const optionalMissing=[];
+      for(const x of m.web_accessible_resources||[]){
+        for(const entry of x.resources||[]){
+          if(item.name==="ex1"&&entry==="inject.js"&&
+             !fs.existsSync(path.join(folder,"inject.js")))
+            optionalMissing.push("inject.js (referencia no utilizada en la prueba)");
+          else refs.push(entry);
+        }
+      }
       const complete=m.manifest_version===3&&m.name===item.name&&
         m.version===item.version&&refs.every(file=>{
           if(typeof file!=="string"||!file||path.isAbsolute(file)||
@@ -46,9 +57,12 @@ function extensionSecurityState(){
           return p.startsWith(folder+path.sep)&&fs.existsSync(p)&&fs.statSync(p).isFile();
         });
       return {name:item.name,installed:complete,present:true,active:false,
-        version:m.version, note:complete?
-          "Incluida pero desactivada. "+item.note:
-          "Archivos presentes, pero el paquete está incompleto o no coincide con la versión esperada."};
+        version:m.version,warning:complete&&optionalMissing.length>0,
+        note:complete?
+          "Archivos principales listos. "+
+          (optionalMissing.length?"Aviso: inject.js figura en el manifiesto pero no se distribuye. ":"")+
+          "El selector no la instala automáticamente; el cliente original podría cargarla al abrir perfiles. "+item.note:
+          "Archivos necesarios ausentes o versión no reconocida."};
     }catch{
       return {name:item.name,installed:false,present:true,active:false,
         note:"Paquete presente pero inválido"};
