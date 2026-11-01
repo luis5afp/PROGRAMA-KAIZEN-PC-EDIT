@@ -23,7 +23,7 @@ function diagnosticarLogin(error) {
     return paso("login", false, "El servidor exige verificación adicional para esta cuenta.",
       { http: status, causa: "MFA_REQUERIDO", metodos: metodos(response.methods) });
   }
-  const message = typeof response.message === "string" ? response.message.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "") : "";
+  const message = typeof response.message === "string" ? response.message.toLowerCase().normalize("NFD").replace(/[^a-z0-9 ]/g, "") : "";
   if (/credenciales invalidas|contrasena incorrecta|correo electronico o la contrasena|invalid credentials|incorrect password/.test(message)) {
     return paso("login", false,
       "El servidor indica: credenciales inválidas. Revisa el correo y contraseña de esta cuenta.",
