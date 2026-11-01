@@ -63,6 +63,11 @@ function resolveDescriptor(id){
        m.action?.default_title!=="KAIZEN"||!m.background?.service_worker||
        Object.prototype.hasOwnProperty.call(m,"key"))
       return {id,...d,folder,available:false,reason:"Paquete o versión no reconocidos"};
+    const worker=m.background.service_worker;
+    if(typeof worker!=="string"||path.isAbsolute(worker)||
+       worker.split(/[\\/]/).some(part=>!part||part==="."||part==="..")||
+       !fs.existsSync(path.join(folder,worker)))
+      return {id,...d,folder,available:false,reason:"Falta un archivo de la extensión"};
     return {id,...d,folder,available:true,reason:"Perfil listo"};
   }catch{return {id,...d,folder,available:false,reason:"Manifiesto inválido"};}
 }
