@@ -25,6 +25,7 @@ for(const [dir,name,version] of dirs){
     action:{default_title:"KAIZEN"},background:{service_worker:"backgroundScript.js"}
   }));
   fs.writeFileSync(path.join(folder,"index.html"),"<p>test</p>");
+  fs.writeFileSync(path.join(folder,"backgroundScript.js"),"// fixture");
 }
 function spawnMock(binary,args,options){
   const child=new EventEmitter();
@@ -96,6 +97,11 @@ async function main(){
   fs.writeFileSync(manifest,orig.replace('"2.5.6"','"1.2.3"'));
   assert.equal(api.listOriginalExtensions().find(x=>x.id==="main").available,false);
   fs.writeFileSync(manifest,orig);
+  // No ofrecer un perfil parcial sin el script que necesita Chromium.
+  const worker=path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","backgroundScript.js");
+  fs.unlinkSync(worker);
+  assert.equal(api.listOriginalExtensions().find(x=>x.id==="google").available,false);
+  fs.writeFileSync(worker,"// fixture");
   // The required Chromium must exist; do not silently fall back to Google Chrome.
   fs.unlinkSync(chromiumExe);
   assert.equal(api.listOriginalExtensions().every(x=>!x.available),true);
