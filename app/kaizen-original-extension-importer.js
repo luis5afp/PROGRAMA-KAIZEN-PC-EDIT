@@ -54,8 +54,8 @@ function validateFolder(root){
       for(const file of entries.resources||[]){
         // MV3 permite patrones como assets/*.png; para éstos validamos la carpeta.
         if(typeof file==="string"&&file.includes("*")){
-          const prefix=file.slice(0,file.indexOf("*")).replace(/\/$/,"");
-          if(prefix)checkResourceDirectory(folder,prefix);
+          const parent=path.posix.dirname(file.replace(/\\/g,"/"));
+          if(parent!==".")checkResourceDirectory(folder,parent);
         }else checkResource(folder,file);
       }
   }
