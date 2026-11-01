@@ -25,6 +25,7 @@ on:
       - "app/tests/catalog-diagnostic-scenarios.js"
       - ".github/workflows/kaizen-member-test.yml"
       - "app/scripts/verify-original-extensions.js"
+      - "app/tests/verify-original-extensions-scenarios.js"
       - "runtime-resources/KAIZEN_EXTENSIONS/**"
       - "runtime-resources/KAIZEN_EXTENSIONS_Originales.zip"
   workflow_dispatch:
@@ -60,6 +61,7 @@ jobs:
           node --check app/kaizen-original-extensions-host.js
           node --check app/original-extension-selector-preload.js
           node app/tests/original-extension-integration-scenarios.js
+          node app/tests/verify-original-extensions-scenarios.js
           node app/tests/android-extension-selector-scenarios.js
           node app/tests/apk-catalog-mode-scenarios.js
           node app/tests/member-role-compatibility-scenarios.js
