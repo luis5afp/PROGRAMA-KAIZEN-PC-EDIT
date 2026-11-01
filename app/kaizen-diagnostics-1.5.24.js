@@ -21,15 +21,38 @@ function record(area,status,description=""){
 }
 function safeStatus(error){return Number(error?.response?.status)||0;}
 function extensionSecurityState(){
-  const base=path.join(app.isPackaged?path.dirname(process.execPath):__dirname,"KAIZEN_EXTENSIONS");
-  return ["KAIZZEN_SECURITY_EX1","KAIZZEN_SECURITY_EX2"].map((name,i)=>{
+  // El instalador deja ex1/ex2 en resources/extensionForSecurity, NO en
+  // KAIZEN_EXTENSIONS. Solo lectura: nunca se cargan ni se ejecutan aquí.
+  const base=app.isPackaged?
+    path.join(path.dirname(process.execPath),"resources","extensionForSecurity"):
+    path.resolve(__dirname,"..","runtime-resources","extensionForSecurity");
+  return [
+    {name:"ex1",version:"1.2",note:"Puede recopilar y enviar URLs del historial."},
+    {name:"ex2",version:"1.1",note:"Puede restringir navegación y herramientas de inspección."}
+  ].map(item=>{
+    const folder=path.join(base,item.name);
+    const file=path.join(folder,"manifest.json");
+    if(!fs.existsSync(file))return {name:item.name,installed:false,active:false,note:"No incluida"};
     try{
-      const m=JSON.parse(fs.readFileSync(path.join(base,name,"manifest.json"),"utf8"));
-      return {name:"ex"+(i+1),installed:!!m,
-        version:typeof m.version==="string"?m.version.slice(0,20):"",
-        active:false,
-        note:"Disponible, pero no activada automáticamente; puede vigilar la navegación"};
-    }catch{return {name:"ex"+(i+1),installed:false,active:false,note:"No instalada"};}
+      const m=JSON.parse(fs.readFileSync(file,"utf8"));
+      const refs=[m.background?.service_worker];
+      for(const x of m.content_scripts||[])refs.push(...(x.js||[]),...(x.css||[]));
+      for(const x of m.web_accessible_resources||[])refs.push(...(x.resources||[]));
+      const complete=m.manifest_version===3&&m.name===item.name&&
+        m.version===item.version&&refs.every(file=>{
+          if(typeof file!=="string"||!file||path.isAbsolute(file)||
+             file.split(/[\\/]/).some(x=>!x||x==="."||x==="..")||/[*?]/.test(file))return false;
+          const p=path.resolve(folder,file);
+          return p.startsWith(folder+path.sep)&&fs.existsSync(p)&&fs.statSync(p).isFile();
+        });
+      return {name:item.name,installed:complete,present:true,active:false,
+        version:m.version, note:complete?
+          "Incluida pero desactivada. "+item.note:
+          "Archivos presentes, pero el paquete está incompleto o no coincide con la versión esperada."};
+    }catch{
+      return {name:item.name,installed:false,present:true,active:false,
+        note:"Paquete presente pero inválido"};
+    }
   });
 }
 async function overview(){
