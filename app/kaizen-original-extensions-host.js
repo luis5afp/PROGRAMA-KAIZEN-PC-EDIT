@@ -24,6 +24,11 @@ function appDirectory() {
 function root() {
   return path.join(appDirectory(),"KAIZEN_EXTENSIONS");
 }
+// Instalaciones elegidas por el usuario quedan fuera de la carpeta del EXE;
+// funciona incluso cuando Windows instala KAIZEN en Program Files.
+function importedRoot() {
+  return path.join(app.getPath("userData"),"kaizen-original-extensions","KAIZEN_EXTENSIONS");
+}
 function browserExecutable() {
   // Google Chrome official builds no longer accept --load-extension.
   // Use bundled Chrome for Testing / non-branded Chromium ONLY.
@@ -46,7 +51,9 @@ function chromeExtensionId(folder) {
 function resolveDescriptor(id){
   if(typeof id!=="string"||!Object.prototype.hasOwnProperty.call(DESCRIPTORS,id))
     return null;
-  const d=DESCRIPTORS[id],folder=path.join(root(),d.dir);
+  const d=DESCRIPTORS[id];
+  const local=path.join(importedRoot(),d.dir);
+  const folder=fs.existsSync(path.join(local,"manifest.json"))?local:path.join(root(),d.dir);
   const manifestFile=path.join(folder,"manifest.json");
   if(!fs.existsSync(manifestFile)||!fs.existsSync(path.join(folder,"index.html")))
     return {id,...d,folder,available:false,reason:"Falta el paquete local"};
@@ -196,4 +203,15 @@ async function openOriginalExtension(id){
   pending.set(id,task);
   try{return await task;}finally{if(pending.get(id)===task)pending.delete(id);}
 }
-module.exports={DESCRIPTORS,listOriginalExtensions,warmupOriginalProfiles,openOriginalExtension,chromeExtensionId};
+function anyRunningProfiles(){
+  return [...running.values()].some(child=>child.exitCode===null&&!child.killed);
+}
+async function importOriginalZip(zipFile){
+  if(anyRunningProfiles())return {ok:false,message:"Cierra los perfiles Chromium antes de importar otras extensiones"};
+  const {installOriginalZip}=require("./kaizen-original-extension-importer");
+  const result=await installOriginalZip(zipFile,app.getPath("userData"));
+  if(result.ok)prepared.clear();
+  return result;
+}
+module.exports={DESCRIPTORS,listOriginalExtensions,warmupOriginalProfiles,openOriginalExtension,
+  chromeExtensionId,importOriginalZip,anyRunningProfiles};
