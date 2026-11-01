@@ -78,7 +78,8 @@ async function main(){
   const restoreManifest=path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_MAIN","manifest.json");
   const restoreBytes=fs.readFileSync(restoreManifest);
   fs.unlinkSync(restoreManifest);
-  fs.writeFileSync(path.join(root,"KAIZEN_EXTENSIONS_Originales.zip"),"local fixture");
+  fs.mkdirSync(path.join(root,"resources"),{recursive:true});
+  fs.writeFileSync(path.join(root,"resources","KAIZEN_EXTENSIONS_Originales.zip"),"local fixture");
   const warm=await api.warmupOriginalProfiles();
   const installedMain=path.join(userData,"kaizen-original-extensions","KAIZEN_EXTENSIONS","KAIZZEN_MAIN","manifest.json");
   assert.equal(fs.readFileSync(installedMain,"utf8"),restoreBytes.toString("utf8"));
