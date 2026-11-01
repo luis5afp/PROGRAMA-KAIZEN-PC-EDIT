@@ -117,7 +117,7 @@ async function main(){
   assert.equal(api.listOriginalExtensions().find(x=>x.id==="main").available,false);
   fs.writeFileSync(manifest,orig);
   // No ofrecer un perfil parcial sin el script que necesita Chromium.
-  const worker=path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","backgroundScript.js");
+  const worker=path.join(userData,"kaizen-original-extensions","KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","backgroundScript.js");
   fs.unlinkSync(worker);
   assert.equal(api.listOriginalExtensions().find(x=>x.id==="google").available,false);
   fs.writeFileSync(worker,"// fixture");
