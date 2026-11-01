@@ -65,6 +65,17 @@ ipcMain.handle("kaizen-android-extension-catalog", async (event, input={}) => {
 // Original local KAIZZEN extensions, sandboxed per user profile.
 // The installed add-on is loaded from beside the packaged .exe.
 const originalExtensions = require("./kaizen-original-extensions-host");
+// Prepare only local folders and extension metadata at app startup.
+// There are NO network calls, no cookies, and no auto-authentication.
+const {app}=require("electron");
+app.whenReady().then(async()=>{
+  try {
+    const ready=await originalExtensions.warmupOriginalProfiles();
+    console.info("[local-profiles] prepared "+ready.prepared+"/"+ready.total+" (offline)");
+  } catch (_) {
+    console.warn("[local-profiles] offline preparation unavailable");
+  }
+});
 function isKaizenUi(event){
   const url=String(event.senderFrame?.url||"").replace(/\\/g,"/");
   return url.toLowerCase().startsWith("file:") &&
@@ -72,6 +83,7 @@ function isKaizenUi(event){
 }
 ipcMain.handle("kaizen-original-extensions-list", async (event) => {
   if(!isKaizenUi(event))return [];
+  await originalExtensions.warmupOriginalProfiles();
   return originalExtensions.listOriginalExtensions();
 });
 ipcMain.handle("kaizen-original-extension-open", async (event,id) => {
