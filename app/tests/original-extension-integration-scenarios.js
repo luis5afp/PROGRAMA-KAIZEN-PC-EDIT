@@ -40,6 +40,23 @@ const sandbox={module:{exports:{}},exports:{},Buffer,process:{
 },console,require:mod=>{
   if(mod==="electron")return {app:{isPackaged:true,getPath:()=>userData}};
   if(mod==="node:child_process")return {spawn:spawnMock};
+  if(mod==="./kaizen-original-extension-importer")return {
+    installOriginalZip:async(_zip,userDataRoot)=>{
+      const dest=path.join(userDataRoot,"kaizen-original-extensions","KAIZEN_EXTENSIONS");
+      for(const [folder,name,version] of dirs){
+        const from=path.join(root,"KAIZEN_EXTENSIONS",folder);
+        const into=path.join(dest,folder);
+        fs.mkdirSync(into,{recursive:true});
+        fs.copyFileSync(path.join(from,"index.html"),path.join(into,"index.html"));
+        fs.copyFileSync(path.join(from,"backgroundScript.js"),path.join(into,"backgroundScript.js"));
+        fs.writeFileSync(path.join(into,"manifest.json"),JSON.stringify({
+          manifest_version:3,name,version,action:{default_title:"KAIZEN"},
+          background:{service_worker:"backgroundScript.js"}
+        }));
+      }
+      return {ok:true,installed:3};
+    }
+  };
   if(mod==="unzipper")return {Open:{file:async()=>({files:[
     {path:"KAIZEN_EXTENSIONS/KAIZZEN_MAIN/manifest.json",
       type:"File",vars:{uncompressedSize:fs.statSync(path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","manifest.json")).size},
@@ -63,7 +80,9 @@ async function main(){
   fs.unlinkSync(restoreManifest);
   fs.writeFileSync(path.join(root,"KAIZEN_EXTENSIONS_Originales.zip"),"local fixture");
   const warm=await api.warmupOriginalProfiles();
-  assert.equal(fs.readFileSync(restoreManifest,"utf8"),restoreBytes.toString("utf8"));
+  const installedMain=path.join(userData,"kaizen-original-extensions","KAIZEN_EXTENSIONS","KAIZZEN_MAIN","manifest.json");
+  assert.equal(fs.readFileSync(installedMain,"utf8"),restoreBytes.toString("utf8"));
+  assert.equal(fs.existsSync(restoreManifest),false); // no writes beside the EXE
   assert.equal(warm.ok,true);
   assert.equal(warm.prepared,3);
   assert.equal(calls.length,0);
@@ -92,7 +111,7 @@ async function main(){
   assert.match(api.chromeExtensionId(path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_MAIN")),/^[a-p]{32}$/);
   assert.equal((await api.openOriginalExtension("invalid")).ok,false);
   // Unknown or modified manifests cannot start.
-  const manifest=path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_MAIN","manifest.json");
+  const manifest=installedMain;
   const orig=fs.readFileSync(manifest,"utf8");
   fs.writeFileSync(manifest,orig.replace('"2.5.6"','"1.2.3"'));
   assert.equal(api.listOriginalExtensions().find(x=>x.id==="main").available,false);
