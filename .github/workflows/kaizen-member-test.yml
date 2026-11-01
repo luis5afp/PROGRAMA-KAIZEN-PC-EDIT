@@ -1,0 +1,63 @@
+name: KAIZEN member Android role Windows test
+
+on:
+  pull_request:
+    paths:
+      - "app/main.member-test.js"
+      - "app/app_view/dist/assets/index-DAX2BPbP.js"
+      - "app/tests/member-role-compatibility-scenarios.js"
+      - ".github/workflows/kaizen-member-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  member-role-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verificar integridad de la prueba
+        shell: pwsh
+        run: |
+          node --check app/main.member-test.js
+          node app/tests/member-role-compatibility-scenarios.js
+          Get-Content app/app_view/dist/assets/index-DAX2BPbP.js -Raw | node --input-type=module --check
+
+      - name: Instalar dependencias originales
+        working-directory: app
+        shell: pwsh
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Aislar nombre y entrypoint experimental
+        shell: pwsh
+        run: |
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          $pkg.main = "main.member-test.js"
+          $pkg.name = "kaizen-member-prueba"
+          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-MEMBER-PRUEBA" -Force
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content app/package.json -Encoding utf8
+
+      - name: Compilar aplicación portable Windows
+        shell: pwsh
+        run: |
+          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-MEMBER-PRUEBA" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $target = "dist/KAIZEN-MEMBER-PRUEBA-win32-x64/resources"
+          if (Test-Path "runtime-resources") {
+            Copy-Item "runtime-resources/*" $target -Recurse -Force
+          }
+          if (!(Test-Path "dist/KAIZEN-MEMBER-PRUEBA-win32-x64/KAIZEN-MEMBER-PRUEBA.exe")) { throw "Falta ejecutable" }
+
+      - name: Publicar aplicación de prueba
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-MEMBER-ANDROID-Windows-x64
+          path: dist/KAIZEN-MEMBER-PRUEBA-win32-x64/
+          retention-days: 7
+          if-no-files-found: error
