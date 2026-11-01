@@ -18,3 +18,10 @@ El punto de entrada es `app/main.no-updates.js`, que aplica esta política antes
 `runtime-resources/app-update.yml` también fue desligado del repositorio upstream para evitar que una futura reactivación accidental consulte o instale builds externos.
 
 > Nota: los cambios del repositorio no modifican retroactivamente el instalador original `KAIZEN-Setup-1.5.2.exe`. Debe generarse un nuevo build para distribuir esta política dentro del programa instalado.
+
+## Verificación exclusivamente con aplicación 2FA (cliente)
+
+Esta variante del cliente inicia sesión con correo y contraseña y, si el servidor exige un segundo factor, ofrece **solo la aplicación autenticadora** (código de seis dígitos). El método por correo deja de aparecer y no se llama a sus endpoints desde el inicio de sesión. Si el servidor declara el método `app`, se abre directamente la pantalla del código; si permite configurar una aplicación, se muestra esa opción.
+
+**Importante:** si el servidor solamente permite el método `email`, el programa mostrará un aviso y no podrá completar el inicio de sesión sin cambiar la configuración del servidor. Este cliente no genera tokens de sesión ni elude el control del backend.
+
