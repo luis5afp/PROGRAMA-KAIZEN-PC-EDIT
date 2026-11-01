@@ -39,3 +39,58 @@ ipcMain.handle("kaizen-original-extension-open",async(event,id)=>{
     return {ok:false,message:"No se pudo abrir Chromium"};
   }
 });
+
+const {app,BrowserWindow,Menu,MenuItem}=require("electron");
+const path=require("node:path");
+let diagWindow=null;
+function openDiagnosticsWindow(){
+  if(diagWindow&&!diagWindow.isDestroyed()){diagWindow.show();diagWindow.focus();return;}
+  diagWindow=new BrowserWindow({
+    width:1020,height:820,minWidth:760,minHeight:550,title:"KAIZEN PC 1.5.24 · Diagnóstico integral",
+    autoHideMenuBar:true,webPreferences:{
+      preload:path.join(__dirname,"kaizen-diagnostics-preload-1.5.24.js"),
+      contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true
+    }
+  });
+  diagWindow.webContents.setWindowOpenHandler(()=>({action:"deny"}));
+  diagWindow.loadFile(path.join(__dirname,"kaizen-diagnostics-1.5.24.html"));
+  diagWindow.on("closed",()=>diagWindow=null);
+}
+function authorizedDiagnosticsWindow(event){
+  return diagWindow&&!diagWindow.isDestroyed()&&event.sender===diagWindow.webContents;
+}
+ipcMain.handle("kaizen-1524-window-overview",async event=>{
+  if(!authorizedDiagnosticsWindow(event))return {error:"Ventana no autorizada"};
+  return diagnostics.overview();
+});
+ipcMain.handle("kaizen-1524-window-probe",async event=>{
+  if(!authorizedDiagnosticsWindow(event))return {ok:false,message:"Ventana no autorizada"};
+  const window=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&
+    String(w.webContents.getURL()||"").replace(/\\/g,"/").includes("/app_view/dist/index.html"));
+  if(!window)return {ok:false,message:"Abre la ventana principal de KAIZEN"};
+  let token="";
+  try{
+    token=await window.webContents.executeJavaScript(
+      "window.localStorage.getItem('token') || ''",true);
+    const result=await diagnostics.remoteChecks(token);
+    return result;
+  }catch(_){
+    return {ok:false,message:"No hay una sesión válida para la consulta"};
+  }finally{token="";}
+});
+function installDiagnosticMenu(){
+  const menu=Menu.getApplicationMenu()||Menu.buildFromTemplate([]);
+  if(!menu.items.some(item=>item.label==="KAIZEN 1.5.24")){
+    menu.append(new MenuItem({label:"KAIZEN 1.5.24",submenu:[
+      {label:"Diagnóstico integral",accelerator:"CmdOrCtrl+Shift+D",click:openDiagnosticsWindow},
+      {label:"Abrir lista de perfiles",click:()=>{
+        const w=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&
+           String(w.webContents.getURL()||"").replace(/\\/g,"/").includes("/app_view/dist/index.html"));
+        if(w){w.show();w.focus();}
+      }}
+    ]}));
+    Menu.setApplicationMenu(menu);
+  }
+}
+app.whenReady().then(installDiagnosticMenu);
+app.on("browser-window-created",()=>setTimeout(installDiagnosticMenu,1000));
