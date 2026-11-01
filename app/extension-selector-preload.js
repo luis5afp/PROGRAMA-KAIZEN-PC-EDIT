@@ -22,7 +22,7 @@ module.exports = function installAndroidExtensionSelector(ipcRenderer) {
     const token=String(window.localStorage.getItem("token")||"");
     return {
       token,
-      ok:!!token && !/(?:^|\\/)login(?:\\/|$)/.test(hash)
+      ok:!!token && !hash.toLowerCase().includes("/login")
     };
   }
   function close() {
