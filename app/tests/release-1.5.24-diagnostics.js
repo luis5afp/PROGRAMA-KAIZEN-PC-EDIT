@@ -29,7 +29,7 @@ const fakeLocal={
  ]
 };
 const fakeApp={isPackaged:false};
-const sandbox={module:{exports:{}},exports:{},Buffer,console,process,Date,require:name=>{
+const sandbox={module:{exports:{}},exports:{},Buffer,console,process,Date,URL,require:name=>{
  if(name==="electron")return {app:fakeApp};
  if(name==="./axiosConfig")return http;
  if(name==="./config")return {BACKEND_URL:"https://example.org/v/abc"};
