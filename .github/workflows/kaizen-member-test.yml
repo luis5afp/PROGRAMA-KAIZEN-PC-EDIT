@@ -28,6 +28,11 @@ on:
       - "app/tests/verify-original-extensions-scenarios.js"
       - "runtime-resources/KAIZEN_EXTENSIONS/**"
       - "runtime-resources/KAIZEN_EXTENSIONS_Originales.zip"
+      - "runtime-resources/extensionForSecurity/**"
+      - "app/scripts/verify-security-extensions.js"
+      - "app/tests/verify-security-extensions-scenarios.js"
+      - "app/kaizen-diagnostics-ui-1.5.24.js"
+      - "docs/RELEASE-1.5.24.md"
   workflow_dispatch:
 
 permissions:
@@ -62,6 +67,8 @@ jobs:
           node --check app/original-extension-selector-preload.js
           node app/tests/original-extension-integration-scenarios.js
           node app/tests/verify-original-extensions-scenarios.js
+          node app/tests/verify-security-extensions-scenarios.js
+          node --check app/scripts/verify-security-extensions.js
           node app/tests/android-extension-selector-scenarios.js
           node app/tests/apk-catalog-mode-scenarios.js
           node app/tests/member-role-compatibility-scenarios.js
@@ -90,6 +97,7 @@ jobs:
           if (Test-Path "runtime-resources") {
             Copy-Item "runtime-resources/*" $target -Recurse -Force
           }
+          node app/scripts/verify-security-extensions.js "$target/extensionForSecurity"
           if (!(Test-Path "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN-PC-v1.5.24.exe")) { throw "Falta ejecutable" }
 
       - name: Incluir Chromium compatible con extensiones
