@@ -1,0 +1,36 @@
+name: KAIZEN - Auditar paquetes de seguridad originales
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/kaizen-security-archive-audit.yml"
+      - "runtime-resources/extensionForSecurity/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-original-security-zip:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspeccionar archivos de los ZIP originales, sin ejecutar extensiones
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          foreach ($name in @('ex1','ex2')) {
+            $zip = "runtime-resources/extensionForSecurity/$name/$name.zip"
+            if (!(Test-Path $zip)) { throw "No existe el ZIP original de $name" }
+            $dest = Join-Path $env:RUNNER_TEMP "kaizen-audit-$name"
+            Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
+            $items = @(Get-ChildItem -LiteralPath $dest -Recurse -File)
+            Write-Host "${name}: $($items.Count) archivo(s) en el ZIP."
+            foreach ($item in $items) {
+              $rel = [System.IO.Path]::GetRelativePath($dest,$item.FullName)
+              Write-Host "$name archivo: $rel"
+            }
+            $inject = @($items | Where-Object { $_.Name -eq 'inject.js' })
+            Write-Host "$name contiene inject.js: $($inject.Count -gt 0)"
+          }
