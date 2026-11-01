@@ -23,5 +23,5 @@ El punto de entrada es `app/main.no-updates.js`, que aplica esta política antes
 
 Esta variante del cliente inicia sesión con correo y contraseña y, si el servidor exige un segundo factor, ofrece **solo la aplicación autenticadora** (código de seis dígitos). El método por correo deja de aparecer y no se llama a sus endpoints desde el inicio de sesión. Si el servidor declara el método `app`, se abre directamente la pantalla del código; si permite configurar una aplicación, se muestra esa opción.
 
-**Importante:** si el servidor solamente permite el método `email`, el programa mostrará un aviso y no podrá completar el inicio de sesión sin cambiar la configuración del servidor. Este cliente no genera tokens de sesión ni elude el control del backend.
+**Importante:** si el servidor solamente anuncia el método `email`, el programa mostrará una advertencia y permitirá **probar manualmente** el código de un autenticador que ya estuviera configurado. La petición irá al endpoint legítimo `/api/users/2fa/verify`. Si el servidor lo rechaza, no será posible iniciar sesión sin habilitar ese método en el servidor. Este cliente no genera tokens de sesión ni elude el control del backend.
 
