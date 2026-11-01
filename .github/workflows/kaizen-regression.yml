@@ -35,6 +35,8 @@ jobs:
       - name: Run KAIZEN regression scenarios
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
           node app/tests/family-reliability-scenarios.js
           node app/tests/sync-profile-preload-scenarios.js
           node app/tests/profile-open-fast-path-scenarios.js
