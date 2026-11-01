@@ -1,0 +1,56 @@
+name: Exportar codigo fuente de Diagnostico KAIZEN
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/export-diagnostics-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Empaquetar el codigo fuente original sin secretos ni registros
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p salida/app/inspector
+          cp app/inspector/connectionCapture.js salida/app/inspector/
+          cp app/inspector/profileChromeCapture.js salida/app/inspector/
+          cp app/inspector/extensionSnapshot.js salida/app/inspector/
+          cp app/inspector/passiveResponseCapture.js salida/app/inspector/
+          cp app/main.no-updates.js salida/app/
+          cp app/preload.min.js salida/app/
+          cat > salida/LEEME.txt <<'TXT'
+          KAIZEN PC - CODIGO ORIGINAL DEL DIAGNOSTICO
+          =============================================
+          app/inspector/connectionCapture.js: capturas HTTP/HTTPS/CDP, proxy, eventos.
+          app/inspector/profileChromeCapture.js: observacion de perfiles Chrome.
+          app/inspector/extensionSnapshot.js: inventario local de extensiones.
+          app/inspector/passiveResponseCapture.js: capturador alternativo de respuestas.
+          app/main.no-updates.js: inicializacion y ruta IPC 'diagnostics-open-folder'.
+          app/preload.min.js: boton de la interfaz 'installDiagnosticsButton()'.
+
+          Estas fuentes fueron tomadas directamente del repositorio KAIZEN.
+          Adapta el require('../config') para exportar BACKEND_HOST en tu programa.
+          No se incluyen config.js ni axiosConfig.js para no distribuir secretos.
+
+          ATENCION: Las capturas originales registran cuerpos, encabezados y datos
+          sensibles SIN CIFRADO: passwords, tokens de sesion y cookies pueden quedar
+          en archivos locales. Solo para diagnostico autorizado y uso controlado.
+
+          El boton Sesiones LAB es ajeno al modulo de Diagnostico.
+          TXT
+          test -s salida/app/inspector/connectionCapture.js
+          test -s salida/app/preload.min.js
+      - name: Descargar codigo completo
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-Codigo-Fuente-Diagnostico
+          path: salida/
+          retention-days: 14
+          if-no-files-found: error
