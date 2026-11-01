@@ -37,4 +37,8 @@ assert(preload.includes("🔄 Actualizar todo"), 'bulk update button missing')
 assert(noUpdates.includes("autoUpdater.checkForUpdates = async () => null"), 'application updater must remain disabled')
 assert(noUpdates.includes("autoUpdater.downloadUpdate = async () => []"), 'application updater download must remain disabled')
 
+assert(preload.includes('👤 Perfiles locales'), 'local profiles entry label missing')
+assert(preload.includes('setTimeout(showDefaultLocalProfiles, 150)'), 'local profiles must open on first login view')
+assert(preload.includes("window.addEventListener('hashchange', showDefaultLocalProfiles)"), 'local profiles must support delayed login navigation')
+
 console.log('guest-local-update-scenarios: OK')
