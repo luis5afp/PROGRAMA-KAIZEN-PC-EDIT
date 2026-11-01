@@ -2,7 +2,7 @@
 // Original Chrome extension selector shown after a valid local KAIZEN login.
 // No credentials are copied into an extension. Each extension owns its login.
 module.exports=function installOriginalExtensionSelector(ipcRenderer){
-  let overlay=null,button=null,seenSession=null,pending=false;
+  let overlay=null,button=null,openedAtStartup=false,pending=false;
   const styles={
     button:"border:1px solid #65509a;background:#201333;color:#f4edff;border-radius:11px;padding:11px 15px;cursor:pointer;font-weight:700;font-family:system-ui;",
     text:"font:13px/1.6 system-ui;color:#c3c9dc;",
@@ -15,16 +15,15 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
     if(parent)parent.appendChild(node);
     return node;
   }
-  function hasSession(){
-    const hash=String(location.hash||"").toLowerCase();
-    return !!localStorage.getItem("token") && !hash.includes("/login");
-  }
+  // Local Chromium profiles never need a KAIZEN catalogue token. The original
+  // extension will request its own valid login when the user opens it.
+  function canOpenLocalProfiles(){ return true; }
   function close(){
     if(overlay)overlay.remove();
     overlay=null;
   }
   async function open(){
-    if(!hasSession() || pending)return;
+    if(!canOpenLocalProfiles() || pending)return;
     close();
     overlay=el("div",document.body,"",
       "position:fixed;inset:0;z-index:2147483000;overflow-y:auto;background:rgba(2,4,14,.96);padding:38px 18px;color:#f8fafc;font-family:system-ui;box-sizing:border-box;");
@@ -32,11 +31,11 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
       "max-width:960px;margin:18px auto;background:linear-gradient(145deg,#0f172a,#160d27);border:1px solid #594679;border-radius:20px;padding:24px;box-shadow:0 20px 65px #0008;");
     const row=el("header",shell,"","display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;");
     const head=el("div",row,"","display:flex;flex-direction:column;gap:7px;");
-    el("h2",head,"KAIZEN · Extensiones originales","font-size:23px;margin:0;");
+    el("h2",head,"KAIZEN · Perfiles Chromium locales","font-size:23px;margin:0;");
     el("p",head,"Selecciona un perfil: KAIZEN abrirá Chromium con su extensión y su catálogo.",styles.text+"margin:0;");
     const exit=el("button",row,"✕ Cerrar",styles.button);
     exit.addEventListener("click",close);
-    const info=el("p",shell,"Cada perfil Chromium guarda su propia sesión. Introduce las credenciales dentro de la extensión; si el servidor pide 2FA, debes completarlo.",styles.text+"margin:20px 0;");
+    const info=el("p",shell,"Estos tres perfiles se preparan localmente al abrir KAIZEN, sin consultar el servidor. Al pulsar Abrir, Chromium inicia con la extensión original. Solo el catálogo y el inicio de sesión de la extensión podrían requerir internet o 2FA.",styles.text+"margin:20px 0;");
     const state=el("div",shell,"Buscando extensiones locales…",styles.text+"margin-bottom:13px;");
     const cards=el("div",shell,"","display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;");
     pending=true;
@@ -53,8 +52,9 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
         b.style.cursor=x.available?"pointer":"not-allowed";
         el("strong",b,x.title,"font-size:20px;");
         el("div",b,x.name+" · v"+x.version,styles.text);
-        el("small",b,x.available?"✓ Lista para abrir":"⚠ "+x.reason,
+        el("small",b,x.available?(x.prepared?"✓ Preparado localmente":"✓ Disponible"):"⚠ "+x.reason,
           "font-size:12px;color:"+(x.available?"#86efac":"#fda4af"));
+        el("span",b,"▶ Abrir perfil Chromium","font-size:13px;font-weight:750;color:#d8b4fe;margin-top:9px;");
         if(x.available)b.addEventListener("click",async ()=>{
           b.disabled=true;
           state.textContent="Abriendo "+x.name+" en su perfil Chromium…";
@@ -69,7 +69,7 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
           } finally {b.disabled=false;}
         });
       }
-      el("p",shell,"Instalación del paquete: descomprime KAIZEN_EXTENSIONS_Originales.zip en la misma carpeta que el archivo .exe, de modo que exista KAIZEN_EXTENSIONS/KAIZZEN_MAIN/manifest.json. Reinicia KAIZEN.",styles.text+"margin-top:22px;");
+      el("p",shell,"Los tres paquetes originales ya vienen en la versión integrada de KAIZEN. Sus sesiones se conservan en carpetas Chromium independientes.",styles.text+"margin-top:22px;");
       el("p",shell,"Estas extensiones pueden gestionar cookies y proxy dentro de sus propios perfiles Chromium aislados. El catálogo remoto sigue sujeto a los permisos del servidor.",styles.text+"margin-top:12px;");
     } catch {
       if(state.isConnected)state.textContent="No fue posible consultar los paquetes instalados.";
@@ -77,20 +77,19 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
   }
   function mount(){
     if(document.getElementById("kaizen-original-extension-button"))return;
-    button=el("button",document.body,"🧩 Extensiones originales",
+    button=el("button",document.body,"🧩 Perfiles Chromium",
       styles.button+"position:fixed;left:24px;bottom:85px;z-index:2147482900;box-shadow:0 8px 24px #0008;");
     button.id="kaizen-original-extension-button";
     button.addEventListener("click",open);
     function sync(){
-      const ready=hasSession();
+      const ready=canOpenLocalProfiles();
       button.style.display=ready?"block":"none";
       if(!ready){
-        seenSession=null;close();return;
+        openedAtStartup=false;close();return;
       }
-      const token=localStorage.getItem("token");
-      if(seenSession!==token){
-        seenSession=token;
-        setTimeout(()=>{if(hasSession())open();},750);
+      if(!openedAtStartup){
+        openedAtStartup=true;
+        setTimeout(()=>{if(canOpenLocalProfiles())open();},750);
       }
     }
     window.addEventListener("hashchange",sync);
