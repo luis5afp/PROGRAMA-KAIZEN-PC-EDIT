@@ -36,6 +36,10 @@ try {
     action: {default_title: "KAIZEN"}, background: {service_worker: "backgroundScript.js"}
   }));
   assert.throws(() => validate(root), /Manifiesto no reconocido/);
+  fs.writeFileSync(manifest, JSON.stringify({
+    manifest_version: 3, name: "KAIZZEN-GOOGLE", version: "1.0.3",
+    action: {default_title: "KAIZEN"}, background: {service_worker: "backgroundScript.js"}
+  }));
   fs.rmSync(path.join(root, "KAIZZEN_CUSTOM"), {recursive: true});
   assert.throws(() => validate(root), /Carpeta ausente/);
   assert.throws(() => validate(path.join(tmp, "does-not-exist")), /No existe/);
