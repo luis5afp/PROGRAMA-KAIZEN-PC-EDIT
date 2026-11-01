@@ -35,7 +35,7 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
     el("p",head,"Selecciona un perfil: KAIZEN abrirá Chromium con su extensión y su catálogo.",styles.text+"margin:0;");
     const exit=el("button",row,"✕ Cerrar",styles.button);
     exit.addEventListener("click",close);
-    const info=el("p",shell,"Estos tres perfiles se preparan localmente al abrir KAIZEN, sin consultar el servidor. Al pulsar Abrir, Chromium inicia con la extensión original. Solo el catálogo y el inicio de sesión de la extensión podrían requerir internet o 2FA.",styles.text+"margin:20px 0;");
+    const info=el("p",shell,"KAIZEN comprueba al iniciar las extensiones originales incluidas en el paquete. Solo los perfiles con archivos completos y comprobados permiten pulsar Abrir Chromium. El catálogo y el inicio de sesión pueden requerir internet o 2FA.",styles.text+"margin:20px 0;");
     const state=el("div",shell,"Buscando extensiones locales…",styles.text+"margin-bottom:13px;");
     const importRow=el("div",shell,"","display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0 20px;");
     const importButton=el("button",importRow,"📦 Importar extensiones originales (.zip)",styles.button);
@@ -63,6 +63,9 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
     try {
       const extensions=await ipcRenderer.invoke("kaizen-original-extensions-list");
       if(!cards.isConnected)return;
+      const allAvailable=Array.isArray(extensions)&&extensions.length===3&&extensions.every(x=>x.available);
+      // Una distribución completa no necesita mostrar opciones de importación.
+      importRow.style.display=allAvailable?"none":"flex";
       state.textContent=Array.isArray(extensions)&&extensions.some(x=>x.available)?
         "Perfiles Chromium preparados. Elige cuál quieres abrir.":
         "Aún no se han instalado los archivos de las extensiones.";
@@ -113,7 +116,6 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
         el("p",securityPanel,"No se pudo consultar el estado de ex1/ex2.",styles.text);
       }
       el("p",shell,"Aviso: ex1 puede recopilar y transmitir URLs del historial. ex2 puede restringir navegación y herramientas de inspección. Por seguridad, no se activan automáticamente.",styles.text+"margin-top:14px;color:#fcd34d;");
-      const allAvailable=Array.isArray(extensions)&&extensions.length===3&&extensions.every(x=>x.available);
       el("p",shell,allAvailable?
         "Los tres paquetes se detectaron en esta instalación. Sus sesiones se conservan en carpetas Chromium independientes.":
         "Faltan archivos locales para activar uno o más perfiles. Usa «Importar extensiones originales (.zip)» para seleccionar un paquete autorizado con las tres extensiones. KAIZEN lo guardará en almacenamiento persistente, sin modificar la carpeta del programa.",styles.text+"margin-top:22px;");
