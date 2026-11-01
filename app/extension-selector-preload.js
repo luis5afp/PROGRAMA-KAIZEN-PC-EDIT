@@ -92,7 +92,9 @@ module.exports = function installAndroidExtensionSelector(ipcRenderer) {
       const switchStatus=Number(data?.switchStatus)||0;
       const catalogStatus=Number(data?.catalogStatus)||0;
       status.textContent="Extensión "+variant.title+
-        " · cambio de variante: "+(switchStatus?"HTTP "+switchStatus:"sin respuesta")+
+        " · sesión: "+String(data?.sessionClient||"sin indicar")+
+        " · cliente solicitado: "+String(data?.requestedClient||"sin indicar")+
+        " · cambio: "+(data?.switchMode==="sesión existente"?"no requerido":switchStatus?"HTTP "+switchStatus:"sin respuesta")+
         " · catálogo: "+(catalogStatus?"HTTP "+catalogStatus:"sin respuesta")+
         (Number.isInteger(data?.catalogCount)?" · "+data.catalogCount+" producto(s) en página "+page:"")+
         (data?.error?" · "+String(data.error).slice(0,180):"");
