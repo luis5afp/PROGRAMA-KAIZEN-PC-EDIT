@@ -54,6 +54,8 @@ jobs:
       - name: Verificar integridad de la prueba
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
           node --check app/main.member-test.js
           node --check app/main.kaizen-1.5.24.js
           node --check app/kaizen-diagnostics-1.5.24.js
