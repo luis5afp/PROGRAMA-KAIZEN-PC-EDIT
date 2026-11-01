@@ -9,6 +9,7 @@ on:
       - "app/main.kaizen-1.5.24.js"
       - "app/tests/original-extension-importer-scenarios.js"
       - "app/tests/original-extension-integration-scenarios.js"
+      - "app/scripts/verify-legacy-core-resources.js"
   workflow_dispatch:
 
 permissions:
@@ -36,6 +37,7 @@ jobs:
           node app/tests/original-extension-importer-scenarios.js
           node app/tests/original-extension-integration-scenarios.js
           node app/tests/release-1.5.24-diagnostics.js
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
 
       - name: Instalar dependencias
         working-directory: app
@@ -64,15 +66,18 @@ jobs:
           $output = 'dist/KAIZEN-PC-v1.5.24-win32-x64'
           if (!(Test-Path "$output/KAIZEN-PC-v1.5.24.exe")) { throw 'No se genero el EXE portable' }
           $resources = "$output/resources"
-          # Se copian recursos de programa, pero NO las extensiones ex1/ex2
-          # incompletas ni paquetes originales simulados.
-          foreach ($folder in @('browserProfilesData','extensionsData','syncPath')) {
+          # El cliente legado exige ex1/ex2 por integridad. Se copian los
+          # seis archivos originales SIN MODIFICAR y se verifican sus SHA256.
+          # Atención: el cliente legado puede activarlas al abrir perfiles;
+          # ex1 puede transmitir URLs. Solo para pruebas informadas.
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
+          foreach ($folder in @('browserProfilesData','extensionsData','syncPath','extensionForSecurity')) {
             $source = "runtime-resources/$folder"
             if (Test-Path $source) {
               Copy-Item -LiteralPath $source -Destination "$resources/$folder" -Recurse -Force
             }
           }
-          if (Test-Path "$resources/extensionForSecurity") { throw 'Preview no debe contener ex1/ex2' }
+          node app/scripts/verify-legacy-core-resources.js "$resources/extensionForSecurity"
           if (Test-Path "$output/KAIZEN_EXTENSIONS") { throw 'Preview no debe afirmar incluir extensiones originales' }
 
       - name: Incluir Chrome for Testing (Windows)
@@ -98,7 +103,13 @@ jobs:
           KAIZEN PC 1.5.24 — PREVIEW DE PRUEBA, NO RELEASE
           Descomprime la carpeta completa y ejecuta KAIZEN-PC-v1.5.24.exe.
           Esta prueba contiene el nuevo importador, pero NO los tres paquetes
-          originales MAIN/GOOGLE/CUSTOM ni las extensiones de seguridad ex1/ex2.
+          originales MAIN/GOOGLE/CUSTOM. Los archivos originales ex1 y ex2
+          SÍ están presentes para cumplir la integridad del cliente legado.
+          ADVERTENCIA: el flujo legado puede activar ex1 y ex2 al abrir
+          ciertos perfiles. ex1 puede transmitir URLs del historial y ambas
+          extensiones restringen funciones de navegacion o inspeccion.
+          No pruebes con credenciales ni sesiones personales/sensibles.
+          Esta version es solo una prueba informada, NO de uso diario.
           Para probar perfiles reales importa un ZIP original y autorizado
           desde "Perfiles Chromium" > "Importar extensiones originales (.zip)".
           No introduzcas credenciales reales hasta verificar la procedencia.
@@ -109,7 +120,7 @@ jobs:
       - name: Publicar ZIP de prueba (no Release)
         uses: actions/upload-artifact@v4
         with:
-          name: KAIZEN-PC-v1.5.24-PREVIEW-importador-Windows-x64
+          name: KAIZEN-PC-v1.5.24-PREVIEW-integridad-Windows-x64
           path: dist/KAIZEN-PC-v1.5.24-win32-x64/
           if-no-files-found: error
           retention-days: 14
