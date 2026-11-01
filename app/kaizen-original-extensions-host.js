@@ -16,6 +16,8 @@ const DESCRIPTORS=Object.freeze({
 });
 const running=new Map();
 const pending=new Map();
+const prepared=new Set();
+let warming=null;
 function appDirectory() {
   return app.isPackaged?path.dirname(process.execPath):__dirname;
 }
@@ -63,10 +65,49 @@ function listOriginalExtensions(){
     const {folder,...result}=resolveDescriptor(id);
     return {...result,
       available:!!found&&result.available,
+      prepared:prepared.has(id),
+      local:true,
       reason:!found?"Falta Chromium compatible incluido":result.reason};
   });
 }
+/**
+ * Offline preparation at KAIZEN startup.
+ * Merely verifies the bundled browser/add-ons and creates three independent
+ * user-data directories. It does NOT run Chromium, read cookies, access the
+ * remote catalogue, or authenticate on behalf of the user.
+ */
+async function warmupOriginalProfiles(){
+  if(warming)return warming;
+  const task=(async()=>{
+    const availableBrowser=browserExecutable();
+    if(!availableBrowser)return {ok:false,prepared:0,total:3,reason:"Falta Chromium incluido"};
+    const userRoot=path.join(app.getPath("userData"),"chromium-extension-profiles");
+    await fs.promises.mkdir(userRoot,{recursive:true});
+    let done=0;
+    for(const id of Object.keys(DESCRIPTORS)){
+      const d=resolveDescriptor(id);
+      if(!d?.available){prepared.delete(id);continue;}
+      try{
+        const dir=path.join(userRoot,id);
+        await fs.promises.mkdir(dir,{recursive:true});
+        // Do not launch Chrome yet: user clicks "Abrir" to create the window.
+        // The package remains in KAIZEN_EXTENSIONS beside the executable.
+        const realDir=await fs.promises.realpath(dir);
+        const realRoot=await fs.promises.realpath(userRoot);
+        if(!realDir.startsWith(realRoot+path.sep))throw Error("Ruta de perfil no aislada");
+        prepared.add(id);
+        done++;
+      }catch{prepared.delete(id);}
+    }
+    return {ok:done===3,prepared:done,total:3,reason:done===3?"Perfiles locales preparados":"Faltan paquetes locales"};
+  })();
+  warming=task;
+  try{return await task;}finally{if(warming===task)warming=null;}
+}
+
 async function openOriginalExtension(id){
+  // An Open action may arrive before the startup warmup finishes.
+  await warmupOriginalProfiles();
   const d=resolveDescriptor(id);
   if(!d)return {ok:false,message:"Perfil de extensión desconocido"};
   if(!d.available)return {ok:false,message:d.reason};
@@ -115,4 +156,4 @@ async function openOriginalExtension(id){
   pending.set(id,task);
   try{return await task;}finally{if(pending.get(id)===task)pending.delete(id);}
 }
-module.exports={DESCRIPTORS,listOriginalExtensions,openOriginalExtension,chromeExtensionId};
+module.exports={DESCRIPTORS,listOriginalExtensions,warmupOriginalProfiles,openOriginalExtension,chromeExtensionId};
