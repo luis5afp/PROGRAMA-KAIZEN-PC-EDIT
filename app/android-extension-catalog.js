@@ -5,7 +5,20 @@
 // already distributed in the official Android bundle; it is NOT an auth token.
 const crypto = require("node:crypto");
 const APK_CONTENT_KEY = Buffer.from("70b72aa4c457ca40482fae3e094556fd4c1afee5a49962d9c0976f870a7d71fd", "hex");
-const VALID_VARIANTS = Object.freeze({ main: "android", custom: "android_custom" });
+// In the Android shell the bundle selects android/android_custom.
+// In a Windows browser context the SAME bundle selects extension/extension_custom.
+const VALID_VARIANTS = Object.freeze({ main: "extension", custom: "extension_custom" });
+const ANDROID_VARIANTS = Object.freeze({ main: "android", custom: "android_custom" });
+const ALLOWED_CLIENTS = new Set(["android","android_custom","extension","extension_custom"]);
+function tokenClient(token) {
+  if(typeof token!=="string") return "sin-indicar";
+  try {
+    const segment=token.split(".")[1];
+    if(!segment || segment.length>12000) return "sin-indicar";
+    const data=JSON.parse(Buffer.from(segment,"base64url").toString("utf8"));
+    return ALLOWED_CLIENTS.has(data?.client) ? data.client : "sin-indicar";
+  } catch { return "sin-indicar"; }
+}
 function status(err) { return Number(err?.response?.status || 0) || 0; }
 function txt(x, max=160) { return typeof x==="string" ? x.slice(0,max) : ""; }
 function decodeCatalog(value) {
@@ -45,6 +58,7 @@ function visibleItem(item,base) {
 async function loadVariantCatalog(http, base, currentToken, variant, page=1, search="") {
   const result={
     variant:variant==="custom"?"Streaming":"Principal",
+    requestedClient:"", sessionClient:"sin-indicar", switchMode:"sin consulta",
     switchStatus:0, selectorStatus:0, selectorCount:null,
     catalogStatus:0, catalogCount:null, hasMore:false,
     items:[], error:""
@@ -59,21 +73,35 @@ async function loadVariantCatalog(http, base, currentToken, variant, page=1, sea
     result.error="Sesión no disponible";return result;
   }
   const headers={Authorization:"Bearer "+currentToken};
+  const currentClient=tokenClient(currentToken);
+  const family=currentClient.startsWith("android") ? ANDROID_VARIANTS : VALID_VARIANTS;
+  const target=family[variant];
+  result.sessionClient=currentClient;
+  result.requestedClient=target;
   let variantToken;
-  try {
-    const change=await http.post(base+"/api/users/switch-client",
-      {client:VALID_VARIANTS[variant]},
-      {headers,timeout:12000});
-    result.switchStatus=Number(change.status||200);
-    variantToken=change?.data?.token;
-    if(typeof variantToken!=="string"||!variantToken) {
-      result.error="El servidor no entregó una sesión para esta extensión";
+  if(currentClient===target){
+    // No switch required. The server still validates the bearer for EVERY GET.
+    variantToken=currentToken;
+    result.switchMode="sesión existente";
+  } else {
+    result.switchMode="solicitado al servidor";
+    try {
+      const change=await http.post(base+"/api/users/switch-client",
+        {client:target},
+        {headers,timeout:12000});
+      result.switchStatus=Number(change.status||200);
+      variantToken=change?.data?.token;
+      if(typeof variantToken!=="string"||!variantToken) {
+        result.error="El servidor no entregó una sesión para esta extensión";
+        return result;
+      }
+    } catch(e) {
+      result.switchStatus=status(e);
+      result.error=result.switchStatus===400 ?
+        "Solicitud de extensión rechazada (HTTP 400). Verifica el tipo de cliente indicado." :
+        "El servidor rechazó el cambio de extensión";
       return result;
     }
-  } catch(e) {
-    result.switchStatus=status(e);
-    result.error="El servidor rechazó el cambio de extensión";
-    return result;
   }
 
   // The chooser is optional on Android, even if the user has zero proxy profiles.
@@ -105,4 +133,4 @@ async function loadVariantCatalog(http, base, currentToken, variant, page=1, sea
   }
   return result;
 }
-module.exports={loadVariantCatalog,decodeCatalog,VALID_VARIANTS};
+module.exports={loadVariantCatalog,decodeCatalog,VALID_VARIANTS,ANDROID_VARIANTS,tokenClient};
