@@ -1,7 +1,7 @@
 "use strict";
 const assert=require("node:assert/strict");
 const crypto=require("node:crypto");
-const {loadVariantCatalog,decodeCatalog,VALID_VARIANTS}=require("../android-extension-catalog");
+const {loadVariantCatalog,decodeCatalog,VALID_VARIANTS,ANDROID_VARIANTS,tokenClient}=require("../android-extension-catalog");
 const KEY=Buffer.from("70b72aa4c457ca40482fae3e094556fd4c1afee5a49962d9c0976f870a7d71fd","hex");
 const TOKEN="member_test_token",ROOT="https://catalog.example.org/api";
 function encrypt(products){
@@ -20,6 +20,7 @@ async function scenario(variant,config={}){
     post:async (url,body,opt)=>{
       requests.push({method:"POST",url,body,authorization:opt?.headers?.Authorization});
       if(config.switch403)return fail(403);
+      if(config.switch400)return fail(400);
       return {status:200,data:{token:"variant_"+body.client}};
     },
     get:async (url,opt)=>{
@@ -35,7 +36,7 @@ async function scenario(variant,config={}){
       throw Error("Unexpected request");
     }
   };
-  return {result:await loadVariantCatalog(http,ROOT,TOKEN,variant,1,""),requests};
+  return {result:await loadVariantCatalog(http,ROOT,config.token||TOKEN,variant,1,""),requests};
 }
 (async()=>{
   const a=await scenario("custom");
@@ -46,14 +47,16 @@ async function scenario(variant,config={}){
   assert.equal(a.result.items[0].title,"STREAM DEMO 1");
   assert(a.result.items[0].image.startsWith("https://catalog.example.org/"));
   assert.equal(a.result.items[1].image,"");
-  assert(!JSON.stringify(a.result).includes("variant_android_custom"));
+  assert(!JSON.stringify(a.result).includes("variant_extension_custom"));
   assert(!JSON.stringify(a.result).includes("sensitive.example"));
   assert(!JSON.stringify(a.result).includes("secret"));
-  assert.equal(a.requests[0].body.client,"android_custom");
+  assert.equal(a.requests[0].body.client,"extension_custom");
+  assert.equal(a.result.sessionClient,"sin-indicar");
+  assert.equal(a.result.requestedClient,"extension_custom");
   assert.equal(a.requests[0].authorization,"Bearer "+TOKEN);
-  assert(a.requests.slice(1).every(x=>x.authorization==="Bearer variant_android_custom"));
+  assert(a.requests.slice(1).every(x=>x.authorization==="Bearer variant_extension_custom"));
   const b=await scenario("main");
-  assert.equal(b.requests[0].body.client,"android");
+  assert.equal(b.requests[0].body.client,"extension");
   const c=await scenario("main",{switch403:true});
   assert.equal(c.result.switchStatus,403);assert.equal(c.requests.length,1);
   const d=await scenario("custom",{profile403:true});
@@ -62,6 +65,24 @@ async function scenario(variant,config={}){
   assert.equal(e.result.catalogStatus,403);assert.equal(e.result.items.length,0);
   const f=await scenario("unknown");
   assert.equal(f.requests.length,0);assert.match(f.result.error,/desconocida/);
+  // HTTP 400 is a terminal failure; it is not silently treated as permission.
+  const g=await scenario("custom",{switch400:true});
+  assert.equal(g.result.switchStatus,400);
+  assert.equal(g.requests.length,1);
+  assert.match(g.result.error,/HTTP 400/);
+  // If the already server-issued JWT belongs to that client, skip the POST.
+  // All subsequent API calls still require server-side authorization.
+  const jwt=(client)=>"header."+Buffer.from(JSON.stringify({client})).toString("base64url")+".signature";
+  const h=await scenario("custom",{token:jwt("extension_custom")});
+  assert.equal(h.requests.length,2);
+  assert.equal(h.requests[0].method,"GET");
+  assert.equal(h.result.switchMode,"sesión existente");
+  assert.equal(h.result.catalogStatus,200);
+  assert.equal(tokenClient(jwt("extension_custom")),"extension_custom");
+  const j=await scenario("custom",{token:jwt("android_custom")});
+  assert.equal(j.requests[0].method,"GET");
+  assert.equal(j.result.requestedClient,"android_custom");
+  assert.equal(ANDROID_VARIANTS.main,"android");
   assert.deepEqual(Object.keys(VALID_VARIANTS),["main","custom"]);
-  console.log("KAIZEN PC Android extension switch + product catalog: PASS (6 scenarios)");
+  console.log("KAIZEN PC Android extension switch + product catalog: PASS (9 scenarios)");
 })().catch(e=>{console.error(e);process.exitCode=1});

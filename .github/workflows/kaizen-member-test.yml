@@ -1,4 +1,4 @@
-name: KAIZEN PC Android extensions selector Windows test
+name: KAIZEN Windows extensions client fix test
 
 on:
   pull_request:
@@ -54,24 +54,24 @@ jobs:
         run: |
           $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
           $pkg.main = "main.member-test.js"
-          $pkg.name = "kaizen-extensiones-android"
-          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-EXTENSIONES-ANDROID" -Force
+          $pkg.name = "kaizen-extensiones-corregidas"
+          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-EXTENSIONES-CORREGIDAS" -Force
           $pkg | ConvertTo-Json -Depth 10 | Set-Content app/package.json -Encoding utf8
 
       - name: Compilar aplicación portable Windows
         shell: pwsh
         run: |
-          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-EXTENSIONES-ANDROID" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-          $target = "dist/KAIZEN-EXTENSIONES-ANDROID-win32-x64/resources"
+          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-EXTENSIONES-CORREGIDAS" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $target = "dist/KAIZEN-EXTENSIONES-CORREGIDAS-win32-x64/resources"
           if (Test-Path "runtime-resources") {
             Copy-Item "runtime-resources/*" $target -Recurse -Force
           }
-          if (!(Test-Path "dist/KAIZEN-EXTENSIONES-ANDROID-win32-x64/KAIZEN-EXTENSIONES-ANDROID.exe")) { throw "Falta ejecutable" }
+          if (!(Test-Path "dist/KAIZEN-EXTENSIONES-CORREGIDAS-win32-x64/KAIZEN-EXTENSIONES-CORREGIDAS.exe")) { throw "Falta ejecutable" }
 
       - name: Publicar aplicación de prueba
         uses: actions/upload-artifact@v4
         with:
-          name: KAIZEN-EXTENSIONES-ANDROID-Windows-x64
-          path: dist/KAIZEN-EXTENSIONES-ANDROID-win32-x64/
+          name: KAIZEN-EXTENSIONES-CORREGIDAS-Windows-x64
+          path: dist/KAIZEN-EXTENSIONES-CORREGIDAS-win32-x64/
           retention-days: 7
           if-no-files-found: error
