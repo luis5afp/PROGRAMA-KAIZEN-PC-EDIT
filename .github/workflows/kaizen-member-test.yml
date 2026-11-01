@@ -6,6 +6,7 @@ on:
       - "app/main.member-test.js"
       - "app/app_view/dist/assets/index-DAX2BPbP.js"
       - "app/tests/member-role-compatibility-scenarios.js"
+      - "app/tests/catalog-diagnostic-scenarios.js"
       - ".github/workflows/kaizen-member-test.yml"
   workflow_dispatch:
 
@@ -28,6 +29,7 @@ jobs:
         run: |
           node --check app/main.member-test.js
           node app/tests/member-role-compatibility-scenarios.js
+          node app/tests/catalog-diagnostic-scenarios.js
           Get-Content app/app_view/dist/assets/index-DAX2BPbP.js -Raw | node --input-type=module --check
 
       - name: Instalar dependencias originales
