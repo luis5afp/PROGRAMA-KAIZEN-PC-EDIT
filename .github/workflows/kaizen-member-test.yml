@@ -1,10 +1,13 @@
-name: KAIZEN APK Principal catalogue Windows test
+name: KAIZEN PC Android extensions selector Windows test
 
 on:
   pull_request:
     paths:
       - "app/main.member-test.js"
       - "app/apk-catalog-mode.js"
+      - "app/android-extension-catalog.js"
+      - "app/extension-selector-preload.js"
+      - "app/tests/android-extension-selector-scenarios.js"
       - "app/preload.min.js"
       - "app/tests/apk-catalog-mode-scenarios.js"
       - "app/app_view/dist/assets/index-DAX2BPbP.js"
@@ -33,6 +36,9 @@ jobs:
           node --check app/main.member-test.js
           node --check app/preload.min.js
           node --check app/apk-catalog-mode.js
+          node --check app/android-extension-catalog.js
+          node --check app/extension-selector-preload.js
+          node app/tests/android-extension-selector-scenarios.js
           node app/tests/apk-catalog-mode-scenarios.js
           node app/tests/member-role-compatibility-scenarios.js
           node app/tests/catalog-diagnostic-scenarios.js
@@ -48,24 +54,24 @@ jobs:
         run: |
           $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
           $pkg.main = "main.member-test.js"
-          $pkg.name = "kaizen-catalogo-apk"
-          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-CATALOGO-APK" -Force
+          $pkg.name = "kaizen-extensiones-android"
+          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-EXTENSIONES-ANDROID" -Force
           $pkg | ConvertTo-Json -Depth 10 | Set-Content app/package.json -Encoding utf8
 
       - name: Compilar aplicación portable Windows
         shell: pwsh
         run: |
-          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-CATALOGO-APK" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-          $target = "dist/KAIZEN-CATALOGO-APK-win32-x64/resources"
+          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-EXTENSIONES-ANDROID" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $target = "dist/KAIZEN-EXTENSIONES-ANDROID-win32-x64/resources"
           if (Test-Path "runtime-resources") {
             Copy-Item "runtime-resources/*" $target -Recurse -Force
           }
-          if (!(Test-Path "dist/KAIZEN-CATALOGO-APK-win32-x64/KAIZEN-CATALOGO-APK.exe")) { throw "Falta ejecutable" }
+          if (!(Test-Path "dist/KAIZEN-EXTENSIONES-ANDROID-win32-x64/KAIZEN-EXTENSIONES-ANDROID.exe")) { throw "Falta ejecutable" }
 
       - name: Publicar aplicación de prueba
         uses: actions/upload-artifact@v4
         with:
-          name: KAIZEN-CATALOGO-APK-Windows-x64
-          path: dist/KAIZEN-CATALOGO-APK-win32-x64/
+          name: KAIZEN-EXTENSIONES-ANDROID-Windows-x64
+          path: dist/KAIZEN-EXTENSIONES-ANDROID-win32-x64/
           retention-days: 7
           if-no-files-found: error
