@@ -16,6 +16,8 @@ const DESCRIPTORS=Object.freeze({
 });
 const running=new Map();
 const pending=new Map();
+const prepared=new Set();
+let warming=null;
 function appDirectory() {
   return app.isPackaged?path.dirname(process.execPath):__dirname;
 }
@@ -63,10 +65,89 @@ function listOriginalExtensions(){
     const {folder,...result}=resolveDescriptor(id);
     return {...result,
       available:!!found&&result.available,
+      prepared:prepared.has(id),
+      local:true,
       reason:!found?"Falta Chromium compatible incluido":result.reason};
   });
 }
+/**
+ * Offline preparation at KAIZEN startup.
+ * Merely verifies the bundled browser/add-ons and creates three independent
+ * user-data directories. It does NOT run Chromium, read cookies, access the
+ * remote catalogue, or authenticate on behalf of the user.
+ */
+async function unpackLocalExtensionArchive(){
+  const archivePath=path.join(appDirectory(),"KAIZEN_EXTENSIONS_Originales.zip");
+  if(!fs.existsSync(archivePath))return 0;
+  // No remote downloads; this package is placed beside the EXE by the user.
+  const required=Object.keys(DESCRIPTORS);
+  if(required.every(id=>resolveDescriptor(id)?.available))return 0;
+  try{
+    const unzipper=require("unzipper");
+    const archive=await unzipper.Open.file(archivePath);
+    const allowedRoot=path.resolve(root());
+    const validDirs=new Set(Object.values(DESCRIPTORS).map(x=>x.dir));
+    let count=0,total=0;
+    for(const entry of archive.files||[]){
+      if(entry.type==="Directory")continue;
+      const name=String(entry.path||"").replace(/\\/g,"/");
+      const segments=name.split("/");
+      if(segments.length<3 || segments[0]!=="KAIZEN_EXTENSIONS" ||
+         !validDirs.has(segments[1]) ||
+         segments.some(x=>!x||x==="."||x==="..") ||
+         /^[A-Za-z]:/.test(name) || name.includes(String.fromCharCode(0)))continue;
+      const length=Number(entry?.vars?.uncompressedSize||0);
+      if(!Number.isFinite(length)||length<0||length>4_000_000)continue;
+      total+=length;
+      if(total>25_000_000)throw Error("Archivo demasiado grande");
+      const dest=path.resolve(appDirectory(),...segments);
+      if(!dest.startsWith(allowedRoot+path.sep))continue;
+      if(fs.existsSync(dest))continue;
+      await fs.promises.mkdir(path.dirname(dest),{recursive:true});
+      const bytes=await entry.buffer();
+      if(bytes.length>4_000_000)throw Error("Entrada demasiado grande");
+      await fs.promises.writeFile(dest,bytes,{flag:"wx"});
+      count++;
+    }
+    return count;
+  }catch{
+    return 0;
+  }
+}
+
+async function warmupOriginalProfiles(){
+  if(warming)return warming;
+  const task=(async()=>{
+    await unpackLocalExtensionArchive();
+    const availableBrowser=browserExecutable();
+    if(!availableBrowser)return {ok:false,prepared:0,total:3,reason:"Falta Chromium incluido"};
+    const userRoot=path.join(app.getPath("userData"),"chromium-extension-profiles");
+    await fs.promises.mkdir(userRoot,{recursive:true});
+    let done=0;
+    for(const id of Object.keys(DESCRIPTORS)){
+      const d=resolveDescriptor(id);
+      if(!d?.available){prepared.delete(id);continue;}
+      try{
+        const dir=path.join(userRoot,id);
+        await fs.promises.mkdir(dir,{recursive:true});
+        // Do not launch Chrome yet: user clicks "Abrir" to create the window.
+        // The package remains in KAIZEN_EXTENSIONS beside the executable.
+        const realDir=await fs.promises.realpath(dir);
+        const realRoot=await fs.promises.realpath(userRoot);
+        if(!realDir.startsWith(realRoot+path.sep))throw Error("Ruta de perfil no aislada");
+        prepared.add(id);
+        done++;
+      }catch{prepared.delete(id);}
+    }
+    return {ok:done===3,prepared:done,total:3,reason:done===3?"Perfiles locales preparados":"Faltan paquetes locales"};
+  })();
+  warming=task;
+  try{return await task;}finally{if(warming===task)warming=null;}
+}
+
 async function openOriginalExtension(id){
+  // An Open action may arrive before the startup warmup finishes.
+  await warmupOriginalProfiles();
   const d=resolveDescriptor(id);
   if(!d)return {ok:false,message:"Perfil de extensión desconocido"};
   if(!d.available)return {ok:false,message:d.reason};
@@ -115,4 +196,4 @@ async function openOriginalExtension(id){
   pending.set(id,task);
   try{return await task;}finally{if(pending.get(id)===task)pending.delete(id);}
 }
-module.exports={DESCRIPTORS,listOriginalExtensions,openOriginalExtension,chromeExtensionId};
+module.exports={DESCRIPTORS,listOriginalExtensions,warmupOriginalProfiles,openOriginalExtension,chromeExtensionId};
