@@ -23,9 +23,15 @@ try{
     fs.writeFileSync(path.join(folder,"manifest.json"),JSON.stringify(manifest));
   }
   assert.equal(validate(root),true);
+  // El archivo inject.js se menciona como web_accessible_resources, pero
+  // NO forma parte del paquete original: Chrome sí puede cargar EX1 sin él.
   fs.rmSync(path.join(root,"ex1","inject.js"));
-  assert.throws(()=>validate(root),/Falta un recurso declarado/);
-  fs.writeFileSync(path.join(root,"ex1","inject.js"),"fixture only");
+  assert.equal(validate(root),true);
+  // Un script realmente ejecutado sí es obligatorio: el build debe fallar.
+  fs.rmSync(path.join(root,"ex1","contentScript.js"));
+  assert.throws(()=>validate(root),/Falta un recurso declarado.*contentScript.js/);
+  fs.writeFileSync(path.join(root,"ex1","contentScript.js"),"fixture only");
+  assert.equal(validate(root),true);
   const file=path.join(root,"ex2","manifest.json");
   const m=JSON.parse(fs.readFileSync(file,"utf8"));
   m.version="999";fs.writeFileSync(file,JSON.stringify(m));
