@@ -23,8 +23,9 @@ jobs:
           node-version: "22"
 
       - name: Install application dependencies
+        working-directory: app
         shell: pwsh
-        run: npm install --prefix app --omit=dev --no-audit --no-fund
+        run: npm install --omit=dev --no-audit --no-fund
 
       - name: Build portable Electron application
         shell: pwsh
