@@ -27,6 +27,13 @@ jobs:
         shell: pwsh
         run: npm install --omit=dev --no-audit --no-fund
 
+      - name: Isolate portable test app data from installed KAIZEN
+        shell: pwsh
+        run: |
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-2FA-PRUEBA" -Force
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content app/package.json -Encoding utf8
+
       - name: Build portable Electron application
         shell: pwsh
         run: |
