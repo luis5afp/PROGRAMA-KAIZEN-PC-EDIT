@@ -40,6 +40,29 @@ ipcMain.handle("kaizen-original-extension-open",async(event,id)=>{
   }
 });
 
+// El selector pide el archivo en el proceso principal; la interfaz no obtiene
+// rutas del disco ni puede ordenar importar archivos arbitrarios.
+ipcMain.handle("kaizen-original-extensions-import",async(event)=>{
+  if(!authorize(event))return {ok:false,message:"Interfaz no autorizada"};
+  try{
+    const {dialog,BrowserWindow}=require("electron");
+    const parent=BrowserWindow.fromWebContents(event.sender);
+    const options={title:"Seleccionar ZIP original de extensiones KAIZEN",
+      properties:["openFile"],filters:[{name:"Paquete original KAIZEN (ZIP)",extensions:["zip"]}]};
+    const selected=parent?await dialog.showOpenDialog(parent,options):await dialog.showOpenDialog(options);
+    if(selected.canceled||!selected.filePaths?.length)
+      return {ok:false,canceled:true,message:"Importación cancelada"};
+    const outcome=await originals.importOriginalZip(selected.filePaths[0]);
+    diagnostics.record("original_extensions",outcome.ok?"ok":"warning",
+      outcome.ok?"Tres extensiones originales importadas y validadas":
+      "Importación no completada");
+    return outcome;
+  }catch{
+    diagnostics.record("original_extensions","error","Error al importar paquete local");
+    return {ok:false,message:"No se pudo importar el ZIP original"};
+  }
+});
+
 const {app,BrowserWindow,Menu,MenuItem}=require("electron");
 const path=require("node:path");
 let diagWindow=null;
