@@ -19,6 +19,10 @@ jobs:
         shell: pwsh
         run: |
           node --check app/main.no-updates.js
+          node --check app/main.kaizen-1.5.24.js
+          node --check app/kaizen-diagnostics-1.5.24.js
+          node --check app/kaizen-diagnostics-preload-1.5.24.js
+          node --check app/kaizen-diagnostics-renderer-1.5.24.js
           node --check app/main.min.js
           node --check app/preload.min.js
           node --check app/util.min.js
@@ -35,10 +39,11 @@ jobs:
           node app/tests/sync-profile-preload-scenarios.js
           node app/tests/profile-open-fast-path-scenarios.js
           node app/tests/guest-local-update-scenarios.js
+          node app/tests/release-1.5.24-diagnostics.js
 
       - name: Validate release metadata
         shell: pwsh
         run: |
           $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
           if ($pkg.version -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { throw "Unexpected KAIZEN version $($pkg.version)" }
-          if ($pkg.main -ne 'main.no-updates.js') { throw "Unexpected main entrypoint $($pkg.main)" }
+          if ($pkg.main -ne 'main.kaizen-1.5.24.js') { throw "Unexpected main entrypoint $($pkg.main)" }
