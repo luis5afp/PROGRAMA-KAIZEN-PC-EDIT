@@ -57,6 +57,11 @@ async function openOriginalExtension(id){
 
   const task=(async()=>{
     try {
+      // Only one extension window at a time. Persistent partitions remain
+      // isolated so switching never shares cookies or proxy settings.
+      for(const [other,window] of running){
+        if(other!==id && window && !window.isDestroyed())window.close();
+      }
       // Every original extension has its own storage, cookies and proxy.
       const partitionName="persist:kaizen-original-"+id;
       const ses=session.fromPartition(partitionName);
