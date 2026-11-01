@@ -37,7 +37,11 @@ function makeEntries(version="2.5.6"){
   return arr;
 }
 (async()=>{
-  entries=makeEntries();
+  entries=[
+    {type:"Directory",path:"KAIZEN_EXTENSIONS/"},
+    {type:"Directory",path:"KAIZEN_EXTENSIONS/KAIZZEN_MAIN/"},
+    ...makeEntries()
+  ];
   let result=await api.installOriginalZip(testZip,userData);
   assert.equal(result.ok,true,result.message);
   assert.equal(result.installed,3);
