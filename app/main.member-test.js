@@ -61,6 +61,24 @@ ipcMain.handle("kaizen-android-extension-catalog", async (event, input={}) => {
   }
 });
 
+
+// Original local KAIZZEN extensions, sandboxed per user profile.
+// The installed add-on is loaded from beside the packaged .exe.
+const originalExtensions = require("./kaizen-original-extensions-host");
+function isKaizenUi(event){
+  const url=String(event.senderFrame?.url||"").replace(/\\/g,"/");
+  return url.toLowerCase().startsWith("file:") &&
+    url.includes("/app_view/dist/index.html");
+}
+ipcMain.handle("kaizen-original-extensions-list", async (event) => {
+  if(!isKaizenUi(event))return [];
+  return originalExtensions.listOriginalExtensions();
+});
+ipcMain.handle("kaizen-original-extension-open", async (event,id) => {
+  if(!isKaizenUi(event))return {ok:false,message:"Interfaz no autorizada"};
+  return await originalExtensions.openOriginalExtension(id);
+});
+
 // No usar main.no-updates.js aquí: ese launcher activa captura de tráfico
 // completa y podría registrar tokens y contraseñas sin que el usuario lo sepa.
 require("./main.min.js");
