@@ -53,7 +53,9 @@ function resolveDescriptor(id){
     return null;
   const d=DESCRIPTORS[id];
   const local=path.join(importedRoot(),d.dir);
-  const folder=fs.existsSync(path.join(local,"manifest.json"))?local:path.join(root(),d.dir);
+  const resource=path.join(appDirectory(),"resources","KAIZEN_EXTENSIONS",d.dir);
+  const candidates=[local,path.join(root(),d.dir),resource];
+  const folder=candidates.find(candidate=>fs.existsSync(path.join(candidate,"manifest.json")))||local;
   const manifestFile=path.join(folder,"manifest.json");
   if(!fs.existsSync(manifestFile)||!fs.existsSync(path.join(folder,"index.html")))
     return {id,...d,folder,available:false,reason:"Falta el paquete local"};
@@ -89,42 +91,22 @@ function listOriginalExtensions(){
  * remote catalogue, or authenticate on behalf of the user.
  */
 async function unpackLocalExtensionArchive(){
-  const archivePath=path.join(appDirectory(),"KAIZEN_EXTENSIONS_Originales.zip");
-  if(!fs.existsSync(archivePath))return 0;
-  // No remote downloads; this package is placed beside the EXE by the user.
-  const required=Object.keys(DESCRIPTORS);
-  if(required.every(id=>resolveDescriptor(id)?.available))return 0;
-  try{
-    const unzipper=require("unzipper");
-    const archive=await unzipper.Open.file(archivePath);
-    const allowedRoot=path.resolve(root());
-    const validDirs=new Set(Object.values(DESCRIPTORS).map(x=>x.dir));
-    let count=0,total=0;
-    for(const entry of archive.files||[]){
-      if(entry.type==="Directory")continue;
-      const name=String(entry.path||"").replace(/\\/g,"/");
-      const segments=name.split("/");
-      if(segments.length<3 || segments[0]!=="KAIZEN_EXTENSIONS" ||
-         !validDirs.has(segments[1]) ||
-         segments.some(x=>!x||x==="."||x==="..") ||
-         /^[A-Za-z]:/.test(name) || name.includes(String.fromCharCode(0)))continue;
-      const length=Number(entry?.vars?.uncompressedSize||0);
-      if(!Number.isFinite(length)||length<0||length>4_000_000)continue;
-      total+=length;
-      if(total>25_000_000)throw Error("Archivo demasiado grande");
-      const dest=path.resolve(appDirectory(),...segments);
-      if(!dest.startsWith(allowedRoot+path.sep))continue;
-      if(fs.existsSync(dest))continue;
-      await fs.promises.mkdir(path.dirname(dest),{recursive:true});
-      const bytes=await entry.buffer();
-      if(bytes.length>4_000_000)throw Error("Entrada demasiado grande");
-      await fs.promises.writeFile(dest,bytes,{flag:"wx"});
-      count++;
-    }
-    return count;
-  }catch{
-    return 0;
+  // Paquetes oficiales incluidos por el build: preparación automática y
+  // validada en almacenamiento persistente. Nunca escribir junto al .exe.
+  const {installOriginalZip}=require("./kaizen-original-extension-importer");
+  const complete=Object.keys(DESCRIPTORS).every(id=>resolveDescriptor(id)?.available);
+  if(complete)return 0;
+  const archivePaths=[
+    path.join(appDirectory(),"KAIZEN_EXTENSIONS_Originales.zip"),
+    path.join(appDirectory(),"resources","KAIZEN_EXTENSIONS_Originales.zip")
+  ];
+  for(const archivePath of archivePaths){
+    if(!fs.existsSync(archivePath))continue;
+    const outcome=await installOriginalZip(archivePath,app.getPath("userData"));
+    if(outcome.ok)return outcome.installed||3;
+    console.warn("[local-profiles] Paquete incorporado no válido:",String(outcome.message||"error").slice(0,120));
   }
+  return 0;
 }
 
 async function warmupOriginalProfiles(){
