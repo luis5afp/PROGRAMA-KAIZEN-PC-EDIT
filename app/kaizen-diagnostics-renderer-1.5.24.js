@@ -21,7 +21,7 @@ async function load(){
       item(profile,p.title+" · "+p.extension,p.status,p.available?"good":"warn");
     const security=clear("security");
     for(const x of data.security||[])
-      item(security,x.name+" · "+(x.installed?"instalada":"no instalada"),
+      item(security,x.name+" · "+(x.installed?"incluida":x.present?"incompleta":"no incluida"),
         x.active?"Activa":x.note,x.active?"good":"warn");
     const events=clear("events");
     const latest=(data.events||[]).slice(-20).reverse();
