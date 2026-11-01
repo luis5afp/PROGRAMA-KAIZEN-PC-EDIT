@@ -33,10 +33,10 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
     const row=el("header",shell,"","display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;");
     const head=el("div",row,"","display:flex;flex-direction:column;gap:7px;");
     el("h2",head,"KAIZEN · Extensiones originales","font-size:23px;margin:0;");
-    el("p",head,"Elige una extensión para abrir su interfaz real en un navegador aislado.",styles.text+"margin:0;");
+    el("p",head,"Selecciona un perfil: KAIZEN abrirá Chromium con su extensión y su catálogo.",styles.text+"margin:0;");
     const exit=el("button",row,"✕ Cerrar",styles.button);
     exit.addEventListener("click",close);
-    const info=el("p",shell,"Cada extensión guarda sus propias sesiones y puede solicitar inicio de sesión o 2FA. No se transfieren tokens entre extensiones.",styles.text+"margin:20px 0;");
+    const info=el("p",shell,"Cada perfil Chromium guarda su propia sesión. Introduce las credenciales dentro de la extensión; si el servidor pide 2FA, debes completarlo.",styles.text+"margin:20px 0;");
     const state=el("div",shell,"Buscando extensiones locales…",styles.text+"margin-bottom:13px;");
     const cards=el("div",shell,"","display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;");
     pending=true;
@@ -44,7 +44,7 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
       const extensions=await ipcRenderer.invoke("kaizen-original-extensions-list");
       if(!cards.isConnected)return;
       state.textContent=Array.isArray(extensions)&&extensions.some(x=>x.available)?
-        "Paquetes detectados. Abre una de las extensiones disponibles.":
+        "Perfiles Chromium preparados. Elige cuál quieres abrir.":
         "Aún no se han instalado los archivos de las extensiones.";
       for(const x of Array.isArray(extensions)?extensions:[]){
         const b=el("button",cards,"",styles.card);
@@ -57,12 +57,12 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
           "font-size:12px;color:"+(x.available?"#86efac":"#fda4af"));
         if(x.available)b.addEventListener("click",async ()=>{
           b.disabled=true;
-          state.textContent="Abriendo "+x.name+" en un navegador aislado…";
+          state.textContent="Abriendo "+x.name+" en su perfil Chromium…";
           try{
             const res=await ipcRenderer.invoke("kaizen-original-extension-open",x.id);
             if(!state.isConnected)return;
             state.textContent=res?.ok ?
-              x.name+" abierta. Si necesitas credenciales, ingrésalas en la interfaz original de esa extensión.":
+              x.name+" abierta en Chromium. Introduce tus credenciales en la extensión original cuando se soliciten.":
               String(res?.message||"No se pudo iniciar esta extensión.");
           } catch {
             if(state.isConnected)state.textContent="La extensión no se pudo iniciar.";
@@ -70,7 +70,7 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
         });
       }
       el("p",shell,"Instalación del paquete: descomprime KAIZEN_EXTENSIONS_Originales.zip en la misma carpeta que el archivo .exe, de modo que exista KAIZEN_EXTENSIONS/KAIZZEN_MAIN/manifest.json. Reinicia KAIZEN.",styles.text+"margin-top:22px;");
-      el("p",shell,"Estas extensiones necesitan permisos de cookies y proxy. Se abren por separado para no alterar tus perfiles personales. El catálogo Chrome remoto sigue sujeto a los permisos del servidor.",styles.text+"margin-top:12px;");
+      el("p",shell,"Estas extensiones pueden gestionar cookies y proxy dentro de sus propios perfiles Chromium aislados. El catálogo remoto sigue sujeto a los permisos del servidor.",styles.text+"margin-top:12px;");
     } catch {
       if(state.isConnected)state.textContent="No fue posible consultar los paquetes instalados.";
     } finally {pending=false;}
