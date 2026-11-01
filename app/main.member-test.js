@@ -43,6 +43,24 @@ ipcMain.handle("kaizen-apk-catalog-probe", async (event, token) => {
   }
 });
 
+
+// Android extensions / server-authorized catalogue. Tokens never leave the
+// main process in the response; account permissions remain server-controlled.
+const { loadVariantCatalog } = require("./android-extension-catalog");
+ipcMain.handle("kaizen-android-extension-catalog", async (event, input={}) => {
+  const url=String(event.senderFrame?.url||"");
+  if (!url.toLowerCase().startsWith("file:") ||
+      !url.replace(/\\/g,"/").includes("/app_view/dist/index.html")) {
+    return {error:"Origen de interfaz no autorizado",items:[]};
+  }
+  try {
+    return await loadVariantCatalog(signedHttp,BACKEND_URL,
+      input.token,input.variant,input.page,input.search);
+  } catch (_) {
+    return {error:"Error interno consultando la extensión",items:[]};
+  }
+});
+
 // No usar main.no-updates.js aquí: ese launcher activa captura de tráfico
 // completa y podría registrar tokens y contraseñas sin que el usuario lo sepa.
 require("./main.min.js");
