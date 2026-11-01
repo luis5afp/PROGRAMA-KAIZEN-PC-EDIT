@@ -13,11 +13,16 @@ for (const mark of [
   '"HTTP "+ue+" · consulta fallida"',
   '"Error de red · sin respuesta"',
   '"Caché local · "+Ce.profiles.length+" perfil(es); remoto "',
-  'children:estadoCatalogo'
+  'children:estadoCatalogo',
+  'children:"Grupos: "+estadoGrupos',
+  'ke.get(Ir+"/api/browser/group/get",{headers:{Authorization:"Bearer "+k}',
+  '"HTTP "+respuestaGrupos.status+" · "+listaGrupos.length+" grupo(s) visibles"',
+  '"HTTP "+estado+" · consulta denegada o fallida"',
+  'actualizarEstadoGrupos("Consultando…")'
 ])assert(s.includes(mark),"Missing catalog state: "+mark);
 assert(s.includes('iN=["appcbl_soft","admin","specific","member","all_profile","manager"]'));
 assert(s.includes('ke.get(Ir+"/api/browser/get",{headers:{Authorization:"Bearer "+k}})'));
 assert(s.includes('n.role==="admin"?'));
 assert(s.includes('"/api/users/2fa/email/verify"'));
 new Function(s.replaceAll("import.meta","({})"));
-console.log("KAIZEN catalog UI diagnostic: PASS");
+console.log("KAIZEN group and catalog UI diagnostics: PASS");
