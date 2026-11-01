@@ -76,9 +76,49 @@ function listOriginalExtensions(){
  * user-data directories. It does NOT run Chromium, read cookies, access the
  * remote catalogue, or authenticate on behalf of the user.
  */
+async function unpackLocalExtensionArchive(){
+  const archivePath=path.join(appDirectory(),"KAIZEN_EXTENSIONS_Originales.zip");
+  if(!fs.existsSync(archivePath))return 0;
+  // No remote downloads; this package is placed beside the EXE by the user.
+  const required=Object.keys(DESCRIPTORS);
+  if(required.every(id=>resolveDescriptor(id)?.available))return 0;
+  try{
+    const unzipper=require("unzipper");
+    const archive=await unzipper.Open.file(archivePath);
+    const allowedRoot=path.resolve(root());
+    const validDirs=new Set(Object.values(DESCRIPTORS).map(x=>x.dir));
+    let count=0,total=0;
+    for(const entry of archive.files||[]){
+      if(entry.type==="Directory")continue;
+      const name=String(entry.path||"").replace(/\\/g,"/");
+      const segments=name.split("/");
+      if(segments.length<3 || segments[0]!=="KAIZEN_EXTENSIONS" ||
+         !validDirs.has(segments[1]) ||
+         segments.some(x=>!x||x==="."||x==="..") ||
+         /^[A-Za-z]:/.test(name) || name.includes("\\0"))continue;
+      const length=Number(entry?.vars?.uncompressedSize||0);
+      if(!Number.isFinite(length)||length<0||length>4_000_000)continue;
+      total+=length;
+      if(total>25_000_000)throw Error("Archivo demasiado grande");
+      const dest=path.resolve(appDirectory(),...segments);
+      if(!dest.startsWith(allowedRoot+path.sep))continue;
+      if(fs.existsSync(dest))continue;
+      await fs.promises.mkdir(path.dirname(dest),{recursive:true});
+      const bytes=await entry.buffer();
+      if(bytes.length>4_000_000)throw Error("Entrada demasiado grande");
+      await fs.promises.writeFile(dest,bytes,{flag:"wx"});
+      count++;
+    }
+    return count;
+  }catch{
+    return 0;
+  }
+}
+
 async function warmupOriginalProfiles(){
   if(warming)return warming;
   const task=(async()=>{
+    await unpackLocalExtensionArchive();
     const availableBrowser=browserExecutable();
     if(!availableBrowser)return {ok:false,prepared:0,total:3,reason:"Falta Chromium incluido"};
     const userRoot=path.join(app.getPath("userData"),"chromium-extension-profiles");
