@@ -1,0 +1,46 @@
+name: KAIZEN 2FA Windows test build
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "runtime-resources/**"
+      - ".github/workflows/kaizen-2fa-test-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-test:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install application dependencies
+        shell: pwsh
+        run: npm install --prefix app --omit=dev --no-audit --no-fund
+
+      - name: Build portable Electron application
+        shell: pwsh
+        run: |
+          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-2FA-PRUEBA" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $target = "dist/KAIZEN-2FA-PRUEBA-win32-x64/resources"
+          if (!(Test-Path $target)) { throw "Electron resources directory missing: $target" }
+          Copy-Item "runtime-resources/*" $target -Recurse -Force
+          if (!(Test-Path "dist/KAIZEN-2FA-PRUEBA-win32-x64/KAIZEN-2FA-PRUEBA.exe")) {
+            throw "Test executable missing"
+          }
+
+      - name: Upload Windows portable test ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-2FA-PRUEBA-Windows-x64
+          path: dist/KAIZEN-2FA-PRUEBA-win32-x64/
+          if-no-files-found: error
+          retention-days: 7
