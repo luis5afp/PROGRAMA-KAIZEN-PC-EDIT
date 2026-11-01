@@ -13,12 +13,18 @@ function httpError(status) {
   return e;
 }
 function simulador({ role2 = "admin", catalogError = null, firstMfa = false,
-                     secondMfa = false, firstRole = "member", secondVerified = true } = {}) {
+                     secondMfa = false, firstRole = "member", secondVerified = true,
+                     firstLoginError = null, firstLoginMessage = "" } = {}) {
   const calls = [];
   const http = {
     post: async (url, payload) => {
       calls.push({ method:"POST", path:new URL(url).pathname, hasPassword: !!payload.password });
       if (payload.email === credenciales.primera.email) {
+        if (firstLoginError) {
+          const error = httpError(firstLoginError);
+          error.response.data = { error:true, message:firstLoginMessage };
+          throw error;
+        }
         if (firstMfa) return { status:200, data:{requires2faSetup:true,methods:["email"],tempToken:"TEMP1"} };
         return {status:200, data:{token:"TOKEN1-SECRET"}};
       }
@@ -101,6 +107,22 @@ async function run() {
     assert.equal(result.ok,false);
     assert.equal(result.pasos[0].id,"entrada");
   }
-  console.log("KAIZEN dual credential test: PASS (7 scenarios)");
+  {
+    const {http,calls}=simulador({firstLoginError:400,firstLoginMessage:"Credenciales inválidas"});
+    const result=await ejecutarPrueba({http,baseUrl,...credenciales});
+    assert.equal(result.ok,false);
+    assert.equal(result.pasos[0].id,"login_1");
+    assert.equal(result.pasos[0].http,400);
+    assert.equal(result.pasos[0].causa,"CREDENCIALES_INVALIDAS");
+    assert.equal(calls.length,1);
+    assert(!JSON.stringify(result).includes("secret1"));
+  }
+  {
+    const {http}=simulador({firstLoginError:400,firstLoginMessage:"Mensaje privado: secreto"});
+    const result=await ejecutarPrueba({http,baseUrl,...credenciales});
+    assert.equal(result.pasos[0].causa,"SOLICITUD_RECHAZADA");
+    assert(!JSON.stringify(result).includes("secreto"));
+  }
+  console.log("KAIZEN dual credential test: PASS (9 scenarios)");
 }
 run().catch(error => { console.error(error.message); process.exitCode=1; });
