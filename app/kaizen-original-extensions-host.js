@@ -4,7 +4,7 @@
 // passed into any extension. No web profile archives or server role changes.
 const fs = require("node:fs");
 const path = require("node:path");
-const { BrowserWindow, session, shell, app } = require("electron");
+const { BrowserWindow, session, app } = require("electron");
 
 const DESCRIPTORS=Object.freeze({
   main:{dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",title:"Principal",version:"2.5.6"},
@@ -87,9 +87,15 @@ async function openOriginalExtension(id){
         try{
           const dest=new URL(url);
           if(dest.protocol==="https:" || dest.protocol==="http:"){
-            // External product sites are opened in the user's system browser;
-            // do not import KAIZEN cookies into those browser profiles.
-            shell.openExternal(dest.href).catch(()=>{});
+            // Open product tabs in the SAME isolated browser session so the
+            // chosen extension's proxy/cookies apply; never use personal Chrome.
+            const productWin=new BrowserWindow({
+              width:1100,height:780,minWidth:650,minHeight:500,
+              title:"KAIZEN · "+x.title+" · Navegación",autoHideMenuBar:true,
+              webPreferences:{session:ses,nodeIntegration:false,
+                contextIsolation:true,sandbox:true,webSecurity:true}
+            });
+            productWin.loadURL(dest.href).catch(()=>{if(!productWin.isDestroyed())productWin.close();});
           }
         }catch{}
         return {action:"deny"};
