@@ -60,6 +60,7 @@ async function loadVariantCatalog(http, base, currentToken, variant, page=1, sea
     variant:variant==="custom"?"Streaming":"Principal",
     requestedClient:"", sessionClient:"sin-indicar", switchMode:"sin consulta",
     switchStatus:0, selectorStatus:0, selectorCount:null,
+    sessionExpired:false, variantRenewed:false,
     catalogStatus:0, catalogCount:null, hasMore:false,
     items:[], error:""
   };
@@ -97,6 +98,7 @@ async function loadVariantCatalog(http, base, currentToken, variant, page=1, sea
       }
     } catch(e) {
       result.switchStatus=status(e);
+      result.sessionExpired=result.switchStatus===401;
       result.error=result.switchStatus===400 ?
         "Solicitud de extensión rechazada (HTTP 400). Verifica el tipo de cliente indicado." :
         "El servidor rechazó el cambio de extensión";
@@ -113,13 +115,33 @@ async function loadVariantCatalog(http, base, currentToken, variant, page=1, sea
     result.selectorCount=Array.isArray(response?.data?.profiles)?response.data.profiles.length:null;
   } catch(e) { result.selectorStatus=status(e); }
 
+  const productConfig=()=>({
+    headers:{Authorization:"Bearer "+variantToken},
+    params:{subtitle_id:"null",searchQuery:txt(search,100)||"null",
+      page:Math.max(1,Math.min(1000,Math.floor(Number(page)||1))),limit:20},
+    timeout:20000
+  });
   try {
-    const response=await http.get(base+"/api/products/getmostusedtool",{
-      headers:variantHeaders,
-      params:{subtitle_id:"null",searchQuery:txt(search,100)||"null",
-        page:Math.max(1,Math.min(1000,Math.floor(Number(page)||1))),limit:20},
-      timeout:20000
-    });
+    let response;
+    try {
+      response=await http.get(base+"/api/products/getmostusedtool",productConfig());
+    } catch(lookupError) {
+      if(status(lookupError)!==401 || variantToken===currentToken) throw lookupError;
+      // The extension token can expire independently of the main account token.
+      // Renew once using the same server-authorized account; no role substitution.
+      try {
+        const renewed=await http.post(base+"/api/users/switch-client",
+          {client:target},{headers,timeout:12000});
+        if(typeof renewed?.data?.token!=="string" || !renewed.data.token)
+          throw Error("El servidor no emitió token de variante");
+        variantToken=renewed.data.token;
+        result.variantRenewed=true;
+        response=await http.get(base+"/api/products/getmostusedtool",productConfig());
+      } catch (renewError) {
+        result.sessionExpired=status(renewError)===401;
+        throw renewError;
+      }
+    }
     result.catalogStatus=Number(response.status||200);
     const items=decodeCatalog(response?.data?.products);
     result.catalogCount=items.length;
@@ -127,6 +149,7 @@ async function loadVariantCatalog(http, base, currentToken, variant, page=1, sea
     result.items=items.slice(0,20).map(item=>visibleItem(item,base)).filter(Boolean);
   } catch(e) {
     result.catalogStatus=status(e);
+    if(result.catalogStatus===401) result.sessionExpired=true;
     result.error=result.catalogStatus
       ? "No se pudo cargar el catálogo (HTTP "+result.catalogStatus+")"
       : "No se pudo procesar el catálogo de productos";
