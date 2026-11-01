@@ -69,7 +69,10 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
           } finally {b.disabled=false;}
         });
       }
-      el("p",shell,"Los tres paquetes originales ya vienen en la versión integrada de KAIZEN. Sus sesiones se conservan en carpetas Chromium independientes.",styles.text+"margin-top:22px;");
+      const allAvailable=Array.isArray(extensions)&&extensions.length===3&&extensions.every(x=>x.available);
+      el("p",shell,allAvailable?
+        "Los tres paquetes se detectaron en esta instalación. Sus sesiones se conservan en carpetas Chromium independientes.":
+        "Faltan archivos locales para activar uno o más perfiles. Coloca KAIZEN_EXTENSIONS_Originales.zip o la carpeta KAIZEN_EXTENSIONS, con los tres paquetes originales autorizados, junto al archivo .exe de KAIZEN y reinicia la aplicación. No se pueden abrir perfiles sin estos archivos.",styles.text+"margin-top:22px;");
       el("p",shell,"Estas extensiones pueden gestionar cookies y proxy dentro de sus propios perfiles Chromium aislados. El catálogo remoto sigue sujeto a los permisos del servidor.",styles.text+"margin-top:12px;");
     } catch {
       if(state.isConnected)state.textContent="No fue posible consultar los paquetes instalados.";
