@@ -52,7 +52,7 @@ const api=sandbox.module.exports;
 async function main(){
   const items=api.listOriginalExtensions();
   assert.equal(items.filter(x=>x.available).length,3);
-  assert.deepEqual(items.map(x=>x.id),["main","google","custom"]);
+  assert.equal(items.map(x=>x.id).join(","),"main,google,custom");
   // Offline prewarm must prepare local storage WITHOUT starting the browser
   // or contacting the server. It can run before the KAIZEN login.
   // Simulate the user placing the original ZIP beside the EXE.
