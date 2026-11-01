@@ -2,6 +2,7 @@
 // Windows UI selector equivalent to the APK's Principal / Streaming screen.
 // Uses the authenticated KAIZEN session; doesn't modify the original Chrome
 // catalogue or silently open external sites, import cookies, or bypass proxies.
+const { sameAccountJwt } = require("./extension-session-identity");
 module.exports = function installAndroidExtensionSelector(ipcRenderer) {
   let button, panel, startedForToken=null, busy=false;
   const css={
@@ -86,8 +87,39 @@ module.exports = function installAndroidExtensionSelector(ipcRenderer) {
     try {
       const token=loginState().token;
       if(!token) throw Error("Sesión no disponible");
-      const data=await ipcRenderer.invoke("kaizen-android-extension-catalog",
+      let data=await ipcRenderer.invoke("kaizen-android-extension-catalog",
         {token,variant:variant.id,page,search});
+      let renewMessage="";
+      // Only 401 means expired/invalid authentication. Never attempt re-login
+      // because of HTTP 400/403 or an unassigned role.
+      if(data?.sessionExpired && loginState().token===token){
+        status.textContent="Sesión vencida. Intentando renovar la misma cuenta…";
+        try {
+          // Uses KAIZEN's existing encrypted remembered credentials in the
+          // Electron main process, not passwords handled by this UI.
+          const renewed=await ipcRenderer.invoke("session-refresh",{});
+          if(renewed?.ok && typeof renewed.token==="string" &&
+             sameAccountJwt(token,renewed.token) &&
+             loginState().token===token){
+            window.localStorage.setItem("token",renewed.token);
+            startedForToken=renewed.token;
+            renewMessage=" · sesión principal renovada";
+            data=await ipcRenderer.invoke("kaizen-android-extension-catalog",
+              {token:renewed.token,variant:variant.id,page,search});
+          } else if(renewed?.requires2fa || renewed?.requires2faSetup ||
+                    renewed?.reason==="2fa-required"){
+            renewMessage=" · el servidor exige 2FA; vuelve a iniciar sesión en KAIZEN";
+          } else if(renewed?.ok && renewed.token){
+            renewMessage=" · identidad no confirmada: inicia sesión de nuevo (no se reemplazó la cuenta)";
+          } else if(renewed?.reason==="no-credentials"){
+            renewMessage=" · sin credenciales guardadas: inicia sesión de nuevo";
+          } else {
+            renewMessage=" · renovación rechazada: vuelve a iniciar sesión";
+          }
+        } catch (_){
+          renewMessage=" · no se pudo renovar: vuelve a iniciar sesión";
+        }
+      }
       if (!grid.isConnected) return;
       const switchStatus=Number(data?.switchStatus)||0;
       const catalogStatus=Number(data?.catalogStatus)||0;
@@ -97,7 +129,9 @@ module.exports = function installAndroidExtensionSelector(ipcRenderer) {
         " · cambio: "+(data?.switchMode==="sesión existente"?"no requerido":switchStatus?"HTTP "+switchStatus:"sin respuesta")+
         " · catálogo: "+(catalogStatus?"HTTP "+catalogStatus:"sin respuesta")+
         (Number.isInteger(data?.catalogCount)?" · "+data.catalogCount+" producto(s) en página "+page:"")+
-        (data?.error?" · "+String(data.error).slice(0,180):"");
+        (data?.variantRenewed?" · token de extensión renovado":"")+
+        (data?.error?" · "+String(data.error).slice(0,180):"")+
+        renewMessage;
       if(!Array.isArray(data?.items) || !data.items.length){
         element("p",grid,
           data?.error||"No hay productos visibles para esta selección.",css.sub);
