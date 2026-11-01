@@ -41,12 +41,12 @@ module.exports=function installKaizenDiagnostics(ipcRenderer){
       el("h3",content,"Extensiones de seguridad","font:700 17px system-ui;margin:23px 0 9px;");
       for(const x of summary.security||[]){
         const row=el("div",security,"",style.row);
-        el("strong",row,x.name+" · "+(x.installed?"instalada":"no instalada"),
+        el("strong",row,x.name+" · "+(x.installed?"incluida":x.present?"incompleta":"no incluida"),
           "font:600 14px system-ui;");
         el("span",row,x.active?"Activa":x.note,style.small);
       }
       el("p",content,
-        "Privacidad: ex1 puede registrar y enviar historial de navegación. No se activa automáticamente en esta compilación. El diagnóstico no recopila contraseñas, tokens ni páginas visitadas.",
+        "Privacidad: ex1 puede registrar y enviar URLs del historial. ex2 puede bloquear navegación y herramientas de inspección. Ninguna se activa automáticamente en esta compilación. El diagnóstico no recopila contraseñas, tokens ni páginas visitadas.",
         style.small+"margin:14px 0;color:#fcd34d;");
       el("h3",content,"Eventos de funciones reales","font:700 17px system-ui;margin:20px 0 9px;");
       const events=el("div",content,"",style.table);
