@@ -120,7 +120,7 @@
         event("catalogo-envio",{transporte:"fetch",metodo:String(args[1]?.method||args[0]?.method||"GET").toUpperCase()});
         let response;
         try {response=await native.apply(this,args);}
-        catch {event("catalogo-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});throw new Error("Error al solicitar catálogo");}
+        catch(error) {event("catalogo-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});throw error;}
         response.clone().json().then(body=>summary(body,response.status,"fetch",elapsed(start)))
           .catch(()=>event("catalogo-respuesta-invalida",{transporte:"fetch",http:response.status}));
         return response;
