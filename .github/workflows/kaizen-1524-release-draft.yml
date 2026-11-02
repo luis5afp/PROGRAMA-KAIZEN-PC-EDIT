@@ -1,0 +1,112 @@
+name: KAIZEN PC 1.5.24 - Borrador de Release con instalador
+on:
+  workflow_dispatch:
+    inputs:
+      privacy_review:
+        description: "Confirmo permiso de distribucion y revision de secretos de las extensiones"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: kaizen-1524-release-draft
+  cancel-in-progress: false
+jobs:
+  build-and-draft:
+    if: ${{ inputs.privacy_review == true }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Obtener codigo de KAIZEN 1.5.24
+        uses: actions/checkout@v4
+        with:
+          ref: release/kaizen-pc-1.5.24-local-profiles-and-diagnostics
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verificar que v1.5.24 no existe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (git ls-remote --tags origin refs/tags/v1.5.24) {
+            throw 'La etiqueta v1.5.24 ya existe.'
+          }
+          if (!(Test-Path 'docs/RELEASE-NOTES-v1.5.24.md')) {
+            throw 'Faltan notas de la nueva version.'
+          }
+      - name: Descargar y validar ZIP privado de extensiones
+        shell: pwsh
+        env:
+          BUNDLE_URL: ${{ secrets.KAIZEN_EXTENSIONS_BUNDLE_URL }}
+          BUNDLE_SHA256: ${{ secrets.KAIZEN_EXTENSIONS_BUNDLE_SHA256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (!$env:BUNDLE_URL -or $env:BUNDLE_URL -notmatch '^https://') {
+            throw 'Falta configurar KAIZEN_EXTENSIONS_BUNDLE_URL en Secrets.'
+          }
+          if ($env:BUNDLE_SHA256 -notmatch '^[a-fA-F0-9]{64}$') {
+            throw 'Falta configurar KAIZEN_EXTENSIONS_BUNDLE_SHA256 (64 caracteres hexadecimales).'
+          }
+          $zip = Join-Path $env:RUNNER_TEMP 'KAIZEN_EXTENSIONS_Originales.zip'
+          Invoke-WebRequest -Uri $env:BUNDLE_URL -OutFile $zip -MaximumRedirection 3
+          $sha = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+          if ($sha -ne $env:BUNDLE_SHA256) { throw 'El paquete privado no coincide con su SHA-256.' }
+          "KAIZEN_PRIVATE_BUNDLE=$zip" >> $env:GITHUB_ENV
+          Write-Host 'Paquete privado autenticado por SHA-256.'
+      - name: Comprobar codigo y pruebas de apertura de perfiles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          node --check app/kaizen-original-extensions-host.js
+          node app/tests/embedded-extension-integration-scenarios.js
+          node app/tests/original-extension-integration-scenarios.js
+          node app/tests/verify-security-extensions-scenarios.js
+          node app/tests/release-1.5.24-diagnostics.js
+          $errors = @()
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/build-windows-integrated.ps1').Path,
+            [ref]$null,[ref]$errors)
+          if ($errors.Count -gt 0) { throw ($errors -join '; ') }
+      - name: Generar Setup Windows con extensiones internas
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          & './scripts/build-windows-integrated.ps1' -ExtensionsSource $env:KAIZEN_PRIVATE_BUNDLE
+      - name: Comprobar recursos incluidos y generar SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $resources = 'dist/KAIZEN-PC-v1.5.24-win32-x64/resources'
+          node app/scripts/verify-original-extensions.js "$resources/KAIZEN_EXTENSIONS"
+          node -e "require('./app/kaizen-original-extension-importer').validateFolder(process.argv[1])" "$resources/KAIZEN_EXTENSIONS"
+          node app/scripts/verify-security-extensions.js "$resources/extensionForSecurity"
+          node app/scripts/verify-legacy-core-resources.js "$resources/extensionForSecurity"
+          if (!(Test-Path 'dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_CHROMIUM/chrome-win64/chrome.exe')) {
+            throw 'Chromium no incluido.'
+          }
+          $setup = @(Get-ChildItem 'dist/installer' -Filter '*.exe' -File)
+          if ($setup.Count -ne 1) { throw 'No se genero el instalador unico.' }
+          $sha = (Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha *$($setup[0].Name)" | Set-Content -LiteralPath ($setup[0].FullName + '.sha256') -Encoding ascii
+          "KAIZEN_SETUP=$($setup[0].FullName)" >> $env:GITHUB_ENV
+          "KAIZEN_SETUP_SHA=$($setup[0].FullName).sha256" >> $env:GITHUB_ENV
+      - name: Crear borrador de Release (sin publicar)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $sourceSha = (git rev-parse HEAD).Trim()
+          gh release create v1.5.24 "$env:KAIZEN_SETUP" "$env:KAIZEN_SETUP_SHA" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --draft --target "$sourceSha" `
+            --title 'KAIZEN PC 1.5.24 - Perfiles Chromium integrados' `
+            --notes-file docs/RELEASE-NOTES-v1.5.24.md
+          Write-Host 'Borrador v1.5.24 creado en Releases. Verificar antes de publicarlo.'
