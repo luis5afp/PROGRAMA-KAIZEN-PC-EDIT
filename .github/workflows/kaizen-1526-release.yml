@@ -12,7 +12,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: kaizen-1525-release
+  group: kaizen-1526-release
   cancel-in-progress: false
 jobs:
   release:

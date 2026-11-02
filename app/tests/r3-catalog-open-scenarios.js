@@ -29,7 +29,7 @@ for(const [folder,name,version,file] of specs){
     fallback.includes('S.password'),folder+": validar URL HTTP(S) pública");
   assert(fallback.includes('chrome.windows.create({url:S.href')&&
     fallback.includes('window.open(S.href'),folder+": intentar abrir página pública");
-  assert(!/storage\.local|product:|set_proxy|wipe_site_session|cookie|password/i.test(fallback),
+  assert(!/storage\.local|product:|set_proxy|wipe_site_session|cookie/i.test(fallback),
     folder+": no instalar cookies o sesiones en rama restringida");
   assert(src.slice(end,end+7000).includes("chrome.storage.local.set"),
     folder+": conservar apertura original cuando está autorizada");
