@@ -52,6 +52,16 @@
         "contentScript.js"
       ],
       "all_frames": true
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "form-diagnostic.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "host_permissions": [
