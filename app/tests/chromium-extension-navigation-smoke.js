@@ -27,9 +27,9 @@ function extensionId(folder){
 }
 const url="chrome-extension://"+extensionId(catalog)+"/index.html";
 const root=fs.mkdtempSync(path.join(os.tmpdir(),"kaizen-chromium-url-smoke-"));
-function run(label,folders){
+function run(label,folders,profileName=label){
   const args=[
-    "--user-data-dir="+path.join(root,label),
+    "--user-data-dir="+path.join(root,profileName),
     "--headless=new",
     "--disable-gpu",
     "--no-first-run",
@@ -58,8 +58,10 @@ function run(label,folders){
 try{
   const single=run("catalog-alone",[catalog]);
   const combined=run("catalog-with-security",[catalog,ex1,ex2]);
+  const migrated=run("old-profile-with-security",[catalog,ex1,ex2],"catalog-alone");
   if(!single.ok)throw Error("La URL no pasó la prueba ni con la extensión sola; revisar prueba headless/ID/Chromium");
-  if(!combined.ok)throw Error("La URL no pasó con EX1 y EX2; consultar regla/registro sin desactivar las extensiones");
-  console.log("[smoke] PASSED: extensión Principal accesible al cargar las tres extensiones.");
+  if(!combined.ok)throw Error("La URL no pasó con EX1 y EX2 en perfil limpio; consultar regla/registro");
+  if(!migrated.ok)throw Error("El perfil usado previamente con una sola extensión falla al cargar EX1 y EX2");
+  console.log("[smoke] PASSED: navegación a KAIZZEN-MAIN limpia y tras reutilizar un perfil previo.");
 }catch(error){console.error("[smoke] "+error.message);process.exitCode=1;}
 finally{fs.rmSync(root,{force:true,recursive:true});}
