@@ -82,52 +82,49 @@ try{
     for(const [id,dir] of specs){
       const opened=await api.openOriginalExtension(id);
       assert.equal(opened.ok,true,id);
+      assert.equal(opened.securityExtensions,true,"EX1/EX2 obligatorias");
       const call=calls[calls.length-1];
       assert.equal(call.bin,chrome);
       assert.equal(call.opts.shell,false);
-      assert(call.args.some(x=>x==="--load-extension="+path.join(root,"resources","KAIZEN_EXTENSIONS",dir)));
-      assert(!call.args.find(x=>x.startsWith("--load-extension=")).includes("ex1"),
-        "no activation of EX1 without consent");
-      assert(!call.args.find(x=>x.startsWith("--load-extension=")).includes("ex2"),
-        "no activation of EX2 without consent");
+      const main=path.join(root,"resources","KAIZEN_EXTENSIONS",dir);
+      const ex1=path.join(root,"resources","extensionForSecurity","ex1");
+      const ex2=path.join(root,"resources","extensionForSecurity","ex2");
+      assert(call.args.includes("--load-extension="+[main,ex1,ex2].join(",")));
+      assert(call.args.includes("--disable-extensions-except="+[main,ex1,ex2].join(",")));
       assert(call.args.some(x=>x.startsWith("chrome-extension://")&&x.endsWith("/index.html")));
     }
+    assert.equal(api.activeSecurityProfiles().length,3);
     const dirs=calls.map(x=>x.args.find(a=>a.startsWith("--user-data-dir=")));
     assert.equal(new Set(dirs).size,3,"perfiles aislados");
     assert.equal(imports,0);
-    assert.equal(validations.length,0,"security packages must not be probed to activate by default");
-    const mustClose=await api.openOriginalExtension("main",{securityExtensions:true});
-    assert.equal(mustClose.ok,false);
-    assert.equal(mustClose.requiresRestart,true);
-    assert.equal(calls.length,3,"cannot change extensions on running Chromium");
+    assert(validations.some(x=>x[0]==="package"),"validación de manifiestos");
+    assert(validations.some(x=>x[0]==="sha256"),"validación SHA256");
+    const same=await api.openOriginalExtension("main");
+    assert.equal(same.ok,true);
+    assert.equal(calls.length,3,"no duplicar proceso por perfil");
     const first=calls[0].child;
     first.exitCode=0;first.emit("exit",0);
     securityValid=false;
-    const rejected=await api.openOriginalExtension("main",{securityExtensions:true});
-    assert.equal(rejected.ok,false,"deny invalid or modified EX1/EX2");
-    assert.equal(calls.length,3,"do not spawn with invalid security packages");
+    const unavailable=api.listOriginalExtensions();
+    assert.equal(unavailable.filter(x=>x.available).length,0,
+      "sin EX1/EX2 válidas no hay perfiles disponibles");
+    const rejected=await api.openOriginalExtension("main");
+    assert.equal(rejected.ok,false,"rechazar hashes modificados o paquetes ausentes");
+    assert.equal(calls.length,3,"nunca iniciar sin EX1 y EX2 verificadas");
     securityValid=true;
-    const secured=await api.openOriginalExtension("main",{securityExtensions:true});
+    const secured=await api.openOriginalExtension("main");
     assert.equal(secured.ok,true);
     assert.equal(secured.securityExtensions,true);
-    assert.equal(validations.length,4,"both validators run on each security opening attempt");
-    const loaded=calls[calls.length-1].args.find(x=>x.startsWith("--load-extension="));
-    const allowed=calls[calls.length-1].args.find(x=>x.startsWith("--disable-extensions-except="));
-    const dir=path.join(root,"resources","KAIZEN_EXTENSIONS","KAIZZEN_MAIN");
-    const ex1=path.join(root,"resources","extensionForSecurity","ex1");
-    const ex2=path.join(root,"resources","extensionForSecurity","ex2");
-    assert.equal(loaded,"--load-extension="+[dir,ex1,ex2].join(","));
-    assert.equal(allowed,"--disable-extensions-except="+[dir,ex1,ex2].join(","));
-    assert.equal(api.activeSecurityProfiles().join(","),"main");
-    const reused=await api.openOriginalExtension("main",{securityExtensions:true});
-    assert.equal(reused.ok,true);
     assert.equal(calls.length,4);
     const release=calls[3].child;
     release.exitCode=0;release.emit("exit",0);
-    assert.deepEqual([...api.activeSecurityProfiles()],[]);
+    assert.equal(api.activeSecurityProfiles().join(","),"google,custom");
     const selector=fs.readFileSync(path.join(__dirname,"..","original-extension-selector-preload.js"),"utf8");
-    assert(selector.includes('securityCheckbox.checked=false'));
-    assert(selector.includes('securityExtensions:securityCheckbox.checked'));
-    console.log("KAIZEN perfiles Chromium y EX1/EX2 opt-in con verificación de integridad: PASS");
+    const ipc=fs.readFileSync(path.join(__dirname,"..","main.kaizen-1.5.24.js"),"utf8");
+    assert(selector.includes("Abrir perfil con EX1 y EX2"));
+    assert(!selector.includes("securityCheckbox"),"no permitir apertura sin EX1/EX2");
+    assert(ipc.includes("originals.openOriginalExtension(id);"));
+    assert(!ipc.includes("includeSecurity"));
+    console.log("KAIZEN perfiles obligatorios: 3 extensiones por Chromium, verificación SHA256 y cierre ante fallos; PASS");
   })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>fs.rmSync(root,{force:true,recursive:true}));
 }catch(e){fs.rmSync(root,{force:true,recursive:true});throw e;}
