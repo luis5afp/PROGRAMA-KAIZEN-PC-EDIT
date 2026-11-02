@@ -20,11 +20,11 @@ function add(name,data){
   const buffer=Buffer.from(data);
   return {type:"File",path:name,vars:{uncompressedSize:buffer.length},buffer:async()=>buffer};
 }
-function makeEntries(version="2.5.6"){
+function makeEntries(version="2.5.9"){
   const arr=[];
   for(const [dir,name,v] of [["KAIZZEN_MAIN","KAIZZEN-MAIN",version],
-                             ["KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.3"],
-                             ["KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.6"]]){
+                             ["KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.6"],
+                             ["KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.9"]]){
     const pre="KAIZEN_EXTENSIONS/"+dir+"/";
     arr.push(add(pre+"manifest.json",JSON.stringify({
       manifest_version:3,name,version:v,
