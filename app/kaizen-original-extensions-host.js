@@ -10,9 +10,9 @@ const {spawn}=require("node:child_process");
 const {app}=require("electron");
 
 const DESCRIPTORS=Object.freeze({
-  main:{dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",title:"Principal",version:"2.5.9"},
-  google:{dir:"KAIZZEN_GOOGLE",name:"KAIZZEN-GOOGLE",title:"Google",version:"1.0.6"},
-  custom:{dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",title:"Streaming / Custom",version:"1.0.9"}
+  main:{dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",title:"Principal",version:"2.5.10"},
+  google:{dir:"KAIZZEN_GOOGLE",name:"KAIZZEN-GOOGLE",title:"Google",version:"1.0.7"},
+  custom:{dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",title:"Streaming / Custom",version:"1.0.10"}
 });
 const running=new Map();
 const runningSecurity=new Map();

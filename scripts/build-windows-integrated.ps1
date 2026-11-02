@@ -63,9 +63,9 @@ try {
     Pop-Location
   }
 
-  $out = Join-Path $repo 'dist/KAIZEN-PC-v1.5.26-win32-x64'
-  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC-v1.5.26 --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-  if (!(Test-Path "$out/KAIZEN-PC-v1.5.26.exe")) { throw "Fallo la compilacion del ejecutable." }
+  $out = Join-Path $repo 'dist/KAIZEN-PC-v1.5.27-win32-x64'
+  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC-v1.5.27 --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+  if (!(Test-Path "$out/KAIZEN-PC-v1.5.27.exe")) { throw "Fallo la compilacion del ejecutable." }
   $resources = Join-Path $out 'resources'
   foreach ($folder in @('browserProfilesData','extensionsData','syncPath','extensionForSecurity')) {
     $source = Join-Path $repo "runtime-resources/$folder"

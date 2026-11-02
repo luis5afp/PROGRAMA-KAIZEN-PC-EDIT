@@ -8,9 +8,9 @@ const {EventEmitter}=require("node:events");
 const root=fs.mkdtempSync(path.join(os.tmpdir(),"kaizen-embedded-profiles-"));
 const userData=path.join(root,"userData");
 const specs=[
-  ["main","KAIZZEN_MAIN","KAIZZEN-MAIN","2.5.9"],
-  ["google","KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.6"],
-  ["custom","KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.9"]
+  ["main","KAIZZEN_MAIN","KAIZZEN-MAIN","2.5.10"],
+  ["google","KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.7"],
+  ["custom","KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.10"]
 ];
 const chrome=path.join(root,"KAIZEN_CHROMIUM","chrome-win64","chrome.exe");
 const calls=[];
