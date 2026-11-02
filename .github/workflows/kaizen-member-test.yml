@@ -17,6 +17,8 @@ on:
       - "app/tests/release-1.5.24-diagnostics.js"
       - "app/original-extension-selector-preload.js"
       - "app/tests/original-extension-integration-scenarios.js"
+      - "app/tests/embedded-extension-integration-scenarios.js"
+      - "app/electron-builder.yml"
       - "app/tests/android-extension-selector-scenarios.js"
       - "app/preload.min.js"
       - "app/tests/apk-catalog-mode-scenarios.js"
@@ -42,6 +44,9 @@ permissions:
 
 jobs:
   member-role-windows:
+    # Los archivos originales incluyen permisos amplios y posibles secretos.
+    # No publicar distribuciones completas desde pull requests publicos.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -72,6 +77,7 @@ jobs:
           node --check app/kaizen-original-extension-importer.js
           node app/tests/original-extension-importer-scenarios.js
           node app/tests/original-extension-integration-scenarios.js
+          node app/tests/embedded-extension-integration-scenarios.js
           node app/tests/verify-original-extensions-scenarios.js
           node app/tests/verify-security-extensions-scenarios.js
           node --check app/scripts/verify-security-extensions.js
@@ -139,27 +145,48 @@ jobs:
             $sourceZip = Join-Path $env:RUNNER_TEMP "KAIZEN_EXTENSIONS_Originales.zip"
             Invoke-WebRequest -Uri $env:KAIZEN_EXTENSIONS_BUNDLE_URL -OutFile $sourceZip -MaximumRedirection 4
           }
-          $target = "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_EXTENSIONS"
+          # Los tres directorios se distribuyen DENTRO de resources del
+          # programa. El usuario no importa ni extrae ninguna extension.
+          $target = "dist/KAIZEN-PC-v1.5.24-win32-x64/resources/KAIZEN_EXTENSIONS"
+          if (!(Test-Path $sourceFolder) -and !(Test-Path $sourceZip)) {
+            throw "No hay paquete original privado. Configure KAIZEN_EXTENSIONS_BUNDLE_URL para compilar el instalador completo; no distribuya una versión incompleta."
+          }
+          if (Test-Path $target) { Remove-Item -LiteralPath $target -Force -Recurse }
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
           if (Test-Path $sourceFolder) {
-            Copy-Item -LiteralPath $sourceFolder -Destination $target -Recurse -Force
-          } elseif (Test-Path $sourceZip) {
+            Copy-Item -Path "$sourceFolder/*" -Destination $target -Recurse -Force
+          } else {
             $stage = Join-Path $env:RUNNER_TEMP "kaizen-extension-stage"
             New-Item -ItemType Directory -Path $stage -Force | Out-Null
             Expand-Archive -LiteralPath $sourceZip -DestinationPath $stage -Force
             $unpacked = Join-Path $stage "KAIZEN_EXTENSIONS"
-            if (!(Test-Path $unpacked)) { throw "El ZIP no contiene KAIZEN_EXTENSIONS en su raíz" }
-            Copy-Item -LiteralPath $unpacked -Destination $target -Recurse -Force
-          } else {
-            throw "Faltan los tres paquetes originales. No se publica un portable incompleto. Consulte docs/RELEASE-1.5.24.md"
+            if (!(Test-Path $unpacked)) { throw "El paquete original debe contener KAIZEN_EXTENSIONS en su raíz" }
+            Copy-Item -Path "$unpacked/*" -Destination $target -Recurse -Force
           }
           node app/scripts/verify-original-extensions.js $target
-          # El directorio validado debe estar AL LADO del EXE, no en resources/.
-          if (!(Test-Path "$target/KAIZZEN_MAIN/manifest.json")) { throw "Paquetes fuera de la ubicación del EXE" }
+          node -e "require('./app/kaizen-original-extension-importer').validateFolder(process.argv[1])" $target
+          foreach ($name in @('KAIZZEN_MAIN','KAIZZEN_GOOGLE','KAIZZEN_CUSTOM')) {
+            if (!(Test-Path "$target/$name/manifest.json")) { throw "Falta la extension $name en resources" }
+          }
+          if (Test-Path "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_EXTENSIONS") {
+            throw "Las extensiones no deben quedar al lado del EXE"
+          }
 
-      - name: Publicar aplicación de prueba
+      - name: Generar instalador Windows de un archivo (NSIS)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $packed = (Resolve-Path 'dist/KAIZEN-PC-v1.5.24-win32-x64').Path
+          npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $packed --win nsis --x64 --publish never
+          $setup = @(Get-ChildItem -Path dist/installer -Filter '*.exe' -File)
+          if ($setup.Count -ne 1) { throw "Se esperaba un único instalador .exe; encontrados: $($setup.Count)" }
+          Write-Host "Instalador creado: $($setup[0].Name)"
+
+      - name: Publicar instalador de validación (privado, corta duración)
         uses: actions/upload-artifact@v4
         with:
-          name: KAIZEN-PC-v1.5.24-Windows-x64
-          path: dist/KAIZEN-PC-v1.5.24-win32-x64/
-          retention-days: 30
+          name: KAIZEN-PC-v1.5.24-Setup-Windows-x64-VALIDACION
+          path: dist/installer/*.exe
+          retention-days: 1
           if-no-files-found: error
