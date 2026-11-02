@@ -1,0 +1,44 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KAIZEN · Mis contraseñas</title>
+<style>
+:root{color-scheme:dark}body{margin:0;padding:28px;background:#09101c;color:#e5edf7;font:15px/1.6 system-ui}
+main{max-width:780px;margin:0 auto}h1{font-size:26px}h2{font-size:18px}
+section{padding:16px 20px;border:1px solid #35485e;border-radius:14px;margin:16px 0;background:#101c2d}
+li{margin:10px 0}button{background:#245382;color:white;border:1px solid #688bb8;border-radius:8px;padding:12px 16px;font:600 14px system-ui;cursor:pointer}
+p{color:#becbdc}code{color:#b8defb}strong{color:#e7f5ff}
+#message{min-height:24px;color:#a9e7c0}
+</style></head><body><main>
+<h1>🔑 KAIZEN · Mis contraseñas de Chromium</h1>
+<p>Tu perfil Chromium puede guardar tus propias cuentas y ofrecer autocompletado
+al abrir los enlaces de las tarjetas, sin modificar el servidor KAIZZEN.</p>
+<section>
+<h2>Configurar el inicio de sesión automático</h2>
+<ol>
+<li>Abre el gestor de contraseñas de <strong>este perfil Chromium</strong>.</li>
+<li>Guarda allí el usuario y contraseña de un sitio que administras o tienes autorizado.</li>
+<li>Entra a la página de inicio de sesión de ese sitio y permite que Chromium
+guarde la contraseña si te lo propone.</li>
+<li>Regresa al catálogo y pulsa su tarjeta; el navegador podrá sugerir o completar
+las credenciales guardadas cuando aparezcan los campos.</li>
+</ol>
+<button id="password-manager">Abrir gestor de contraseñas</button>
+<p>Si no se abre, escribe en la barra de direcciones
+<code>chrome://password-manager/passwords</code> o
+<code>chrome://settings/passwords</code>.</p>
+</section>
+<section>
+<h2>Diagnóstico rápido</h2>
+<p>Si se abre la URL pero no aparecen las credenciales, comprueba que las guardaste
+en <strong>este mismo perfil</strong>, que el dominio del formulario coincide con
+el sitio guardado y que el sitio permite autocompletar. Los tres perfiles de KAIZEN
+usan carpetas de usuario independientes.</p>
+<p>Si el catálogo marca «Requiere acceso», solo se abre la URL pública. Esta
+opción no importa cookies, contraseñas ni sesiones que el servidor haya restringido.
+El gestor de contraseñas utiliza únicamente los accesos que hayas guardado tú.</p>
+<p>Algunos sitios requieren CAPTCHA, 2FA o seleccionar la cuenta manualmente.
+Ninguna de estas medidas se evita automáticamente.</p>
+</section>
+<p id="message" role="status"></p>
+<script src="owner-guide.js" defer></script>
+</main></body></html>
