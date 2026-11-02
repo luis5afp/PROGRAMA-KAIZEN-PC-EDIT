@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KAIZZEN-MAIN",
-  "version": "2.5.8",
+  "version": "2.5.9",
   "description": "Your secure password manager",
   "action": {
     "default_icon": {
