@@ -44,7 +44,7 @@ jobs:
           node app/tests/release-1.5.24-diagnostics.js
           node app/tests/embedded-extension-integration-scenarios.js
           node app/tests/r3-catalog-open-scenarios.js
-          node app/tests/owner-password-guide-scenarios.js
+          node app/tests/catalog-autofill-diagnostic-scenarios.js
           node app/tests/verify-original-extensions-scenarios.js
           node app/tests/original-extension-importer-scenarios.js
           node app/scripts/verify-uploaded-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS

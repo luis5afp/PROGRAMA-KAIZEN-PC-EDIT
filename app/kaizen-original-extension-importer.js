@@ -6,9 +6,9 @@ const path=require("node:path");
 const crypto=require("node:crypto");
 
 const EXPECTED=Object.freeze([
-  {dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",version:"2.5.10"},
-  {dir:"KAIZZEN_GOOGLE",name:"KAIZZEN-GOOGLE",version:"1.0.7"},
-  {dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",version:"1.0.10"}
+  {dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",version:"2.5.11"},
+  {dir:"KAIZZEN_GOOGLE",name:"KAIZZEN-GOOGLE",version:"1.0.8"},
+  {dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",version:"1.0.11"}
 ]);
 const MAX_FILES=1200,MAX_FILE_BYTES=32*1024*1024,MAX_TOTAL=160*1024*1024;
 let installing=null;

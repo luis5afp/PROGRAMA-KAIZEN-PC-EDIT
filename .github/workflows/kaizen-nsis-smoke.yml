@@ -1,4 +1,4 @@
-name: KAIZEN 1.5.27 - Prueba instalador NSIS (recursos ficticios)
+name: KAIZEN 1.5.28 - Prueba instalador NSIS (recursos ficticios)
 on:
   pull_request:
     paths:
@@ -34,14 +34,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          npx --yes @electron/packager@18.3.6 ./app 'KAIZEN-PC-v1.5.27' --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-          $out='dist/KAIZEN-PC-v1.5.27-win32-x64'
+          npx --yes @electron/packager@18.3.6 ./app 'KAIZEN-PC-v1.5.28' --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $out='dist/KAIZEN-PC-v1.5.28-win32-x64'
           $resources="$out/resources"
           Copy-Item -LiteralPath 'runtime-resources/extensionForSecurity' -Destination "$resources/extensionForSecurity" -Recurse -Force
           node app/scripts/verify-legacy-core-resources.js "$resources/extensionForSecurity"
           $folder="$resources/KAIZEN_EXTENSIONS"
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
-          foreach($item in @(@{dir='KAIZZEN_MAIN';name='KAIZZEN-MAIN';version='2.5.10'},@{dir='KAIZZEN_GOOGLE';name='KAIZZEN-GOOGLE';version='1.0.7'},@{dir='KAIZZEN_CUSTOM';name='KAIZZEN-CUSTOM';version='1.0.10'})) {
+          foreach($item in @(@{dir='KAIZZEN_MAIN';name='KAIZZEN-MAIN';version='2.5.11'},@{dir='KAIZZEN_GOOGLE';name='KAIZZEN-GOOGLE';version='1.0.8'},@{dir='KAIZZEN_CUSTOM';name='KAIZZEN-CUSTOM';version='1.0.11'})) {
             $target=Join-Path $folder $item.dir
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             $manifest=@{manifest_version=3;name=$item.name;version=$item.version;action=@{default_title='KAIZEN'};background=@{service_worker='backgroundScript.js'}} | ConvertTo-Json -Depth 5
@@ -55,7 +55,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
-          $packed=(Resolve-Path 'dist/KAIZEN-PC-v1.5.27-win32-x64').Path
+          $packed=(Resolve-Path 'dist/KAIZEN-PC-v1.5.28-win32-x64').Path
           npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $packed --win nsis --x64 --publish never
           $setups=@(Get-ChildItem -LiteralPath 'dist/installer' -Filter '*.exe' -File)
           if($setups.Count -ne 1) { throw 'No se genero un Setup NSIS unico' }
