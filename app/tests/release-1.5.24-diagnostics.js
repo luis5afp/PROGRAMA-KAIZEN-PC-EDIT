@@ -42,7 +42,7 @@ vm.runInNewContext(src,sandbox,{filename:"diagnostics.js"});
 const {record,overview,remoteChecks}=sandbox.module.exports;
 (async()=>{
  const local=await overview();
- assert.equal(local.version,"1.5.24");
+ assert.equal(local.version,"1.5.29");
  assert.equal(local.prepared,3);
  assert.equal(local.profiles.length,3);
  assert.equal(local.security.length,2);
@@ -97,7 +97,7 @@ const {record,overview,remoteChecks}=sandbox.module.exports;
  assert(panel.includes("summary.features"));
  assert(preload.includes('require("./kaizen-diagnostics-ui-1.5.24")'));
  const pkg=JSON.parse(fs.readFileSync(path.join(__dirname,"..","package.json"),"utf8"));
- assert.equal(pkg.version,"1.5.28");
+ assert.equal(pkg.version,"1.5.29");
  assert.equal(pkg.main,"main.kaizen-1.5.24.js");
  console.log("KAIZEN 1.5.24 diagnostics and release metadata: PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});
