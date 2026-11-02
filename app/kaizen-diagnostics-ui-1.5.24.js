@@ -62,10 +62,10 @@ module.exports=function installKaizenDiagnostics(ipcRenderer){
         const row=el("div",security,"",style.row);
         el("strong",row,x.name+" · "+(x.installed?(x.warning?"incluida · aviso":"incluida"):x.present?"incompleta":"no incluida"),
           "font:600 14px system-ui;");
-        el("span",row,x.active?"Activa":x.note,style.small);
+        el("span",row,x.active?"Activa en: "+(x.activeProfiles||[]).join(", "):x.note,style.small);
       }
       el("p",content,
-        "Privacidad: ex1 puede registrar y enviar URLs del historial. ex2 puede bloquear navegación y herramientas de inspección. El selector no las activa; el cliente legado puede cargarlas al abrir perfiles. El diagnóstico no recopila contraseñas, tokens ni páginas visitadas.",
+        "Privacidad: EX1 puede registrar y enviar URLs del historial. EX2 puede bloquear navegación e inspección. Solo se incluyen desde el selector al marcar la casilla; el cliente legado también podría cargarlas fuera del selector. El diagnóstico no recopila contraseñas, tokens ni páginas visitadas.",
         style.small+"margin:14px 0;color:#fcd34d;");
       el("h3",content,"Eventos de funciones reales","font:700 17px system-ui;margin:20px 0 9px;");
       const events=el("div",content,"",style.table);
