@@ -54,8 +54,10 @@ function resolveDescriptor(id){
   const d=DESCRIPTORS[id];
   const local=path.join(importedRoot(),d.dir);
   const resource=path.join(appDirectory(),"resources","KAIZEN_EXTENSIONS",d.dir);
-  const candidates=[local,path.join(root(),d.dir),resource];
-  const folder=candidates.find(candidate=>fs.existsSync(path.join(candidate,"manifest.json")))||local;
+  // Priorizar los recursos oficiales entregados dentro de la instalación.
+  // No utilizar una importación antigua si hay una versión integrada válida.
+  const candidates=[resource,path.join(root(),d.dir),local];
+  const folder=candidates.find(candidate=>fs.existsSync(path.join(candidate,"manifest.json")))||resource;
   const manifestFile=path.join(folder,"manifest.json");
   if(!fs.existsSync(manifestFile)||!fs.existsSync(path.join(folder,"index.html")))
     return {id,...d,folder,available:false,reason:"Falta el paquete local"};
@@ -125,7 +127,8 @@ async function warmupOriginalProfiles(){
         const dir=path.join(userRoot,id);
         await fs.promises.mkdir(dir,{recursive:true});
         // Do not launch Chrome yet: user clicks "Abrir" to create the window.
-        // The package remains in KAIZEN_EXTENSIONS beside the executable.
+        // Las extensiones integradas se leen desde resources/KAIZEN_EXTENSIONS
+        // y no requieren extraer ni importar un ZIP en el equipo del usuario.
         const realDir=await fs.promises.realpath(dir);
         const realRoot=await fs.promises.realpath(userRoot);
         if(!realDir.startsWith(realRoot+path.sep))throw Error("Ruta de perfil no aislada");
