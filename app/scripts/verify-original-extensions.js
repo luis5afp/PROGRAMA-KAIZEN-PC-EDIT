@@ -6,9 +6,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const profiles = [
-  {folder: "KAIZZEN_MAIN", name: "KAIZZEN-MAIN", version: "2.5.9"},
-  {folder: "KAIZZEN_GOOGLE", name: "KAIZZEN-GOOGLE", version: "1.0.6"},
-  {folder: "KAIZZEN_CUSTOM", name: "KAIZZEN-CUSTOM", version: "1.0.9"}
+  {folder: "KAIZZEN_MAIN", name: "KAIZZEN-MAIN", version: "2.5.10"},
+  {folder: "KAIZZEN_GOOGLE", name: "KAIZZEN-GOOGLE", version: "1.0.7"},
+  {folder: "KAIZZEN_CUSTOM", name: "KAIZZEN-CUSTOM", version: "1.0.10"}
 ];
 
 function fail(message) {
