@@ -1,5 +1,6 @@
 appId: org.kaizzen.kaizenpc
 productName: KAIZEN-PC-v1.5.24
+electronVersion: 36.0.0
 directories:
   output: ../dist/installer
 win:
