@@ -1,0 +1,49 @@
+name: KAIZEN 1.5.25 - Diagnosticar ERR_BLOCKED_BY_CLIENT en Chromium
+on:
+  push:
+    branches:
+      - diagnostic/chromium-blocked-extension-page-v1525
+    paths:
+      - "app/tests/chromium-extension-navigation-smoke.js"
+      - ".github/workflows/kaizen-1525-chromium-extension-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verificar los hashes originales EX1/EX2 antes del diagnóstico
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
+          node --check app/tests/chromium-extension-navigation-smoke.js
+      - name: Obtener Chrome for Testing Win64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $meta=Invoke-RestMethod 'https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json'
+          $entry=@($meta.channels.Stable.downloads.chrome | Where-Object { $_.platform -eq 'win64' })[0]
+          if(!$entry.url) { throw 'No está disponible Chrome for Testing Win64' }
+          Invoke-WebRequest -Uri $entry.url -OutFile "$env:RUNNER_TEMP/chrome-win64.zip" -MaximumRedirection 8
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP/chrome-win64.zip" -DestinationPath "$env:RUNNER_TEMP/kaizen-chromium" -Force
+          if(!(Test-Path "$env:RUNNER_TEMP/kaizen-chromium/chrome-win64/chrome.exe")) { throw 'No se descargó Chrome' }
+      - name: Comparar extensión sola frente a las 3 extensiones juntas
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $chrome="$env:RUNNER_TEMP/kaizen-chromium/chrome-win64/chrome.exe"
+          $main=(Resolve-Path 'runtime-resources/KAIZEN_EXTENSIONS/KAIZEN_EXTENSIONS/KAIZZEN_MAIN').Path
+          $ex1=(Resolve-Path 'runtime-resources/extensionForSecurity/ex1').Path
+          $ex2=(Resolve-Path 'runtime-resources/extensionForSecurity/ex2').Path
+          node app/tests/chromium-extension-navigation-smoke.js "$chrome" "$main" "$ex1" "$ex2"
+          if($LASTEXITCODE -ne 0) { throw 'Falló el smoke test real de Chrome for Testing' }
+      # No guarda el historial, páginas HTML, cookies, credenciales ni capturas.
