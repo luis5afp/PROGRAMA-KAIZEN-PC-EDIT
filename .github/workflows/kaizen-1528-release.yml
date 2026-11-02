@@ -5,14 +5,14 @@ on:
       - "app/**"
       - "runtime-resources/KAIZEN_EXTENSIONS/**"
       - "scripts/build-windows-integrated.ps1"
-      - ".github/workflows/kaizen-1526-release.yml"
+      - ".github/workflows/kaizen-1528-release.yml"
   push:
     branches: [main]
-    paths: [".github/workflows/kaizen-1526-release.yml"]
+    paths: [".github/workflows/kaizen-1528-release.yml"]
 permissions:
   contents: write
 concurrency:
-  group: kaizen-1526-release
+  group: kaizen-1528-release
   cancel-in-progress: false
 jobs:
   release:
