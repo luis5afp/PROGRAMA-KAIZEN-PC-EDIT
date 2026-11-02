@@ -1,6 +1,6 @@
 # KAIZEN PC 1.5.24 — requisitos para publicar Windows
 
-El flujo `.github/workflows/kaizen-member-test.yml` crea un **portable**, no un instalador Setup. El directorio `KAIZEN_EXTENSIONS` tiene que estar al mismo nivel que `KAIZEN-PC-v1.5.24.exe`, NO dentro de `resources/`.
+El procedimiento vigente genera un **instalador Setup NSIS** con Principal, Google y Custom dentro de `resources/KAIZEN_EXTENSIONS/`, sin importación manual de ZIP. La compilación completa solo está permitida en una máquina autorizada o un repositorio privado. El flujo PREVIEW público es diferente y no incluye estas tres extensiones.
 
 ## Paquetes originales necesarios
 
