@@ -67,8 +67,9 @@ try {
   }
   if (!(Test-Path $chrome)) { throw "No se encontro Chromium incluido." }
 
-  npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $out --win nsis --x64 --publish never
   $installerFolder = Join-Path $repo 'dist/installer'
+  if (Test-Path $installerFolder) { Remove-Item -LiteralPath $installerFolder -Force -Recurse }
+  npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $out --win nsis --x64 --publish never
   $installer = @(Get-ChildItem -LiteralPath $installerFolder -Filter '*.exe' -File)
   if ($installer.Count -ne 1) { throw "No se genero un unico instalador Windows." }
   Write-Host "Instalador completo creado en: $($installer[0].FullName)"
