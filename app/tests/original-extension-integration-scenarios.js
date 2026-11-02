@@ -8,9 +8,9 @@ const crypto=require("node:crypto");
 const {EventEmitter}=require("node:events");
 const root=fs.mkdtempSync(path.join(os.tmpdir(),"kaizen-chromium-profile-test-"));
 const dirs=[
-  ["KAIZZEN_MAIN","KAIZZEN-MAIN","2.5.10"],
-  ["KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.7"],
-  ["KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.10"]
+  ["KAIZZEN_MAIN","KAIZZEN-MAIN","2.5.11"],
+  ["KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.8"],
+  ["KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.11"]
 ];
 const calls=[];
 const chromiumExe=path.join(root,"KAIZEN_CHROMIUM","chrome-win64","chrome.exe");
@@ -62,7 +62,7 @@ const sandbox={module:{exports:{}},exports:{},Buffer,process:{
   if(mod==="unzipper")return {Open:{file:async()=>({files:[
     {path:"KAIZEN_EXTENSIONS/KAIZZEN_MAIN/manifest.json",
       type:"File",vars:{uncompressedSize:fs.statSync(path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","manifest.json")).size},
-      buffer:async()=>Buffer.from(fs.readFileSync(path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","manifest.json"),"utf8").replace("KAIZZEN-GOOGLE","KAIZZEN-MAIN").replace("1.0.7","2.5.10"))}
+      buffer:async()=>Buffer.from(fs.readFileSync(path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","manifest.json"),"utf8").replace("KAIZZEN-GOOGLE","KAIZZEN-MAIN").replace("1.0.8","2.5.11"))}
   ]})}};
   return require(mod);
 }};
@@ -121,7 +121,7 @@ async function main(){
   // Unknown or modified manifests cannot start.
   const manifest=installedMain;
   const orig=fs.readFileSync(manifest,"utf8");
-  fs.writeFileSync(manifest,orig.replace('"2.5.10"','"1.2.3"'));
+  fs.writeFileSync(manifest,orig.replace('"2.5.11"','"1.2.3"'));
   assert.equal(api.listOriginalExtensions().find(x=>x.id==="main").available,false);
   fs.writeFileSync(manifest,orig);
   // No ofrecer un perfil parcial sin el script que necesita Chromium.

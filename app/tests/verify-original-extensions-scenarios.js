@@ -8,9 +8,9 @@ const {validate} = require("../scripts/verify-original-extensions");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kaizen-original-bundle-"));
 const root = path.join(tmp, "KAIZEN_EXTENSIONS");
 const profiles = [
-  ["KAIZZEN_MAIN", "KAIZZEN-MAIN", "2.5.10"],
-  ["KAIZZEN_GOOGLE", "KAIZZEN-GOOGLE", "1.0.7"],
-  ["KAIZZEN_CUSTOM", "KAIZZEN-CUSTOM", "1.0.10"]
+  ["KAIZZEN_MAIN", "KAIZZEN-MAIN", "2.5.11"],
+  ["KAIZZEN_GOOGLE", "KAIZZEN-GOOGLE", "1.0.8"],
+  ["KAIZZEN_CUSTOM", "KAIZZEN-CUSTOM", "1.0.11"]
 ];
 try {
   fs.mkdirSync(root);
@@ -37,7 +37,7 @@ try {
   }));
   assert.throws(() => validate(root), /Manifiesto no reconocido/);
   fs.writeFileSync(manifest, JSON.stringify({
-    manifest_version: 3, name: "KAIZZEN-GOOGLE", version: "1.0.7",
+    manifest_version: 3, name: "KAIZZEN-GOOGLE", version: "1.0.8",
     action: {default_title: "KAIZEN"}, background: {service_worker: "backgroundScript.js"}
   }));
   fs.rmSync(path.join(root, "KAIZZEN_CUSTOM"), {recursive: true});

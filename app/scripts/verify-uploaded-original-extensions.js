@@ -4,9 +4,9 @@ const fs=require("node:fs");
 const path=require("node:path");
 const assert=require("node:assert/strict");
 const profiles=[
-  {dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",version:"2.5.10"},
-  {dir:"KAIZZEN_GOOGLE",name:"KAIZZEN-GOOGLE",version:"1.0.7"},
-  {dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",version:"1.0.10"}
+  {dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",version:"2.5.11"},
+  {dir:"KAIZZEN_GOOGLE",name:"KAIZZEN-GOOGLE",version:"1.0.8"},
+  {dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",version:"1.0.11"}
 ];
 function fileInside(folder,relative){
   if(typeof relative!=="string"||!relative||path.isAbsolute(relative)||

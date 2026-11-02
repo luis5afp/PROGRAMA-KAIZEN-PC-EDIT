@@ -4,9 +4,9 @@ const fs=require("node:fs");
 const path=require("node:path");
 const root=path.resolve(__dirname,"../../runtime-resources/KAIZEN_EXTENSIONS/KAIZEN_EXTENSIONS");
 const specs=[
-  ["KAIZZEN_MAIN","KAIZZEN-MAIN","2.5.10","index-B-06emjA.js"],
-  ["KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.7","index-DhjpRuHp.js"],
-  ["KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.10","index-DtDn-2PW.js"]
+  ["KAIZZEN_MAIN","KAIZZEN-MAIN","2.5.11","index-B-06emjA.js"],
+  ["KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.8","index-DhjpRuHp.js"],
+  ["KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.11","index-DtDn-2PW.js"]
 ];
 for(const [folder,name,version,file] of specs){
   const dir=path.join(root,folder);
