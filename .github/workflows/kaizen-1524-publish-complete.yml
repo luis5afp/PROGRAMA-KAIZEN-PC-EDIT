@@ -1,0 +1,78 @@
+name: KAIZEN 1.5.24 - Publicar Setup completo y verificado
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/kaizen-1524-publish-complete.yml"]
+permissions:
+  contents: write
+concurrency:
+  group: kaizen-1524-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'luis5afp/PROGRAMA-KAIZEN-PC-EDIT'
+    runs-on: windows-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Comprobar version y archivos originales
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          if (git ls-remote --tags origin refs/tags/v1.5.24) { throw 'v1.5.24 ya existe; no sobrescribir' }
+          node app/tests/release-1.5.24-diagnostics.js
+          node app/tests/embedded-extension-integration-scenarios.js
+          node app/scripts/verify-uploaded-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS
+          node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
+          if (!(Test-Path 'docs/RELEASE-NOTES-v1.5.24.md')) { throw 'Faltan notas del Release' }
+      - name: Compilar NSIS con los cinco paquetes reales y Chromium
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          & './scripts/build-windows-integrated.ps1' -ExtensionsSource 'runtime-resources/KAIZEN_EXTENSIONS'
+          & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder 'dist/KAIZEN-PC-v1.5.24-win32-x64'
+          if ($LASTEXITCODE -ne 0) { throw 'Integridad de la compilacion invalida' }
+      - name: Instalar Setup en Windows y verificar la integridad
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $setup=@(Get-ChildItem 'dist/installer' -Filter '*.exe' -File)
+          if($setup.Count -ne 1 -or $setup[0].Length -lt 100MB) { throw 'Setup incompleto' }
+          $proc=Start-Process -FilePath $setup[0].FullName -ArgumentList '/S' -Wait -PassThru
+          if($proc.ExitCode -ne 0) { throw "NSIS falló: $($proc.ExitCode)" }
+          $programs=Join-Path $env:LOCALAPPDATA 'Programs'
+          $installed=@(Get-ChildItem $programs -Recurse -Filter 'KAIZEN-PC-v1.5.24.exe' -File -ErrorAction SilentlyContinue)
+          if($installed.Count -ne 1) { throw 'EXE instalado no encontrado o duplicado' }
+          $folder=Split-Path -Parent $installed[0].FullName
+          & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder $folder
+          if($LASTEXITCODE -ne 0) { throw 'Integridad de instalacion invalida' }
+          node app/scripts/verify-uploaded-original-extensions.js (Join-Path $folder 'resources/KAIZEN_EXTENSIONS')
+      - name: Calcular checksum SHA256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $setup=@(Get-ChildItem 'dist/installer' -Filter '*.exe' -File)
+          if($setup.Count -ne 1) { throw 'No existe un Setup unico' }
+          $digest=(Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest *$($setup[0].Name)" | Set-Content -LiteralPath ($setup[0].FullName+'.sha256') -Encoding ascii
+          "SETUP=$($setup[0].FullName)" >> $env:GITHUB_ENV
+          "SHA=$($setup[0].FullName).sha256" >> $env:GITHUB_ENV
+      - name: Publicar KAIZEN PC 1.5.24
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $sha=(git rev-parse HEAD).Trim()
+          & gh release create v1.5.24 "$env:SETUP" "$env:SHA" --repo "$env:GITHUB_REPOSITORY" --target "$sha" --title 'KAIZEN PC 1.5.24 - Perfiles integrados' --notes-file docs/RELEASE-NOTES-v1.5.24.md --latest
+          if($LASTEXITCODE -ne 0) { throw 'GitHub rechazó la publicacion del Release' }
