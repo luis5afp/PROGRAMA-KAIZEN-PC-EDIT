@@ -39,6 +39,7 @@ jobs:
           node app/tests/embedded-extension-integration-scenarios.js
           node app/tests/r3-catalog-open-scenarios.js
           node app/tests/catalog-autofill-diagnostic-scenarios.js
+          node app/tests/catalog-diagnostic-v2-runtime.js
           node app/tests/verify-original-extensions-scenarios.js
           node app/tests/original-extension-importer-scenarios.js
           node app/tests/original-extension-integration-scenarios.js
