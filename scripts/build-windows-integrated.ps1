@@ -27,6 +27,28 @@ try {
   if (!(Test-Path -LiteralPath $unpacked -PathType Container)) {
     throw "No existen las carpetas de las tres extensiones originales."
   }
+  # El usuario subió las tres carpetas dentro de un segundo
+  # KAIZEN_EXTENSIONS. Aceptar ambas estructuras como FUENTE, pero copiar
+  # siempre únicamente KAIZZEN_MAIN, KAIZZEN_GOOGLE y KAIZZEN_CUSTOM en
+  # resources/KAIZEN_EXTENSIONS, sin niveles duplicados.
+  $names = @('KAIZZEN_MAIN','KAIZZEN_GOOGLE','KAIZZEN_CUSTOM')
+  $hasAll = $true
+  foreach ($name in $names) {
+    if (!(Test-Path -LiteralPath (Join-Path $unpacked "$name/manifest.json"))) { $hasAll = $false }
+  }
+  if (!$hasAll) {
+    $nested = Join-Path $unpacked 'KAIZEN_EXTENSIONS'
+    $nestedComplete = (Test-Path -LiteralPath $nested -PathType Container)
+    foreach ($name in $names) {
+      if (!(Test-Path -LiteralPath (Join-Path $nested "$name/manifest.json"))) { $nestedComplete = $false }
+    }
+    if (!$nestedComplete) {
+      throw "No están juntas las tres extensiones completas, ni en la raíz ni en KAIZEN_EXTENSIONS anidada."
+    }
+    $unpacked = $nested
+    Write-Warning "La fuente tiene KAIZEN_EXTENSIONS anidado; se normalizará dentro del instalador."
+  }
+  node app/scripts/verify-uploaded-original-extensions.js $unpacked
   node app/scripts/verify-original-extensions.js $unpacked
   node -e "require('./app/kaizen-original-extension-importer').validateFolder(process.argv[1])" $unpacked
   node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
