@@ -65,7 +65,7 @@ function extensionSecurityState(){
           "Archivos principales listos. "+
           (optionalMissing.length?"Aviso: inject.js figura en el manifiesto pero no se distribuye. ":"")+
           (activeProfiles.length?"Cargada en perfiles Chromium: "+activeProfiles.join(", ")+". ":
-            "Solo se carga desde el selector con consentimiento explícito; el cliente legado podría cargarla por separado. ")+
+            "Obligatoria al abrir los perfiles desde el selector; el cliente legado podría cargarla por separado. ")+
           item.note:
           "Archivos necesarios ausentes o versión no reconocida."};
     }catch{
