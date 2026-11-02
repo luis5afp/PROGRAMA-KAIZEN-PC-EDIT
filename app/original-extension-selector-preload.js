@@ -58,6 +58,18 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
         if(state.isConnected)state.textContent="No se pudo importar el paquete original";
       }finally{importButton.disabled=false;}
     });
+    // These optional extensions run on every site: EX1 may send browsing
+    // history URLs and EX2 may restrict navigation or developer tools.
+    // Default OFF; each opening requires an explicit choice by the user.
+    const securityChoice=el("label",shell,"",
+      "display:flex;gap:12px;align-items:flex-start;margin:6px 0 22px;padding:14px;border:1px solid #6b4d86;border-radius:13px;background:#1d2037;cursor:pointer;");
+    const securityCheckbox=el("input",securityChoice);
+    securityCheckbox.type="checkbox";
+    securityCheckbox.checked=false;
+    securityCheckbox.style.cssText="width:19px;height:19px;flex:none;margin-top:2px;accent-color:#a78bfa;";
+    el("span",securityChoice,
+      "Cargar también EX1 y EX2 al abrir este perfil (opcional). EX1 puede recopilar y transmitir URLs del historial; EX2 puede restringir la navegación y las herramientas de inspección. Se aplicará solo si están verificadas y se reinicia este perfil.",
+      styles.text+"color:#fef3c7;");
     const cards=el("div",shell,"","display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;");
     pending=true;
     try {
@@ -83,18 +95,21 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
           b.disabled=true;
           state.textContent="Abriendo "+x.name+" en su perfil Chromium…";
           try{
-            const res=await ipcRenderer.invoke("kaizen-original-extension-open",x.id);
+            const res=await ipcRenderer.invoke("kaizen-original-extension-open",x.id,
+              {securityExtensions:securityCheckbox.checked});
             if(!state.isConnected)return;
             state.textContent=res?.ok ?
-              x.name+" abierta en Chromium. Introduce tus credenciales en la extensión original cuando se soliciten.":
+              x.name+" abierta en Chromium"+
+              (res.securityExtensions?" con EX1 y EX2 incluidas.":".")+
+              " Introduce tus credenciales en la extensión original cuando se soliciten.":
               String(res?.message||"No se pudo iniciar esta extensión.");
           } catch {
             if(state.isConnected)state.textContent="La extensión no se pudo iniciar.";
           } finally {b.disabled=false;}
         });
       }
-      // Las extensiones de seguridad se muestran solo para transparencia:
-      // el selector NO ofrece instalarlas ni ejecutarlas automáticamente.
+      // El estado del paquete sigue siendo informativo: la activación
+      // exige marcar la casilla explícita de arriba, por perfil.
       const securityTitle=el("h3",shell,"Extensiones de seguridad (estado del paquete)",
         "font:700 16px system-ui;margin:24px 0 12px;");
       const securityPanel=el("div",shell,"",
@@ -108,14 +123,15 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
             (x.installed?(x.warning?"incluida · aviso":"incluida"):x.present?"paquete incompleto":"no incluida"),
             "font-size:16px;");
           el("p",card,x.note||"Sin información",styles.text+"margin:0;");
-          el("small",card,"No se activa desde este selector; el cliente original puede cargarla.",
+          el("small",card,
+            "Se carga solo al marcar la casilla y abrir un perfil nuevo; el cliente legado también puede cargarla por separado.",
             "font-size:12px;color:#fcd34d;");
         }
         if(!items.length)el("p",securityPanel,"Diagnóstico de seguridad no disponible.",styles.text);
       }catch{
         el("p",securityPanel,"No se pudo consultar el estado de ex1/ex2.",styles.text);
       }
-      el("p",shell,"Aviso: ex1 puede recopilar y transmitir URLs del historial; ex2 puede restringir navegación e inspección. Este selector no las carga automáticamente, pero el cliente original puede hacerlo en ciertos perfiles.",styles.text+"margin-top:14px;color:#fcd34d;");
+      el("p",shell,"Aviso: EX1 puede recopilar y transmitir URLs del historial; EX2 puede restringir navegación e inspección. Ambas permanecen desactivadas por defecto en este selector. Marca la casilla para incluirlas en el próximo arranque de Chromium; no se modifica ningún permiso del servidor.",styles.text+"margin-top:14px;color:#fcd34d;");
       el("p",shell,allAvailable?
         "Los tres paquetes se detectaron en esta instalación. Sus sesiones se conservan en carpetas Chromium independientes.":
         "Faltan archivos locales para activar uno o más perfiles. Usa «Importar extensiones originales (.zip)» para seleccionar un paquete autorizado con las tres extensiones. KAIZEN lo guardará en almacenamiento persistente, sin modificar la carpeta del programa.",styles.text+"margin-top:22px;");
