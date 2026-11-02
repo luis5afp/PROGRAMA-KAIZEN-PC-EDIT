@@ -46,6 +46,16 @@ const {record,overview,remoteChecks}=sandbox.module.exports;
  assert.equal(local.security.length,2);
  assert.equal(local.security.every(x=>x.active===false),true);
  assert.equal(local.security.map(x=>x.name).join(","),"ex1,ex2");
+ // EX1 original: Chrome puede cargarlo aunque declare un inject.js
+ // no incluido. El diagnóstico no debe marcarlo "incompleto" por eso.
+ const ex1=local.security.find(x=>x.name==="ex1");
+ const ex2=local.security.find(x=>x.name==="ex2");
+ assert.equal(ex1.installed,true);
+ assert.equal(ex1.warning,true);
+ assert.match(ex1.note,/inject\.js/);
+ assert.equal(ex2.installed,true);
+ assert.equal(ex1.active,false);
+ assert.equal(ex2.active,false);
  const noToken=await remoteChecks("");
  assert.equal(noToken.ok,false);
  assert.equal(requests.length,0);
