@@ -40,6 +40,8 @@ const sandbox={module:{exports:{}},exports:{},Buffer,process:{
 },console,require:mod=>{
   if(mod==="electron")return {app:{isPackaged:true,getPath:()=>userData}};
   if(mod==="node:child_process")return {spawn:spawnMock};
+  if(mod==="./scripts/verify-security-extensions")return {validate:()=>true};
+  if(mod==="./scripts/verify-legacy-core-resources")return {verify:()=>true};
   if(mod==="./kaizen-original-extension-importer")return {
     installOriginalZip:async(_zip,userDataRoot)=>{
       const dest=path.join(userDataRoot,"kaizen-original-extensions","KAIZEN_EXTENSIONS");
@@ -98,6 +100,11 @@ async function main(){
   assert(calls[0].args.some(x=>x.startsWith("--user-data-dir=")));
   assert(calls[0].args.some(x=>x.startsWith("--load-extension=")));
   assert(calls[0].args.some(x=>x.startsWith("--disable-extensions-except=")));
+  for(const file of ["ex1","ex2"]){
+    const folder=path.join(root,"resources","extensionForSecurity",file);
+    assert(calls[0].args.some(x=>x.startsWith("--load-extension=")&&x.split(",").includes(folder)),
+      "Debe cargar EX1 y EX2 siempre junto al perfil original");
+  }
   assert(calls[0].args.some(x=>x.startsWith("chrome-extension://")&&x.endsWith("/index.html")));
   assert(!calls[0].args.some(x=>x.includes("Bearer ")||x.includes("token")));
   assert.equal((await api.openOriginalExtension("custom")).message,"Perfil Chromium ya abierto");
