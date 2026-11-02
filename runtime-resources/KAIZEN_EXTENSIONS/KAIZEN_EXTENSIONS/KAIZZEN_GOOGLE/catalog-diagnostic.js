@@ -232,18 +232,19 @@
     const e=events.slice().reverse();
     const recent=stage=>e.find(x=>x.stage===stage);
     const last=recent("clic-tarjeta");
-    const session=recent("sesion-temporal-preparada");
-    const opening=recent("apertura-solicitada");
-    const page=recent("script-formulario-activo")||recent("formulario-sin-sesion");
-    const created=recent("chromium-ventana-detectada");
-    const form=recent("formulario-observado");
+    const traced=stage=>last?.flujo?e.find(x=>x.stage===stage && x.flujo===last.flujo):null;
+    const session=traced("sesion-temporal-preparada");
+    const opening=traced("apertura-solicitada");
+    const page=traced("script-formulario-activo")||traced("formulario-sin-sesion");
+    const created=traced("chromium-ventana-detectada");
+    const form=traced("formulario-observado");
     const catalog=recent("catalogo-respuesta");
     const notes=[
       "Catálogo: "+(catalog?"HTTP "+catalog.http+" · "+(catalog.normal+catalog.premium)+" tarjetas · estructura "+catalog.estructura:"sin respuesta observada"),
       "Tarjeta: "+(last?"clic registrado":"sin clic registrado"),
       "Apertura: "+(opening?"solicitada mediante "+opening.medio:"sin llamada de apertura observada")+
         (created?" · nueva ventana detectada":""),
-      "Sesión: "+(session&&(!last || session.time>=last.time)?"preparación observada":"sin preparación observada tras el último clic"),
+      "Sesión: "+(session?"preparación observada":"sin preparación observada tras el último clic"),
       "Formulario: "+(page?"script ejecutado":"todavía sin evento del script"),
       "Campos: "+(form?("correo "+form.camposCorreo+", clave "+form.camposClave+
         "; contenido correo "+Boolean(form.correoConContenido)+", clave "+Boolean(form.claveConContenido)):
