@@ -35,4 +35,4 @@ for(const [folder,name,version] of [
   assert(!catalog.includes("JSON.stringify(data)"),"No copiar la respuesta íntegra");
   assert(!form.includes("value:") && !form.includes("value="),"Nunca guardar valores de formularios");
 }
-console.log("KAIZEN 1.5.28: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.29: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
