@@ -24,21 +24,17 @@ ipcMain.handle("kaizen-1524-remote-checks",async(event,token)=>{
 });
 // Connect real profile-opening results into the diagnostics feed.
 ipcMain.removeHandler("kaizen-original-extension-open");
-ipcMain.handle("kaizen-original-extension-open",async(event,id,options={})=>{
+ipcMain.handle("kaizen-original-extension-open",async(event,id)=>{
   if(!authorize(event))return {ok:false,message:"Interfaz no autorizada"};
   if(!["main","google","custom"].includes(id))return {ok:false,message:"Perfil no reconocido"};
   diagnostics.record("chromium_"+id,"pending","Solicitando apertura de perfil local");
   try{
-    const includeSecurity=options?.securityExtensions===true;
-    const opened=await originals.openOriginalExtension(id,{securityExtensions:includeSecurity});
+    const opened=await originals.openOriginalExtension(id);
     diagnostics.record("chromium_"+id,opened.ok?"ok":"error",
-      opened.ok?(includeSecurity?
-        "Chromium iniciado con perfil y EX1/EX2 autorizadas":
-        "Chromium iniciado solamente con su extensión de catálogo"):
-      "No se pudo abrir el perfil local");
-    if(opened.ok)diagnostics.record("security_extensions",includeSecurity?"ok":"info",
-      includeSecurity?"EX1/EX2 incluidas en el arranque autorizado":
-        "EX1/EX2 desactivadas para este perfil");
+      opened.ok?"Chromium iniciado con el perfil original, EX1 y EX2 verificados":
+        "No se pudo abrir el perfil con EX1/EX2 obligatorios");
+    if(opened.ok)diagnostics.record("security_extensions","ok",
+      "EX1 y EX2 incluidas obligatoriamente en el perfil solicitado");
     return opened;
   }catch(_){
     diagnostics.record("chromium_"+id,"error","Fallo de apertura");
