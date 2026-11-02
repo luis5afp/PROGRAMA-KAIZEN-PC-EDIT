@@ -110,7 +110,7 @@ module.exports=function installKaizenDiagnostics(ipcRenderer){
     const shell=el("section",openPanel,"",
       "max-width:950px;margin:auto;background:#101a2a;padding:24px;border-radius:17px;border:1px solid #41526e;");
     const header=el("div",shell,"","display:flex;justify-content:space-between;align-items:center;gap:15px;");
-    el("h2",header,"KAIZEN PC 1.5.25 · Diagnóstico integral","font:700 20px system-ui;margin:0;");
+    el("h2",header,"KAIZEN PC 1.5.26 · Diagnóstico integral","font:700 20px system-ui;margin:0;");
     const close=el("button",header,"Cerrar",style.btn);
     close.addEventListener("click",()=>{openPanel?.remove();openPanel=null;});
     const content=el("div",shell,"","");

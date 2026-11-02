@@ -1,0 +1,64 @@
+name: KAIZEN 1.5.26 - PREVIEW de diagnostico Premium
+on:
+  push:
+    branches:
+      - feature/kaizen-v1526-premium-access-diagnostics
+    paths:
+      - "app/**"
+      - "runtime-resources/KAIZEN_EXTENSIONS/**"
+      - "scripts/build-windows-integrated.ps1"
+      - ".github/workflows/kaizen-1526-premium-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verificar comportamiento de las 3 tarjetas Premium y el resto de regresiones
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          node app/tests/three-catalogs-premium-diagnostics.js
+          foreach ($name in @(
+            'KAIZZEN_MAIN/assets/index-B-06emjA.js',
+            'KAIZZEN_GOOGLE/assets/index-DhjpRuHp.js',
+            'KAIZZEN_CUSTOM/assets/index-DtDn-2PW.js'
+          )) {
+            node --check (Join-Path 'runtime-resources/KAIZEN_EXTENSIONS/KAIZEN_EXTENSIONS' $name)
+          }
+          node app/tests/guest-local-update-scenarios.js
+          node app/tests/release-1.5.24-diagnostics.js
+          node app/tests/embedded-extension-integration-scenarios.js
+          node app/scripts/verify-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS/KAIZEN_EXTENSIONS
+          node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
+      - name: Generar Setup 1.5.26 PREVIEW con cinco paquetes originales
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          & './scripts/build-windows-integrated.ps1' -ExtensionsSource 'runtime-resources/KAIZEN_EXTENSIONS'
+          $root='dist/KAIZEN-PC-v1.5.26-win32-x64'
+          & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder $root
+          if($LASTEXITCODE -ne 0){ throw 'Verificacion de integridad fallida' }
+          node app/scripts/verify-uploaded-original-extensions.js "$root/resources/KAIZEN_EXTENSIONS"
+          $setup=@(Get-ChildItem 'dist/installer' -Filter '*.exe' -File)
+          if($setup.Count -ne 1 -or $setup[0].Length -lt 100MB){ throw 'Setup incompleto' }
+          $sha=(Get-FileHash $setup[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha *$($setup[0].Name)" | Set-Content ($setup[0].FullName+'.sha256') -Encoding ascii
+      - name: Publicar artefacto temporal para prueba (NO una Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-PC-v1.5.26-PREVIEW-Premium-Diagnostico
+          path: |
+            dist/installer/*.exe
+            dist/installer/*.sha256
+          if-no-files-found: error
+          retention-days: 7
