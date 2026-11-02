@@ -28,6 +28,7 @@ for(const [folder,name,version] of [
   assert(catalog.includes("/api/shops/extension"),"Identificar el endpoint del catálogo");
   assert(catalog.includes("sesion-temporal-preparada"),"Detectar la preparación original de product");
   assert(catalog.includes("catalogo-respuesta"),"Mostrar respuesta agregada");
+  assert(catalog.includes("catalogo-envio")&&catalog.includes("catalogo-error"),"Registrar envío y fallo sin datos sensibles");
   assert(catalog.includes("Copiar informe"),"Exportar sin DevTools");
   const form=fs.readFileSync(path.join(dir,"form-diagnostic.js"),"utf8");
   assert(form.includes("script-formulario-activo") && form.includes("formulario-observado"));
