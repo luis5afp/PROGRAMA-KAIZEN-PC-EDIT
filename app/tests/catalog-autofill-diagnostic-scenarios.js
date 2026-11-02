@@ -28,6 +28,7 @@ for(const [folder,name,version] of [
   assert(catalog.includes("/api/shops/extension"),"Identificar el endpoint del catálogo");
   assert(catalog.includes("sesion-temporal-preparada"),"Detectar la preparación original de product");
   assert(catalog.includes("catalogo-respuesta"),"Mostrar respuesta agregada");
+  assert(catalog.includes("catalogo-envio")&&catalog.includes("catalogo-error"),"Registrar envío y fallo sin datos sensibles");
   assert(catalog.includes("Copiar informe"),"Exportar sin DevTools");
   const form=fs.readFileSync(path.join(dir,"form-diagnostic.js"),"utf8");
   assert(form.includes("script-formulario-activo") && form.includes("formulario-observado"));
@@ -35,4 +36,4 @@ for(const [folder,name,version] of [
   assert(!catalog.includes("JSON.stringify(data)"),"No copiar la respuesta íntegra");
   assert(!form.includes("value:") && !form.includes("value="),"Nunca guardar valores de formularios");
 }
-console.log("KAIZEN 1.5.28: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.29: diagnóstico en catálogos y formularios de las 3 extensiones PASS");

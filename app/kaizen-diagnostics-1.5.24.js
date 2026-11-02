@@ -116,7 +116,7 @@ async function overview(){
     status:x.available?(x.prepared?"Preparado localmente":"Disponible"):String(x.reason||"Falta paquete").slice(0,90)
   }));
   const summary={
-    version:"1.5.24",
+    version:"1.5.29",
     profiles,prepared:profiles.filter(x=>x.prepared).length,
     chromiumReady:warm.reason!=="Falta Chromium incluido"&&
       !originalStates.some(x=>x.reason==="Falta Chromium compatible incluido"),
@@ -133,6 +133,8 @@ async function overview(){
   return summary;
 }
 async function endpoint(token,pathName){
+  // Solo metadatos de la operación; jamás registrar token, cuerpo ni encabezados.
+  record("http_envio","info","ENVÍO GET "+pathName);
   try{
     const response=await signedHttp.get(BACKEND_URL+pathName,{
       headers:{Authorization:"Bearer "+token},timeout:9000,
@@ -145,13 +147,19 @@ async function endpoint(token,pathName){
     else if(Array.isArray(data.group))count=data.group.length;
     else if(Array.isArray(data.products))count=data.products.length;
     const result={http:Number(response.status)||200,count};
+    record("http_recibido","ok","RECIBIDO HTTP "+result.http+" GET "+pathName+
+      (Number.isInteger(count)?" · "+count+" elemento(s)":""));
     if(pathName==="/api/verify-token"){
       const role=data.user?.role;
       result.role=["member","admin","appcbl_soft","specific","all_profile","manager"].includes(role)?role:"otro";
     }
     return result;
   }catch(error){
-    return {http:safeStatus(error),count:null,error:safeStatus(error)?"Servidor rechazó consulta":"Sin respuesta de red"};
+    const status=safeStatus(error);
+    record("http_error",status?"warning":"error",status?
+      "RECIBIDO HTTP "+status+" GET "+pathName:
+      "ERROR de red GET "+pathName);
+    return {http:status,count:null,error:status?"Servidor rechazó consulta":"Sin respuesta de red"};
   }
 }
 async function remoteChecks(token){
