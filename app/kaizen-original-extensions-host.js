@@ -1,7 +1,7 @@
 "use strict";
 // KAIZEN ORIGINAL extension profiles: one separate Chromium user-data-dir
 // for each original MV3 extension. Each selected profile starts a real
-// Chromium (Chrome for Testing), loads exactly its extension, and navigates
+// Chromium (Chrome for Testing), loads its catalog extension plus EX1/EX2, and navigates
 // to that extension's login/catalogue UI. No credentials are copied.
 const fs=require("node:fs");
 const path=require("node:path");
@@ -15,6 +15,7 @@ const DESCRIPTORS=Object.freeze({
   custom:{dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",title:"Streaming / Custom",version:"1.0.6"}
 });
 const running=new Map();
+const runningSecurity=new Map();
 const pending=new Map();
 const prepared=new Set();
 let warming=null;
@@ -28,6 +29,19 @@ function root() {
 // funciona incluso cuando Windows instala KAIZEN en Program Files.
 function importedRoot() {
   return path.join(app.getPath("userData"),"kaizen-original-extensions","KAIZEN_EXTENSIONS");
+}
+function securityPackagesRoot(){
+  return app.isPackaged?
+    path.join(appDirectory(),"resources","extensionForSecurity"):
+    path.resolve(__dirname,"..","runtime-resources","extensionForSecurity");
+}
+function validatedSecurityExtensions(){
+  const base=securityPackagesRoot();
+  // Both original manifests and script hashes must be valid; fail closed.
+  // EX1's known missing, non-executable inject.js is a warning, not a hash bypass.
+  require("./scripts/verify-security-extensions").validate(base);
+  require("./scripts/verify-legacy-core-resources").verify(base);
+  return ["ex1","ex2"].map(name=>path.join(base,name));
 }
 function browserExecutable() {
   // Google Chrome official builds no longer accept --load-extension.
@@ -77,13 +91,17 @@ function resolveDescriptor(id){
 }
 function listOriginalExtensions(){
   const found=browserExecutable();
+  let securityAvailable=true;
+  try{validatedSecurityExtensions();}
+  catch{securityAvailable=false;}
   return Object.keys(DESCRIPTORS).map(id=>{
     const {folder,...result}=resolveDescriptor(id);
     return {...result,
-      available:!!found&&result.available,
-      prepared:prepared.has(id),
+      available:!!found&&result.available&&securityAvailable,
+      prepared:prepared.has(id)&&securityAvailable,
       local:true,
-      reason:!found?"Falta Chromium compatible incluido":result.reason};
+      reason:!found?"Falta Chromium compatible incluido":
+        !securityAvailable?"EX1/EX2 no están completos o no coinciden sus SHA-256":result.reason};
   });
 }
 /**
@@ -117,6 +135,11 @@ async function warmupOriginalProfiles(){
     await unpackLocalExtensionArchive();
     const availableBrowser=browserExecutable();
     if(!availableBrowser)return {ok:false,prepared:0,total:3,reason:"Falta Chromium incluido"};
+    try{validatedSecurityExtensions();}
+    catch{
+      prepared.clear();
+      return {ok:false,prepared:0,total:3,reason:"Faltan archivos de EX1/EX2 o su integridad no coincide"};
+    }
     const userRoot=path.join(app.getPath("userData"),"chromium-extension-profiles");
     await fs.promises.mkdir(userRoot,{recursive:true});
     let done=0;
@@ -143,6 +166,8 @@ async function warmupOriginalProfiles(){
 }
 
 async function openOriginalExtension(id){
+  // Obligatorio en todos los perfiles: la extensión del catálogo + EX1 + EX2.
+  // El usuario ve los permisos y pulsa "Abrir con EX1 y EX2" expresamente.
   // An Open action may arrive before the startup warmup finishes.
   await warmupOriginalProfiles();
   const d=resolveDescriptor(id);
@@ -153,9 +178,13 @@ async function openOriginalExtension(id){
   if(pending.has(id))return pending.get(id);
   const runningProcess=running.get(id);
   if(runningProcess && runningProcess.exitCode===null && !runningProcess.killed){
-    // Reuse this profile's Chromium. It handles the second command line
-    // itself; do not start another profile concurrently with the same dir.
-    return {ok:true,message:"Perfil Chromium ya abierto",name:d.name};
+    // Chromium ignores changed --load-extension flags for an already-open
+    // user-data-dir. Tell the user to close it instead of claiming EX1/EX2 loaded.
+    if(runningSecurity.get(id)!==true)
+      return {ok:false,requiresRestart:true,message:
+        "Cierra todas las ventanas de Chromium de este perfil y vuelve a abrirlo con EX1/EX2 obligatorias."};
+    return {ok:true,message:"Perfil Chromium ya abierto",name:d.name,
+      securityExtensions:true};
   }
   const task=(async()=>{
     try {
@@ -163,13 +192,21 @@ async function openOriginalExtension(id){
       await fs.promises.mkdir(dir,{recursive:true});
       const extId=chromeExtensionId(d.folder);
       const url="chrome-extension://"+extId+"/index.html";
+      // Siempre lanzar el perfil con EX1/EX2, sin modo alternativo ni
+      // instalaciones incompletas. Nunca modificar sus archivos originales.
+      let folders;
+      try{folders=[d.folder,...validatedSecurityExtensions()];}
+      catch{
+        return {ok:false,message:"EX1/EX2 no están completos o su integridad no coincide; no se abrió Chromium."};
+      }
+      const loadPaths=folders.join(",");
       const args=[
         "--user-data-dir="+dir,
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-sync",
-        "--disable-extensions-except="+d.folder,
-        "--load-extension="+d.folder,
+        "--disable-extensions-except="+loadPaths,
+        "--load-extension="+loadPaths,
         "--new-window",
         url
       ];
@@ -182,8 +219,12 @@ async function openOriginalExtension(id){
         child.once("error",()=>end({ok:false,message:"No se pudo ejecutar Chromium"}));
         child.once("spawn",()=>{
           running.set(id,child);
-          child.once("exit",()=>{if(running.get(id)===child)running.delete(id);});
-          end({ok:true,name:d.name,opened:"perfil Chromium",profile:id});
+          runningSecurity.set(id,true);
+          child.once("exit",()=>{
+            if(running.get(id)===child){running.delete(id);runningSecurity.delete(id);}
+          });
+          end({ok:true,name:d.name,opened:"perfil Chromium",profile:id,
+            securityExtensions:true});
         });
       });
     }catch{
@@ -192,6 +233,11 @@ async function openOriginalExtension(id){
   })();
   pending.set(id,task);
   try{return await task;}finally{if(pending.get(id)===task)pending.delete(id);}
+}
+function activeSecurityProfiles(){
+  return [...runningSecurity.entries()]
+    .filter(([id,enabled])=>enabled&&running.get(id)?.exitCode===null&&!running.get(id)?.killed)
+    .map(([id])=>id);
 }
 function anyRunningProfiles(){
   return [...running.values()].some(child=>child.exitCode===null&&!child.killed);
@@ -204,4 +250,4 @@ async function importOriginalZip(zipFile){
   return result;
 }
 module.exports={DESCRIPTORS,listOriginalExtensions,warmupOriginalProfiles,openOriginalExtension,
-  chromeExtensionId,importOriginalZip,anyRunningProfiles};
+  chromeExtensionId,importOriginalZip,anyRunningProfiles,activeSecurityProfiles};

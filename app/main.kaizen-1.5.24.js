@@ -31,8 +31,10 @@ ipcMain.handle("kaizen-original-extension-open",async(event,id)=>{
   try{
     const opened=await originals.openOriginalExtension(id);
     diagnostics.record("chromium_"+id,opened.ok?"ok":"error",
-      opened.ok?"Se inició Chromium con su extensión de catálogo":
-      "No se pudo abrir el perfil local");
+      opened.ok?"Chromium iniciado con el perfil original, EX1 y EX2 verificados":
+        "No se pudo abrir el perfil con EX1/EX2 obligatorios");
+    if(opened.ok)diagnostics.record("security_extensions","ok",
+      "EX1 y EX2 incluidas obligatoriamente en el perfil solicitado");
     return opened;
   }catch(_){
     diagnostics.record("chromium_"+id,"error","Fallo de apertura");
@@ -69,7 +71,7 @@ let diagWindow=null;
 function openDiagnosticsWindow(){
   if(diagWindow&&!diagWindow.isDestroyed()){diagWindow.show();diagWindow.focus();return;}
   diagWindow=new BrowserWindow({
-    width:1020,height:820,minWidth:760,minHeight:550,title:"KAIZEN PC 1.5.24 · Diagnóstico integral",
+    width:1020,height:820,minWidth:760,minHeight:550,title:"KAIZEN PC 1.5.25 · Diagnóstico integral",
     autoHideMenuBar:true,webPreferences:{
       preload:path.join(__dirname,"kaizen-diagnostics-preload-1.5.24.js"),
       contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true

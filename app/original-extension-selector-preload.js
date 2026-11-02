@@ -32,10 +32,10 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
     const row=el("header",shell,"","display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;");
     const head=el("div",row,"","display:flex;flex-direction:column;gap:7px;");
     el("h2",head,"KAIZEN · Perfiles Chromium locales","font-size:23px;margin:0;");
-    el("p",head,"Selecciona un perfil: KAIZEN abrirá Chromium con su extensión y su catálogo.",styles.text+"margin:0;");
+    el("p",head,"Cada perfil abre Chromium con tres extensiones: su catálogo original, EX1 y EX2.",styles.text+"margin:0;");
     const exit=el("button",row,"✕ Cerrar",styles.button);
     exit.addEventListener("click",close);
-    const info=el("p",shell,"KAIZEN comprueba al iniciar las extensiones originales incluidas en el paquete. Solo los perfiles con archivos completos y comprobados permiten pulsar Abrir Chromium. El catálogo y el inicio de sesión pueden requerir internet o 2FA.",styles.text+"margin:20px 0;");
+    const info=el("p",shell,"KAIZEN exige los archivos completos de la extensión principal, EX1 y EX2. Si falta alguna o sus hashes no coinciden, no se podrá abrir el perfil Chromium. El inicio de sesión puede requerir internet y 2FA.",styles.text+"margin:20px 0;");
     const state=el("div",shell,"Buscando extensiones locales…",styles.text+"margin-bottom:13px;");
     const importRow=el("div",shell,"","display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0 20px;");
     const importButton=el("button",importRow,"📦 Importar extensiones originales (.zip)",styles.button);
@@ -58,6 +58,15 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
         if(state.isConnected)state.textContent="No se pudo importar el paquete original";
       }finally{importButton.disabled=false;}
     });
+    // EX1 and EX2 are mandatory with every profile. The disclosure stays
+    // visible before the user clicks an explicitly labeled launch control.
+    const securityNotice=el("div",shell,"",
+      "margin:6px 0 22px;padding:14px;border:1px solid #6b4d86;border-radius:13px;background:#1d2037;");
+    el("strong",securityNotice,"EX1 y EX2 son obligatorias para los tres perfiles",
+      "display:block;margin-bottom:8px;font:700 14px system-ui;color:#fef3c7;");
+    el("p",securityNotice,
+      "Al pulsar «Abrir perfil con EX1 y EX2» se activarán también ambas extensiones. EX1 puede consultar y transmitir URLs del historial de navegación; EX2 puede restringir páginas y herramientas de inspección. No se abrirá ningún perfil si faltan estos paquetes o fallan sus comprobaciones de integridad.",
+      styles.text+"margin:0;color:#fef3c7;");
     const cards=el("div",shell,"","display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;");
     pending=true;
     try {
@@ -67,8 +76,8 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
       // Una distribución completa no necesita mostrar opciones de importación.
       importRow.style.display=allAvailable?"none":"flex";
       state.textContent=Array.isArray(extensions)&&extensions.some(x=>x.available)?
-        "Perfiles Chromium preparados. Elige cuál quieres abrir.":
-        "Aún no se han instalado los archivos de las extensiones.";
+        "Perfiles Chromium y EX1/EX2 preparados. Elige cuál quieres abrir.":
+        "No se puede abrir un perfil sin KAIZZEN y las extensiones EX1/EX2 originales verificadas.";
       for(const x of Array.isArray(extensions)?extensions:[]){
         const b=el("button",cards,"",styles.card);
         b.disabled=!x.available;
@@ -78,7 +87,7 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
         el("div",b,x.name+" · v"+x.version,styles.text);
         el("small",b,x.available?(x.prepared?"✓ Preparado localmente":"✓ Disponible"):"⚠ "+x.reason,
           "font-size:12px;color:"+(x.available?"#86efac":"#fda4af"));
-        el("span",b,"▶ Abrir perfil Chromium","font-size:13px;font-weight:750;color:#d8b4fe;margin-top:9px;");
+        el("span",b,"▶ Abrir perfil con EX1 y EX2","font-size:13px;font-weight:750;color:#d8b4fe;margin-top:9px;");
         if(x.available)b.addEventListener("click",async ()=>{
           b.disabled=true;
           state.textContent="Abriendo "+x.name+" en su perfil Chromium…";
@@ -86,15 +95,15 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
             const res=await ipcRenderer.invoke("kaizen-original-extension-open",x.id);
             if(!state.isConnected)return;
             state.textContent=res?.ok ?
-              x.name+" abierta en Chromium. Introduce tus credenciales en la extensión original cuando se soliciten.":
-              String(res?.message||"No se pudo iniciar esta extensión.");
+              x.name+" iniciada en Chromium con EX1 y EX2 solicitadas. Comprueba las tres en chrome://extensions. Introduce tus credenciales en la extensión cuando se soliciten.":
+              String(res?.message||"No se pudo iniciar el perfil con EX1 y EX2.");
           } catch {
             if(state.isConnected)state.textContent="La extensión no se pudo iniciar.";
           } finally {b.disabled=false;}
         });
       }
-      // Las extensiones de seguridad se muestran solo para transparencia:
-      // el selector NO ofrece instalarlas ni ejecutarlas automáticamente.
+      // El estado muestra recursos obligatorios. La apertura conjunta se
+      // solicita mediante cada botón, con aviso visible de permisos.
       const securityTitle=el("h3",shell,"Extensiones de seguridad (estado del paquete)",
         "font:700 16px system-ui;margin:24px 0 12px;");
       const securityPanel=el("div",shell,"",
@@ -108,14 +117,15 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
             (x.installed?(x.warning?"incluida · aviso":"incluida"):x.present?"paquete incompleto":"no incluida"),
             "font-size:16px;");
           el("p",card,x.note||"Sin información",styles.text+"margin:0;");
-          el("small",card,"No se activa desde este selector; el cliente original puede cargarla.",
+          el("small",card,
+            "Obligatoria al abrir cualquier perfil Chromium; el cliente legado también puede cargarla por separado.",
             "font-size:12px;color:#fcd34d;");
         }
         if(!items.length)el("p",securityPanel,"Diagnóstico de seguridad no disponible.",styles.text);
       }catch{
         el("p",securityPanel,"No se pudo consultar el estado de ex1/ex2.",styles.text);
       }
-      el("p",shell,"Aviso: ex1 puede recopilar y transmitir URLs del historial; ex2 puede restringir navegación e inspección. Este selector no las carga automáticamente, pero el cliente original puede hacerlo en ciertos perfiles.",styles.text+"margin-top:14px;color:#fcd34d;");
+      el("p",shell,"Aviso: EX1 puede recopilar y transmitir URLs del historial; EX2 puede restringir navegación e inspección. Ambas son obligatorias al abrir perfiles desde KAIZEN, pero no modifican permisos del servidor ni evitan el inicio de sesión o 2FA.",styles.text+"margin-top:14px;color:#fcd34d;");
       el("p",shell,allAvailable?
         "Los tres paquetes se detectaron en esta instalación. Sus sesiones se conservan en carpetas Chromium independientes.":
         "Faltan archivos locales para activar uno o más perfiles. Usa «Importar extensiones originales (.zip)» para seleccionar un paquete autorizado con las tres extensiones. KAIZEN lo guardará en almacenamiento persistente, sin modificar la carpeta del programa.",styles.text+"margin-top:22px;");

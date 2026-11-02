@@ -26,6 +26,8 @@ function extensionSecurityState(){
   // El instalador deja ex1/ex2 en resources/extensionForSecurity, NO en
   // KAIZEN_EXTENSIONS. Solo lectura: nunca se cargan ni se ejecutan aquí.
   const base=securityRoot();
+  const activeProfiles=typeof local.activeSecurityProfiles==="function"?
+    local.activeSecurityProfiles():[];
   return [
     {name:"ex1",version:"1.2",note:"Puede recopilar y enviar URLs del historial."},
     {name:"ex2",version:"1.1",note:"Puede restringir navegación y herramientas de inspección."}
@@ -56,12 +58,15 @@ function extensionSecurityState(){
           const p=path.resolve(folder,file);
           return p.startsWith(folder+path.sep)&&fs.existsSync(p)&&fs.statSync(p).isFile();
         });
-      return {name:item.name,installed:complete,present:true,active:false,
+      return {name:item.name,installed:complete,present:true,
+        active:activeProfiles.length>0,activeProfiles:activeProfiles.slice(),
         version:m.version,warning:complete&&optionalMissing.length>0,
         note:complete?
           "Archivos principales listos. "+
           (optionalMissing.length?"Aviso: inject.js figura en el manifiesto pero no se distribuye. ":"")+
-          "El selector no la instala automáticamente; el cliente original podría cargarla al abrir perfiles. "+item.note:
+          (activeProfiles.length?"Cargada en perfiles Chromium: "+activeProfiles.join(", ")+". ":
+            "Obligatoria al abrir los perfiles desde el selector; el cliente legado podría cargarla por separado. ")+
+          item.note:
           "Archivos necesarios ausentes o versión no reconocida."};
     }catch{
       return {name:item.name,installed:false,present:true,active:false,

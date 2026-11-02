@@ -14,6 +14,8 @@ const specs=[
 ];
 const chrome=path.join(root,"KAIZEN_CHROMIUM","chrome-win64","chrome.exe");
 const calls=[];
+const validations=[];
+let securityValid=true;
 try{
   fs.mkdirSync(userData,{recursive:true});
   fs.mkdirSync(path.dirname(chrome),{recursive:true});
@@ -35,6 +37,11 @@ try{
       fs.writeFileSync(path.join(stale,"index.html"),"stale");
     }
   }
+  for(const name of ["ex1","ex2"]){
+    const folder=path.join(root,"resources","extensionForSecurity",name);
+    fs.mkdirSync(folder,{recursive:true});
+    fs.writeFileSync(path.join(folder,"manifest.json"),JSON.stringify({manifest_version:3,name}));
+  }
   const source=fs.readFileSync(path.join(__dirname,"..","kaizen-original-extensions-host.js"),"utf8");
   let imports=0;
   const sandbox={
@@ -47,6 +54,14 @@ try{
         calls.push({bin,args,opts,child});
         process.nextTick(()=>child.emit("spawn"));
         return child;
+      }};
+      if(mod==="./scripts/verify-security-extensions")return {validate:(folder)=>{
+        validations.push(["package",folder]);
+        if(!securityValid)throw Error("security package corrupt");
+      }};
+      if(mod==="./scripts/verify-legacy-core-resources")return {verify:(folder)=>{
+        validations.push(["sha256",folder]);
+        if(!securityValid)throw Error("hash does not match");
       }};
       if(mod==="./kaizen-original-extension-importer")return {installOriginalZip:async()=>{
         imports++;return {ok:false,message:"no debe importar"};
@@ -67,15 +82,49 @@ try{
     for(const [id,dir] of specs){
       const opened=await api.openOriginalExtension(id);
       assert.equal(opened.ok,true,id);
+      assert.equal(opened.securityExtensions,true,"EX1/EX2 obligatorias");
       const call=calls[calls.length-1];
       assert.equal(call.bin,chrome);
       assert.equal(call.opts.shell,false);
-      assert(call.args.some(x=>x==="--load-extension="+path.join(root,"resources","KAIZEN_EXTENSIONS",dir)));
+      const main=path.join(root,"resources","KAIZEN_EXTENSIONS",dir);
+      const ex1=path.join(root,"resources","extensionForSecurity","ex1");
+      const ex2=path.join(root,"resources","extensionForSecurity","ex2");
+      assert(call.args.includes("--load-extension="+[main,ex1,ex2].join(",")));
+      assert(call.args.includes("--disable-extensions-except="+[main,ex1,ex2].join(",")));
       assert(call.args.some(x=>x.startsWith("chrome-extension://")&&x.endsWith("/index.html")));
     }
+    assert.equal(api.activeSecurityProfiles().length,3);
     const dirs=calls.map(x=>x.args.find(a=>a.startsWith("--user-data-dir=")));
     assert.equal(new Set(dirs).size,3,"perfiles aislados");
     assert.equal(imports,0);
-    console.log("KAIZEN recursos internos: 3 perfiles preparados y botones Chromium verificados por mock; PASS");
+    assert(validations.some(x=>x[0]==="package"),"validación de manifiestos");
+    assert(validations.some(x=>x[0]==="sha256"),"validación SHA256");
+    const same=await api.openOriginalExtension("main");
+    assert.equal(same.ok,true);
+    assert.equal(calls.length,3,"no duplicar proceso por perfil");
+    const first=calls[0].child;
+    first.exitCode=0;first.emit("exit",0);
+    securityValid=false;
+    const unavailable=api.listOriginalExtensions();
+    assert.equal(unavailable.filter(x=>x.available).length,0,
+      "sin EX1/EX2 válidas no hay perfiles disponibles");
+    const rejected=await api.openOriginalExtension("main");
+    assert.equal(rejected.ok,false,"rechazar hashes modificados o paquetes ausentes");
+    assert.equal(calls.length,3,"nunca iniciar sin EX1 y EX2 verificadas");
+    securityValid=true;
+    const secured=await api.openOriginalExtension("main");
+    assert.equal(secured.ok,true);
+    assert.equal(secured.securityExtensions,true);
+    assert.equal(calls.length,4);
+    const release=calls[3].child;
+    release.exitCode=0;release.emit("exit",0);
+    assert.equal(api.activeSecurityProfiles().join(","),"google,custom");
+    const selector=fs.readFileSync(path.join(__dirname,"..","original-extension-selector-preload.js"),"utf8");
+    const ipc=fs.readFileSync(path.join(__dirname,"..","main.kaizen-1.5.24.js"),"utf8");
+    assert(selector.includes("Abrir perfil con EX1 y EX2"));
+    assert(!selector.includes("securityCheckbox"),"no permitir apertura sin EX1/EX2");
+    assert(ipc.includes("originals.openOriginalExtension(id);"));
+    assert(!ipc.includes("includeSecurity"));
+    console.log("KAIZEN perfiles obligatorios: 3 extensiones por Chromium, verificación SHA256 y cierre ante fallos; PASS");
   })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>fs.rmSync(root,{force:true,recursive:true}));
 }catch(e){fs.rmSync(root,{force:true,recursive:true});throw e;}
