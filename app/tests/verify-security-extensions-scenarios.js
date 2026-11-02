@@ -32,6 +32,14 @@ try{
   assert.throws(()=>validate(root),/Falta un recurso declarado.*contentScript.js/);
   fs.writeFileSync(path.join(root,"ex1","contentScript.js"),"fixture only");
   assert.equal(validate(root),true);
+  // La excepción no debe permitir cualquier otro recurso ausente.
+  const ex1Manifest=path.join(root,"ex1","manifest.json");
+  const ex1Data=JSON.parse(fs.readFileSync(ex1Manifest,"utf8"));
+  ex1Data.web_accessible_resources[0].resources.push("otro-recurso-no-incluido.js");
+  fs.writeFileSync(ex1Manifest,JSON.stringify(ex1Data));
+  assert.throws(()=>validate(root),/otro-recurso-no-incluido.js/);
+  ex1Data.web_accessible_resources[0].resources.pop();
+  fs.writeFileSync(ex1Manifest,JSON.stringify(ex1Data));
   const file=path.join(root,"ex2","manifest.json");
   const m=JSON.parse(fs.readFileSync(file,"utf8"));
   m.version="999";fs.writeFileSync(file,JSON.stringify(m));
