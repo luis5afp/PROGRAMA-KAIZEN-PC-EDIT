@@ -1,5 +1,5 @@
 # Diagnostico offline de instalacion, sin ejecutar ni alterar extensiones.
-# Uso: powershell -ExecutionPolicy Bypass -File scripts/diagnose-installed-kaizen.ps1 -ProgramFolder "C:\ruta\KAIZEN-PC-v1.5.27-win32-x64"
+# Uso: powershell -ExecutionPolicy Bypass -File scripts/diagnose-installed-kaizen.ps1 -ProgramFolder "C:\ruta\KAIZEN-PC-v1.5.28-win32-x64"
 param([Parameter(Mandatory=$true)][string]$ProgramFolder)
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path -LiteralPath $ProgramFolder).Path
@@ -28,9 +28,9 @@ foreach($file in ($expected.Keys | Sort-Object)){
   }else{Write-Host "[OK] $file" -ForegroundColor Green}
 }
 $profileVersions=@{
-  'KAIZZEN_MAIN'='2.5.10'
-  'KAIZZEN_GOOGLE'='1.0.7'
-  'KAIZZEN_CUSTOM'='1.0.10'
+  'KAIZZEN_MAIN'='2.5.11'
+  'KAIZZEN_GOOGLE'='1.0.8'
+  'KAIZZEN_CUSTOM'='1.0.11'
 }
 foreach($folder in @('KAIZZEN_MAIN','KAIZZEN_GOOGLE','KAIZZEN_CUSTOM')){
   $file=Join-Path $res "KAIZEN_EXTENSIONS/$folder/manifest.json"
