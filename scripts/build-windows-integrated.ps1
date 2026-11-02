@@ -54,7 +54,14 @@ try {
   node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
   node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
   node app/tests/embedded-extension-integration-scenarios.js
-  npm --prefix app install --omit=dev --no-audit --no-fund
+  # Ejecutar npm desde la carpeta del package.json real. En Windows
+  # --prefix app puede resolverse contra la raíz y fallar con ENOENT.
+  Push-Location (Join-Path $repo 'app')
+  try {
+    npm install --omit=dev --no-audit --no-fund
+  } finally {
+    Pop-Location
+  }
 
   $out = Join-Path $repo 'dist/KAIZEN-PC-v1.5.24-win32-x64'
   npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC-v1.5.24 --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
