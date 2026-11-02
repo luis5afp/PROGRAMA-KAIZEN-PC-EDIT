@@ -15,6 +15,7 @@ const DESCRIPTORS=Object.freeze({
   custom:{dir:"KAIZZEN_CUSTOM",name:"KAIZZEN-CUSTOM",title:"Streaming / Custom",version:"1.0.6"}
 });
 const running=new Map();
+const runningSecurity=new Map();
 const pending=new Map();
 const prepared=new Set();
 let warming=null;
@@ -28,6 +29,19 @@ function root() {
 // funciona incluso cuando Windows instala KAIZEN en Program Files.
 function importedRoot() {
   return path.join(app.getPath("userData"),"kaizen-original-extensions","KAIZEN_EXTENSIONS");
+}
+function securityPackagesRoot(){
+  return app.isPackaged?
+    path.join(appDirectory(),"resources","extensionForSecurity"):
+    path.resolve(__dirname,"..","runtime-resources","extensionForSecurity");
+}
+function validatedSecurityExtensions(){
+  const base=securityPackagesRoot();
+  // Both original manifests and script hashes must be valid; fail closed.
+  // EX1's known missing, non-executable inject.js is a warning, not a hash bypass.
+  require("./scripts/verify-security-extensions").validate(base);
+  require("./scripts/verify-legacy-core-resources").verify(base);
+  return ["ex1","ex2"].map(name=>path.join(base,name));
 }
 function browserExecutable() {
   // Google Chrome official builds no longer accept --load-extension.
@@ -142,7 +156,8 @@ async function warmupOriginalProfiles(){
   try{return await task;}finally{if(warming===task)warming=null;}
 }
 
-async function openOriginalExtension(id){
+async function openOriginalExtension(id,options={}){
+  const withSecurity=options?.securityExtensions===true;
   // An Open action may arrive before the startup warmup finishes.
   await warmupOriginalProfiles();
   const d=resolveDescriptor(id);
@@ -153,9 +168,13 @@ async function openOriginalExtension(id){
   if(pending.has(id))return pending.get(id);
   const runningProcess=running.get(id);
   if(runningProcess && runningProcess.exitCode===null && !runningProcess.killed){
-    // Reuse this profile's Chromium. It handles the second command line
-    // itself; do not start another profile concurrently with the same dir.
-    return {ok:true,message:"Perfil Chromium ya abierto",name:d.name};
+    // Chromium ignores changed --load-extension flags for an already-open
+    // user-data-dir. Tell the user to close it instead of claiming EX1/EX2 loaded.
+    if(runningSecurity.get(id)!==withSecurity)
+      return {ok:false,requiresRestart:true,message:
+        "Cierra todas las ventanas de Chromium de este perfil y vuelve a abrirlo para cambiar EX1/EX2."};
+    return {ok:true,message:"Perfil Chromium ya abierto",name:d.name,
+      securityExtensions:withSecurity};
   }
   const task=(async()=>{
     try {
@@ -163,13 +182,21 @@ async function openOriginalExtension(id){
       await fs.promises.mkdir(dir,{recursive:true});
       const extId=chromeExtensionId(d.folder);
       const url="chrome-extension://"+extId+"/index.html";
+      // Explicit per-opening consent; default remains only the selected
+      // KAIZZEN profile, never silent security-extension installation.
+      let folders=[d.folder];
+      if(withSecurity){
+        try{folders=folders.concat(validatedSecurityExtensions());}
+        catch(error){return {ok:false,message:"EX1/EX2 no están completos o su integridad no coincide; no se inició Chromium con extensiones de seguridad."};}
+      }
+      const loadPaths=folders.join(",");
       const args=[
         "--user-data-dir="+dir,
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-sync",
-        "--disable-extensions-except="+d.folder,
-        "--load-extension="+d.folder,
+        "--disable-extensions-except="+loadPaths,
+        "--load-extension="+loadPaths,
         "--new-window",
         url
       ];
@@ -182,8 +209,12 @@ async function openOriginalExtension(id){
         child.once("error",()=>end({ok:false,message:"No se pudo ejecutar Chromium"}));
         child.once("spawn",()=>{
           running.set(id,child);
-          child.once("exit",()=>{if(running.get(id)===child)running.delete(id);});
-          end({ok:true,name:d.name,opened:"perfil Chromium",profile:id});
+          runningSecurity.set(id,withSecurity);
+          child.once("exit",()=>{
+            if(running.get(id)===child){running.delete(id);runningSecurity.delete(id);}
+          });
+          end({ok:true,name:d.name,opened:"perfil Chromium",profile:id,
+            securityExtensions:withSecurity});
         });
       });
     }catch{
