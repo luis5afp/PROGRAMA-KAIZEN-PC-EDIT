@@ -37,7 +37,7 @@ async function load(){
     const security=clear("security");
     for(const x of data.security||[])
       item(security,x.name+" · "+(x.installed?(x.warning?"incluida · aviso":"incluida"):x.present?"incompleta":"no incluida"),
-        x.active?"Activa":x.note,x.active?"good":"warn");
+        x.active?"Activa en: "+(x.activeProfiles||[]).join(", "):x.note,x.active?"good":"warn");
     const events=clear("events");
     const latest=(data.events||[]).slice(-20).reverse();
     if(!latest.length)item(events,"Eventos","Abre un perfil para generar eventos de lanzamiento");
