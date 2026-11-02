@@ -1,9 +1,14 @@
-name: KAIZEN PC 1.5.24 - Borrador de Release con instalador
+name: KAIZEN PC 1.5.24 - Crear y publicar Release completo
 on:
   workflow_dispatch:
     inputs:
       privacy_review:
-        description: "Confirmo permiso de distribucion y revision de secretos de las extensiones"
+        description: "Confirmo permiso de distribucion y revision/rotacion de secretos de las extensiones"
+        required: true
+        type: boolean
+        default: false
+      publish_release:
+        description: "Publicar v1.5.24 como nueva version publica una vez generado y verificado el instalador"
         required: true
         type: boolean
         default: false
@@ -96,17 +101,28 @@ jobs:
           "$sha *$($setup[0].Name)" | Set-Content -LiteralPath ($setup[0].FullName + '.sha256') -Encoding ascii
           "KAIZEN_SETUP=$($setup[0].FullName)" >> $env:GITHUB_ENV
           "KAIZEN_SETUP_SHA=$($setup[0].FullName).sha256" >> $env:GITHUB_ENV
-      - name: Crear borrador de Release (sin publicar)
+      - name: Crear Release v1.5.24 con instalador y SHA-256 verificados
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           $sourceSha = (git rev-parse HEAD).Trim()
-          gh release create v1.5.24 "$env:KAIZEN_SETUP" "$env:KAIZEN_SETUP_SHA" `
-            --repo "$env:GITHUB_REPOSITORY" `
-            --draft --target "$sourceSha" `
-            --title 'KAIZEN PC 1.5.24 - Perfiles Chromium integrados' `
-            --notes-file docs/RELEASE-NOTES-v1.5.24.md
-          Write-Host 'Borrador v1.5.24 creado en Releases. Verificar antes de publicarlo.'
+          $args = @(
+            'release','create','v1.5.24',
+            $env:KAIZEN_SETUP,$env:KAIZEN_SETUP_SHA,
+            '--repo',$env:GITHUB_REPOSITORY,
+            '--target',$sourceSha,
+            '--title','KAIZEN PC 1.5.24 - Perfiles Chromium integrados',
+            '--notes-file','docs/RELEASE-NOTES-v1.5.24.md'
+          )
+          if ($env:PUBLISH_RELEASE -ne 'true') { $args += '--draft' }
+          & gh @args
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub no pudo crear la nueva version.' }
+          if ($env:PUBLISH_RELEASE -eq 'true') {
+            Write-Host 'Release v1.5.24 publicado con instalador verificado.'
+          } else {
+            Write-Host 'Borrador v1.5.24 creado; revisar y publicar despues.'
+          }
