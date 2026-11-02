@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KAIZEN</title>
+  <style>
+    /* Paint the panel background on the FIRST frame so the window is never a
+       blank white/dark void while the ~0.6 MB bundle downloads and parses. */
+    html, body { margin: 0; background: #0b0511; }
+
+    /* Boot loader shown BEFORE React mounts. React replaces the contents of
+       #root when it renders, so this removes itself — nothing to clean up.
+       Inline and tiny on purpose: it must paint before any JS or external
+       stylesheet has loaded. */
+    #boot {
+      min-width: 320px; min-height: 400px; height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      background: linear-gradient(160deg, #0b0511 0%, #1a0f2e 100%);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    #boot .mark  { color: #e2e8f0; font-size: 13px; font-weight: 700; letter-spacing: 0.18em; }
+    #boot .label { color: rgba(155,140,168,0.8); font-size: 12px; letter-spacing: 0.06em; }
+    #boot .ring {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 2px solid rgba(176, 106, 224,0.18);
+      border-top-color: rgba(176, 106, 224,0.9);
+      animation: bootspin 0.75s linear infinite;
+    }
+    @keyframes bootspin { to { transform: rotate(360deg); } }
+  </style>
+  <script type="module" crossorigin src="/assets/index-DtDn-2PW.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-NwnVFxXV.css">
+</head>
+
+<body>
+  <div id="root">
+    <div id="boot">
+      <div class="mark">KAIZEN</div>
+      <div class="ring"></div>
+      <div class="label">Cargando…</div>
+    </div>
+  </div>
+</body>
+
+</html>
