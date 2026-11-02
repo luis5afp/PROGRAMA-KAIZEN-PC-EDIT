@@ -19,6 +19,21 @@ async function load(){
     const profile=clear("profiles");
     for(const p of data.profiles||[])
       item(profile,p.title+" · "+p.extension,p.status,p.available?"good":"warn");
+    const integrity=clear("integrity");
+    const verify=data.integrity||{};
+    item(integrity,"EX1/EX2 · SHA-256 originales",
+      (verify.verified??0)+"/"+(verify.total??6)+" correctos · "+(verify.note||"Sin información"),
+      verify.ok?"good":"warn");
+    for(const file of verify.failedFiles||[])
+      item(integrity,"Falta o no coincide",file,"warn");
+    const features=clear("features");
+    for(const feature of data.features||[])
+      item(features,feature.title,
+        feature.connected===true?"Canal IPC conectado":
+        feature.connected===false?"Canal IPC desconectado":"No comprobable",
+        feature.connected===true?"good":"warn");
+    item(features,"Chromium incluido",
+      data.chromiumReady?"Detectado":"No detectado",data.chromiumReady?"good":"warn");
     const security=clear("security");
     for(const x of data.security||[])
       item(security,x.name+" · "+(x.installed?(x.warning?"incluida · aviso":"incluida"):x.present?"incompleta":"no incluida"),
