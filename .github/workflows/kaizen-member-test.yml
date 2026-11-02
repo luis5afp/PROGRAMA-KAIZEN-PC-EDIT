@@ -1,0 +1,192 @@
+name: KAIZEN PC v1.5.24 Windows release candidate
+
+on:
+  pull_request:
+    paths:
+      - "app/main.member-test.js"
+      - "app/apk-catalog-mode.js"
+      - "app/android-extension-catalog.js"
+      - "app/extension-selector-preload.js"
+      - "app/extension-session-identity.js"
+      - "app/kaizen-original-extensions-host.js"
+      - "app/main.kaizen-1.5.24.js"
+      - "app/kaizen-diagnostics-1.5.24.js"
+      - "app/kaizen-diagnostics-preload-1.5.24.js"
+      - "app/kaizen-diagnostics-1.5.24.html"
+      - "app/kaizen-diagnostics-renderer-1.5.24.js"
+      - "app/tests/release-1.5.24-diagnostics.js"
+      - "app/original-extension-selector-preload.js"
+      - "app/tests/original-extension-integration-scenarios.js"
+      - "app/tests/embedded-extension-integration-scenarios.js"
+      - "app/electron-builder.yml"
+      - "app/tests/android-extension-selector-scenarios.js"
+      - "app/preload.min.js"
+      - "app/tests/apk-catalog-mode-scenarios.js"
+      - "app/app_view/dist/assets/index-DAX2BPbP.js"
+      - "app/tests/member-role-compatibility-scenarios.js"
+      - "app/tests/catalog-diagnostic-scenarios.js"
+      - ".github/workflows/kaizen-member-test.yml"
+      - "app/scripts/verify-original-extensions.js"
+      - "app/tests/verify-original-extensions-scenarios.js"
+      - "runtime-resources/KAIZEN_EXTENSIONS/**"
+      - "runtime-resources/KAIZEN_EXTENSIONS_Originales.zip"
+      - "runtime-resources/extensionForSecurity/**"
+      - "app/scripts/verify-security-extensions.js"
+      - "app/tests/verify-security-extensions-scenarios.js"
+      - "app/kaizen-diagnostics-ui-1.5.24.js"
+      - "app/kaizen-original-extension-importer.js"
+      - "app/tests/original-extension-importer-scenarios.js"
+      - "docs/RELEASE-1.5.24.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  member-role-windows:
+    # Los archivos originales incluyen permisos amplios y posibles secretos.
+    # No publicar distribuciones completas desde pull requests publicos.
+    if: github.event_name == 'workflow_dispatch' && github.event.repository.private
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verificar integridad de la prueba
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          node --check app/main.member-test.js
+          node --check app/main.kaizen-1.5.24.js
+          node --check app/kaizen-diagnostics-1.5.24.js
+          node --check app/kaizen-diagnostics-preload-1.5.24.js
+          node --check app/kaizen-diagnostics-renderer-1.5.24.js
+          node app/tests/release-1.5.24-diagnostics.js
+          node --check app/preload.min.js
+          node --check app/apk-catalog-mode.js
+          node --check app/android-extension-catalog.js
+          node --check app/extension-selector-preload.js
+          node --check app/extension-session-identity.js
+          node --check app/kaizen-original-extensions-host.js
+          node --check app/original-extension-selector-preload.js
+          node --check app/kaizen-original-extension-importer.js
+          node app/tests/original-extension-importer-scenarios.js
+          node app/tests/original-extension-integration-scenarios.js
+          node app/tests/embedded-extension-integration-scenarios.js
+          node app/tests/verify-original-extensions-scenarios.js
+          node app/tests/verify-security-extensions-scenarios.js
+          node --check app/scripts/verify-security-extensions.js
+          node app/tests/android-extension-selector-scenarios.js
+          node app/tests/apk-catalog-mode-scenarios.js
+          node app/tests/member-role-compatibility-scenarios.js
+          node app/tests/catalog-diagnostic-scenarios.js
+          Get-Content app/app_view/dist/assets/index-DAX2BPbP.js -Raw | node --input-type=module --check
+
+      - name: Instalar dependencias originales
+        working-directory: app
+        shell: pwsh
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Aislar nombre y entrypoint experimental
+        shell: pwsh
+        run: |
+          $pkg = Get-Content app/package.json -Raw | ConvertFrom-Json
+          $pkg.main = "main.kaizen-1.5.24.js"
+          $pkg.name = "kaizen-pc"
+          $pkg | Add-Member -NotePropertyName productName -NotePropertyValue "KAIZEN-PC-v1.5.24" -Force
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content app/package.json -Encoding utf8
+
+      - name: Compilar aplicación portable Windows
+        shell: pwsh
+        run: |
+          npx --yes @electron/packager@18.3.6 ./app "KAIZEN-PC-v1.5.24" --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $target = "dist/KAIZEN-PC-v1.5.24-win32-x64/resources"
+          if (Test-Path "runtime-resources") {
+            Copy-Item "runtime-resources/*" $target -Recurse -Force
+          }
+          node app/scripts/verify-security-extensions.js "$target/extensionForSecurity"
+          node app/scripts/verify-legacy-core-resources.js "$target/extensionForSecurity"
+          if (!(Test-Path "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN-PC-v1.5.24.exe")) { throw "Falta ejecutable" }
+
+      - name: Incluir Chromium compatible con extensiones
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $meta = Invoke-RestMethod -Uri "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json"
+          $entry = @($meta.channels.Stable.downloads.chrome | Where-Object { $_.platform -eq "win64" })[0]
+          if (!$entry.url) { throw "No se encontro Chrome for Testing win64" }
+          $zip = Join-Path $env:RUNNER_TEMP "chrome-for-testing-win64.zip"
+          Invoke-WebRequest -Uri $entry.url -OutFile $zip -MaximumRedirection 8
+          $destination = "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_CHROMIUM"
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Expand-Archive -LiteralPath $zip -DestinationPath $destination -Force
+          $chromium = Join-Path $destination "chrome-win64/chrome.exe"
+          if (!(Test-Path $chromium)) { throw "Falta Chrome for Testing compatible" }
+          Write-Host "Chrome for Testing win64 incluido: version $($meta.channels.Stable.version)"
+
+      - name: Incorporar y verificar los paquetes originales en el portable
+        shell: pwsh
+        env:
+          KAIZEN_EXTENSIONS_BUNDLE_URL: ${{ github.event_name == 'workflow_dispatch' && secrets.KAIZEN_EXTENSIONS_BUNDLE_URL || '' }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sourceFolder = "runtime-resources/KAIZEN_EXTENSIONS"
+          $sourceZip = "runtime-resources/KAIZEN_EXTENSIONS_Originales.zip"
+          # Solo ejecuciones manuales confiables pueden utilizar el enlace privado configurado.
+          if (!(Test-Path $sourceFolder) -and !(Test-Path $sourceZip) -and $env:KAIZEN_EXTENSIONS_BUNDLE_URL) {
+            if ($env:KAIZEN_EXTENSIONS_BUNDLE_URL -notmatch '^https://') {
+              throw "KAIZEN_EXTENSIONS_BUNDLE_URL debe utilizar HTTPS"
+            }
+            $sourceZip = Join-Path $env:RUNNER_TEMP "KAIZEN_EXTENSIONS_Originales.zip"
+            Invoke-WebRequest -Uri $env:KAIZEN_EXTENSIONS_BUNDLE_URL -OutFile $sourceZip -MaximumRedirection 4
+          }
+          # Los tres directorios se distribuyen DENTRO de resources del
+          # programa. El usuario no importa ni extrae ninguna extension.
+          $target = "dist/KAIZEN-PC-v1.5.24-win32-x64/resources/KAIZEN_EXTENSIONS"
+          if (!(Test-Path $sourceFolder) -and !(Test-Path $sourceZip)) {
+            throw "No hay paquete original privado. Configure KAIZEN_EXTENSIONS_BUNDLE_URL para compilar el instalador completo; no distribuya una versión incompleta."
+          }
+          if (Test-Path $target) { Remove-Item -LiteralPath $target -Force -Recurse }
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          if (Test-Path $sourceFolder) {
+            Copy-Item -Path "$sourceFolder/*" -Destination $target -Recurse -Force
+          } else {
+            $stage = Join-Path $env:RUNNER_TEMP "kaizen-extension-stage"
+            New-Item -ItemType Directory -Path $stage -Force | Out-Null
+            Expand-Archive -LiteralPath $sourceZip -DestinationPath $stage -Force
+            $unpacked = Join-Path $stage "KAIZEN_EXTENSIONS"
+            if (!(Test-Path $unpacked)) { throw "El paquete original debe contener KAIZEN_EXTENSIONS en su raíz" }
+            Copy-Item -Path "$unpacked/*" -Destination $target -Recurse -Force
+          }
+          node app/scripts/verify-original-extensions.js $target
+          node -e "require('./app/kaizen-original-extension-importer').validateFolder(process.argv[1])" $target
+          foreach ($name in @('KAIZZEN_MAIN','KAIZZEN_GOOGLE','KAIZZEN_CUSTOM')) {
+            if (!(Test-Path "$target/$name/manifest.json")) { throw "Falta la extension $name en resources" }
+          }
+          if (Test-Path "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN_EXTENSIONS") {
+            throw "Las extensiones no deben quedar al lado del EXE"
+          }
+
+      - name: Generar instalador Windows de un archivo (NSIS)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $packed = (Resolve-Path 'dist/KAIZEN-PC-v1.5.24-win32-x64').Path
+          npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $packed --win nsis --x64 --publish never
+          $setup = @(Get-ChildItem -Path dist/installer -Filter '*.exe' -File)
+          if ($setup.Count -ne 1) { throw "Se esperaba un único instalador .exe; encontrados: $($setup.Count)" }
+          Write-Host "Instalador creado: $($setup[0].Name)"
+
+      - name: Publicar instalador de validación (privado, corta duración)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-PC-v1.5.24-Setup-Windows-x64-VALIDACION
+          path: dist/installer/*.exe
+          retention-days: 1
+          if-no-files-found: error

@@ -1,7 +1,7 @@
 {
-  "name": "kaizen",
-  "version": "1.5.23",
-  "main": "main.no-updates.js",
+  "name": "kaizen-pc",
+  "version": "1.5.24",
+  "main": "main.kaizen-1.5.24.js",
   "type": "commonjs",
   "author": "YERSON",
   "license": "MIT",
@@ -15,5 +15,6 @@
     "puppeteer-core": "^24.17.1",
     "socks": "^2.8.7",
     "unzipper": "^0.12.3"
-  }
+  },
+  "productName": "KAIZEN PC"
 }

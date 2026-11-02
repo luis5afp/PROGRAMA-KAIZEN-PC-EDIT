@@ -1,0 +1,65 @@
+name: KAIZEN 1.5.24 - Prueba instalador NSIS (sin extensiones privadas)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/kaizen-nsis-smoke.yml'
+      - 'app/electron-builder.yml'
+      - 'scripts/build-windows-integrated.ps1'
+      - 'app/kaizen-original-extensions-host.js'
+permissions:
+  contents: read
+jobs:
+  smoke-installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar perfiles y archivos originales de seguridad
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          node app/tests/embedded-extension-integration-scenarios.js
+          node app/tests/verify-security-extensions-scenarios.js
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
+      - name: Dependencias para compilar el instalador
+        shell: pwsh
+        working-directory: app
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Crear paquete Electron con recursos de prueba NO publicables
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          npx --yes @electron/packager@18.3.6 ./app 'KAIZEN-PC-v1.5.24' --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+          $out='dist/KAIZEN-PC-v1.5.24-win32-x64'
+          $resources="$out/resources"
+          Copy-Item -LiteralPath 'runtime-resources/extensionForSecurity' -Destination "$resources/extensionForSecurity" -Recurse -Force
+          node app/scripts/verify-legacy-core-resources.js "$resources/extensionForSecurity"
+          $folder="$resources/KAIZEN_EXTENSIONS"
+          New-Item -ItemType Directory -Force -Path $folder | Out-Null
+          foreach($item in @(@{dir='KAIZZEN_MAIN';name='KAIZZEN-MAIN';version='2.5.6'},@{dir='KAIZZEN_GOOGLE';name='KAIZZEN-GOOGLE';version='1.0.3'},@{dir='KAIZZEN_CUSTOM';name='KAIZZEN-CUSTOM';version='1.0.6'})) {
+            $target=Join-Path $folder $item.dir
+            New-Item -ItemType Directory -Force -Path $target | Out-Null
+            $manifest=@{manifest_version=3;name=$item.name;version=$item.version;action=@{default_title='KAIZEN'};background=@{service_worker='backgroundScript.js'}} | ConvertTo-Json -Depth 5
+            Set-Content -LiteralPath "$target/manifest.json" -Value $manifest -Encoding utf8
+            Set-Content -LiteralPath "$target/index.html" -Value '<p>Prueba de empaquetado: NO es una extension autentica</p>' -Encoding utf8
+            Set-Content -LiteralPath "$target/backgroundScript.js" -Value '// PRUEBA: no instalar en navegador real' -Encoding utf8
+          }
+          node app/scripts/verify-original-extensions.js $folder
+      - name: Probar generador NSIS con Electron preempaquetado
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $packed=(Resolve-Path 'dist/KAIZEN-PC-v1.5.24-win32-x64').Path
+          npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $packed --win nsis --x64 --publish never
+          $setups=@(Get-ChildItem -LiteralPath 'dist/installer' -Filter '*.exe' -File)
+          if($setups.Count -ne 1) { throw 'No se genero un Setup NSIS unico' }
+          if($setups[0].Length -lt 1048576) { throw 'Setup demasiado pequeno' }
+          Write-Host 'PASS: el generador NSIS creo un instalador con recursos de PRUEBA.'
+          Write-Host 'No distribuir este instalador ni usarlo en cuentas reales.'
+      # Deliberadamente sin upload-artifact ni Release: los recursos de prueba NO se distribuyen.
