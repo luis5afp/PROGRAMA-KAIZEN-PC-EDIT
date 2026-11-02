@@ -95,7 +95,7 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
       }
       // Las extensiones de seguridad se muestran solo para transparencia:
       // el selector NO ofrece instalarlas ni ejecutarlas automáticamente.
-      const securityTitle=el("h3",shell,"Extensiones de seguridad (inactivas)",
+      const securityTitle=el("h3",shell,"Extensiones de seguridad (estado del paquete)",
         "font:700 16px system-ui;margin:24px 0 12px;");
       const securityPanel=el("div",shell,"",
         "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;");
@@ -105,17 +105,17 @@ module.exports=function installOriginalExtensionSelector(ipcRenderer){
         for(const x of items){
           const card=el("div",securityPanel,"",styles.card+"cursor:default;min-height:110px;");
           el("strong",card,x.name.toUpperCase()+" · "+
-            (x.installed?"incluida":x.present?"paquete incompleto":"no incluida"),
+            (x.installed?(x.warning?"incluida · aviso":"incluida"):x.present?"paquete incompleto":"no incluida"),
             "font-size:16px;");
           el("p",card,x.note||"Sin información",styles.text+"margin:0;");
-          el("small",card,"Desactivada: no se instalará en Chromium.",
+          el("small",card,"No se activa desde este selector; el cliente original puede cargarla.",
             "font-size:12px;color:#fcd34d;");
         }
         if(!items.length)el("p",securityPanel,"Diagnóstico de seguridad no disponible.",styles.text);
       }catch{
         el("p",securityPanel,"No se pudo consultar el estado de ex1/ex2.",styles.text);
       }
-      el("p",shell,"Aviso: ex1 puede recopilar y transmitir URLs del historial. ex2 puede restringir navegación y herramientas de inspección. Por seguridad, no se activan automáticamente.",styles.text+"margin-top:14px;color:#fcd34d;");
+      el("p",shell,"Aviso: ex1 puede recopilar y transmitir URLs del historial; ex2 puede restringir navegación e inspección. Este selector no las carga automáticamente, pero el cliente original puede hacerlo en ciertos perfiles.",styles.text+"margin-top:14px;color:#fcd34d;");
       el("p",shell,allAvailable?
         "Los tres paquetes se detectaron en esta instalación. Sus sesiones se conservan en carpetas Chromium independientes.":
         "Faltan archivos locales para activar uno o más perfiles. Usa «Importar extensiones originales (.zip)» para seleccionar un paquete autorizado con las tres extensiones. KAIZEN lo guardará en almacenamiento persistente, sin modificar la carpeta del programa.",styles.text+"margin-top:22px;");
