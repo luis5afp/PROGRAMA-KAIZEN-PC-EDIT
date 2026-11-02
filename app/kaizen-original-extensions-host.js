@@ -224,6 +224,11 @@ async function openOriginalExtension(id,options={}){
   pending.set(id,task);
   try{return await task;}finally{if(pending.get(id)===task)pending.delete(id);}
 }
+function activeSecurityProfiles(){
+  return [...runningSecurity.entries()]
+    .filter(([id,enabled])=>enabled&&running.get(id)?.exitCode===null&&!running.get(id)?.killed)
+    .map(([id])=>id);
+}
 function anyRunningProfiles(){
   return [...running.values()].some(child=>child.exitCode===null&&!child.killed);
 }
@@ -235,4 +240,4 @@ async function importOriginalZip(zipFile){
   return result;
 }
 module.exports={DESCRIPTORS,listOriginalExtensions,warmupOriginalProfiles,openOriginalExtension,
-  chromeExtensionId,importOriginalZip,anyRunningProfiles};
+  chromeExtensionId,importOriginalZip,anyRunningProfiles,activeSecurityProfiles};
