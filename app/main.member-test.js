@@ -105,6 +105,29 @@ ipcMain.handle("kaizen-original-extension-open", async (event,id) => {
   return await originalExtensions.openOriginalExtension(id);
 });
 
+// Comprobar la instalacion empaquetada ANTES de cargar el cliente legado.
+// Conserva todos los hashes originales y evita el aviso genérico de
+// "software manipulado" cuando el usuario ejecuta un EXE sin sus resources.
+function verifyStartupResources(){
+  if(!app.isPackaged)return true;
+  const path=require("node:path");
+  const res=process.resourcesPath||path.join(path.dirname(process.execPath),"resources");
+  try{
+    require("./scripts/verify-legacy-core-resources").verify(
+      path.join(res,"extensionForSecurity"));
+    return true;
+  }catch(error){
+    const detail=String(error?.message||"Archivos protegidos ausentes").slice(0,240);
+    const {dialog}=require("electron");
+    app.whenReady().then(()=>{
+      dialog.showErrorBox("KAIZEN PC · Instalación incompleta",
+        "No se ha modificado ninguna protección. El programa requiere el Setup completo y sus carpetas de recursos.\n\n"+
+        detail+"\n\nVuelve a instalar KAIZEN PC 1.5.24 completo; no copies solamente el archivo .exe.");
+      app.quit();
+    });
+    return false;
+  }
+}
 // No usar main.no-updates.js aquí: ese launcher activa captura de tráfico
 // completa y podría registrar tokens y contraseñas sin que el usuario lo sepa.
-require("./main.min.js");
+if(verifyStartupResources())require("./main.min.js");
