@@ -196,6 +196,11 @@
   } catch {}
 
   try {
+    chrome.windows.onCreated.addListener(()=>{
+      if(currentFlow)event("chromium-ventana-detectada",{flujo:currentFlow});
+    });
+  } catch {}
+  try {
     chrome.storage.local.get(TRACE).then(v=>{
       const trace=v[TRACE];
       if(trace && typeof trace.id==="string" &&
@@ -230,12 +235,14 @@
     const session=recent("sesion-temporal-preparada");
     const opening=recent("apertura-solicitada");
     const page=recent("script-formulario-activo")||recent("formulario-sin-sesion");
+    const created=recent("chromium-ventana-detectada");
     const form=recent("formulario-observado");
     const catalog=recent("catalogo-respuesta");
     const notes=[
       "Catálogo: "+(catalog?"HTTP "+catalog.http+" · "+(catalog.normal+catalog.premium)+" tarjetas · estructura "+catalog.estructura:"sin respuesta observada"),
       "Tarjeta: "+(last?"clic registrado":"sin clic registrado"),
-      "Apertura: "+(opening?"solicitada mediante "+opening.medio:"sin llamada de apertura observada"),
+      "Apertura: "+(opening?"solicitada mediante "+opening.medio:"sin llamada de apertura observada")+
+        (created?" · nueva ventana detectada":""),
       "Sesión: "+(session&&(!last || session.time>=last.time)?"preparación observada":"sin preparación observada tras el último clic"),
       "Formulario: "+(page?"script ejecutado":"todavía sin evento del script"),
       "Campos: "+(form?("correo "+form.camposCorreo+", clave "+form.camposClave+
