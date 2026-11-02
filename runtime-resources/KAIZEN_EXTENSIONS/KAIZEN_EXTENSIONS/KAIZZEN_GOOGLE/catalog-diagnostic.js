@@ -41,9 +41,18 @@
     const nativeFetch = globalThis.fetch;
     if (typeof nativeFetch === "function") {
       globalThis.fetch = async function(...args) {
-        const result = await nativeFetch.apply(this,args);
         const url = typeof args[0] === "string" ? args[0] : args[0]?.url;
-        if (isCatalog(url)) result.clone().json()
+        const catalog = isCatalog(url);
+        if (catalog) event("catalogo-envio",{
+          transport:"fetch",method:String(args[1]?.method || args[0]?.method || "GET").toUpperCase().slice(0,12)
+        });
+        let result;
+        try { result = await nativeFetch.apply(this,args); }
+        catch (error) {
+          if (catalog) event("catalogo-error",{transport:"fetch",tipo:"red"});
+          throw error;
+        }
+        if (catalog) result.clone().json()
           .then(data => summary(data,result.status,"fetch"))
           .catch(() => event("catalogo-respuesta-invalida",{transport:"fetch",http:result.status}));
         return result;
@@ -56,6 +65,7 @@
     XMLHttpRequest.prototype.open = function(method,url,...rest) {
       if (isCatalog(url)) {
         catalogRequests.add(this);
+        this.addEventListener("error", () => event("catalogo-error",{transport:"xhr",tipo:"red"}),{once:true});
         this.addEventListener("loadend", () => {
           try {
             const data = this.responseType === "json" ? this.response : JSON.parse(this.responseText);
@@ -66,6 +76,11 @@
         },{once:true});
       }
       return nativeOpen.call(this,method,url,...rest);
+    };
+    const nativeSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(...args) {
+      if (catalogRequests.has(this)) event("catalogo-envio",{transport:"xhr"});
+      return nativeSend.apply(this,args);
     };
   } catch {}
   try {
