@@ -34,6 +34,8 @@ const sandbox={module:{exports:{}},exports:{},Buffer,console,process,Date,URL,re
  if(name==="./axiosConfig")return http;
  if(name==="./config")return {BACKEND_URL:"https://example.org/v/abc"};
  if(name==="./kaizen-original-extensions-host")return fakeLocal;
+ if(name==="./scripts/verify-legacy-core-resources")
+   return require("../scripts/verify-legacy-core-resources");
  return require(name);
 },__dirname:path.join(__dirname,"..")};
 vm.runInNewContext(src,sandbox,{filename:"diagnostics.js"});
