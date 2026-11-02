@@ -29,6 +29,10 @@ const { ipcMain } = require("electron");
 const { consultarCatalogoApk } = require("./apk-catalog-mode");
 const signedHttp = require("./axiosConfig");
 const { BACKEND_URL } = require("./config");
+function recordFeature(id,status,message){
+  // Solo eventos de estado; nunca tokens, cookies, contraseñas ni URLs visitadas.
+  try{require("./kaizen-diagnostics-1.5.24").record(id,status,message);}catch{}
+}
 
 ipcMain.handle("kaizen-apk-catalog-probe", async (event, token) => {
   const url = String(event.senderFrame?.url || "");
@@ -37,8 +41,12 @@ ipcMain.handle("kaizen-apk-catalog-probe", async (event, token) => {
     return { error: "Origen de interfaz no autorizado" };
   }
   try {
-    return await consultarCatalogoApk(signedHttp, BACKEND_URL, token);
+    const result=await consultarCatalogoApk(signedHttp, BACKEND_URL, token);
+    recordFeature("catalogo_apk",result?.error?"warning":"ok",
+      result?.error?"Consulta APK no disponible":"Consulta de catálogo APK realizada");
+    return result;
   } catch (_) {
+    recordFeature("catalogo_apk","error","Falló la consulta de catálogo APK");
     return { error: "No se pudo consultar el catálogo." };
   }
 });
@@ -54,9 +62,13 @@ ipcMain.handle("kaizen-android-extension-catalog", async (event, input={}) => {
     return {error:"Origen de interfaz no autorizado",items:[]};
   }
   try {
-    return await loadVariantCatalog(signedHttp,BACKEND_URL,
+    const result=await loadVariantCatalog(signedHttp,BACKEND_URL,
       input.token,input.variant,input.page,input.search);
+    recordFeature("variantes_android",result?.error?"warning":"ok",
+      result?.error?"Consulta de variantes no disponible":"Pestaña de variantes consultada");
+    return result;
   } catch (_) {
+    recordFeature("variantes_android","error","Falló la consulta de variantes");
     return {error:"Error interno consultando la extensión",items:[]};
   }
 });
@@ -83,7 +95,9 @@ function isKaizenUi(event){
 }
 ipcMain.handle("kaizen-original-extensions-list", async (event) => {
   if(!isKaizenUi(event))return [];
-  await originalExtensions.warmupOriginalProfiles();
+  const result=await originalExtensions.warmupOriginalProfiles();
+  recordFeature("perfiles_locales",result?.ok?"ok":"warning",
+    "Preparación local: "+Number(result?.prepared||0)+"/3 perfiles");
   return originalExtensions.listOriginalExtensions();
 });
 ipcMain.handle("kaizen-original-extension-open", async (event,id) => {
