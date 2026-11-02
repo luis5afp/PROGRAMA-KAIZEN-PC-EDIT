@@ -104,6 +104,7 @@ jobs:
             Copy-Item "runtime-resources/*" $target -Recurse -Force
           }
           node app/scripts/verify-security-extensions.js "$target/extensionForSecurity"
+          node app/scripts/verify-legacy-core-resources.js "$target/extensionForSecurity"
           if (!(Test-Path "dist/KAIZEN-PC-v1.5.24-win32-x64/KAIZEN-PC-v1.5.24.exe")) { throw "Falta ejecutable" }
 
       - name: Incluir Chromium compatible con extensiones
