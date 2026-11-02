@@ -47,3 +47,4 @@ foreach($relative in @('resources/app.asar','KAIZEN_CHROMIUM/chrome-win64/chrome
 if($errors -eq 0){Write-Host "PASS: ubicaciones y hashes de instalacion correctos. No garantiza inicio de sesion o apertura real de Chromium." -ForegroundColor Green}
 else{Write-Host "FAIL: $errors problemas. Reinstale el Setup COMPLETO sin copiar solo el EXE." -ForegroundColor Red}
 if($errors){exit 1}
+exit 0
