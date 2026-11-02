@@ -119,8 +119,14 @@ async function main(){
   fs.writeFileSync(manifest,orig);
   // No ofrecer un perfil parcial sin el script que necesita Chromium.
   const worker=path.join(userData,"kaizen-original-extensions","KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","backgroundScript.js");
+  const bundledWorker=path.join(root,"KAIZEN_EXTENSIONS","KAIZZEN_GOOGLE","backgroundScript.js");
   fs.unlinkSync(worker);
+  // Un paquete integrado sano debe seguir disponible aunque falle un archivo
+  // de la importacion local previa.
+  assert.equal(api.listOriginalExtensions().find(x=>x.id==="google").available,true);
+  fs.unlinkSync(bundledWorker);
   assert.equal(api.listOriginalExtensions().find(x=>x.id==="google").available,false);
+  fs.writeFileSync(bundledWorker,"// fixture");
   fs.writeFileSync(worker,"// fixture");
   // The required Chromium must exist; do not silently fall back to Google Chrome.
   fs.unlinkSync(chromiumExe);
