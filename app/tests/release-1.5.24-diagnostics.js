@@ -44,6 +44,15 @@ const {record,overview,remoteChecks}=sandbox.module.exports;
  assert.equal(local.prepared,3);
  assert.equal(local.profiles.length,3);
  assert.equal(local.security.length,2);
+ assert.equal(local.integrity.total,6);
+ assert.equal(local.integrity.verified,6);
+ assert.equal(local.integrity.ok,true);
+ assert.equal(local.integrity.failedFiles.length,0);
+ assert.equal(local.chromiumReady,true);
+ assert(Array.isArray(local.features));
+ assert(local.features.some(x=>x.id==="catalogo_apk"));
+ assert(local.features.some(x=>x.id==="variantes_android"));
+ assert(local.features.some(x=>x.id==="apertura_chromium"));
  assert.equal(local.security.every(x=>x.active===false),true);
  assert.equal(local.security.map(x=>x.name).join(","),"ex1,ex2");
  // EX1 original: Chrome puede cargarlo aunque declare un inject.js
@@ -74,6 +83,17 @@ const {record,overview,remoteChecks}=sandbox.module.exports;
  const seen=await overview();
  assert(seen.events.some(x=>x.area==="chromium_main"&&x.status==="ok"));
  assert.equal(seen.security.every(x=>x.active===false),true);
+ const html=fs.readFileSync(path.join(__dirname,"..","kaizen-diagnostics-1.5.24.html"),"utf8");
+ const renderer=fs.readFileSync(path.join(__dirname,"..","kaizen-diagnostics-renderer-1.5.24.js"),"utf8");
+ const panel=fs.readFileSync(path.join(__dirname,"..","kaizen-diagnostics-ui-1.5.24.js"),"utf8");
+ const preload=fs.readFileSync(path.join(__dirname,"..","preload.min.js"),"utf8");
+ for(const key of ["integrity","features","security","profiles","events","remote"])
+   assert(html.includes('id="'+key+'"'),"sección del diagnóstico ausente: "+key);
+ for(const key of ["integrity","features","security","profiles","events"])
+   assert(renderer.includes('clear("'+key+'")'),"diagnóstico no vinculado: "+key);
+ assert(panel.includes("summary.integrity"));
+ assert(panel.includes("summary.features"));
+ assert(preload.includes('require("./kaizen-diagnostics-ui-1.5.24")'));
  const pkg=JSON.parse(fs.readFileSync(path.join(__dirname,"..","package.json"),"utf8"));
  assert.equal(pkg.version,"1.5.24");
  assert.equal(pkg.main,"main.kaizen-1.5.24.js");
