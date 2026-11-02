@@ -4,7 +4,9 @@
 // authentication token validity, remote profile/group catalogue and APK catalog.
 const fs=require("node:fs");
 const path=require("node:path");
-const {app}=require("electron");
+const {app,ipcMain}=require("electron");
+const crypto=require("node:crypto");
+const {EXPECTED:LEGACY_SHA256}=require("./scripts/verify-legacy-core-resources");
 const signedHttp=require("./axiosConfig");
 const {BACKEND_URL}=require("./config");
 const local=require("./kaizen-original-extensions-host");
@@ -23,9 +25,7 @@ function safeStatus(error){return Number(error?.response?.status)||0;}
 function extensionSecurityState(){
   // El instalador deja ex1/ex2 en resources/extensionForSecurity, NO en
   // KAIZEN_EXTENSIONS. Solo lectura: nunca se cargan ni se ejecutan aquí.
-  const base=app.isPackaged?
-    path.join(path.dirname(process.execPath),"resources","extensionForSecurity"):
-    path.resolve(__dirname,"..","runtime-resources","extensionForSecurity");
+  const base=securityRoot();
   return [
     {name:"ex1",version:"1.2",note:"Puede recopilar y enviar URLs del historial."},
     {name:"ex2",version:"1.1",note:"Puede restringir navegación y herramientas de inspección."}
@@ -69,9 +69,43 @@ function extensionSecurityState(){
     }
   });
 }
+function securityRoot(){
+  return app.isPackaged?
+    (process.resourcesPath||path.join(path.dirname(process.execPath),"resources"))+"/extensionForSecurity":
+    path.resolve(__dirname,"..","runtime-resources","extensionForSecurity");
+}
+function integrityStatus(){
+  const root=securityRoot(),bad=[];
+  let matched=0;
+  for(const [relative,sha] of Object.entries(LEGACY_SHA256)){
+    try{
+      const file=path.join(root,...relative.split("/"));
+      if(!fs.existsSync(file)||!fs.statSync(file).isFile())throw Error("missing");
+      const digest=crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+      if(digest!==sha)throw Error("mismatch");
+      matched++;
+    }catch{bad.push(relative);}
+  }
+  return {ok:bad.length===0,verified:matched,total:Object.keys(LEGACY_SHA256).length,
+    failedFiles:bad,note:bad.length?"Hay archivos originales ausentes o modificados; reinstalar el paquete completo.":"Los 6 SHA-256 originales coinciden."};
+}
+function featureState(){
+  const handlers=[
+    ["perfiles_locales","Principal · Google · Streaming / Custom","kaizen-original-extensions-list"],
+    ["apertura_chromium","Botones Abrir Chromium","kaizen-original-extension-open"],
+    ["importador_opcional","Importación de respaldo","kaizen-original-extensions-import"],
+    ["catalogo_apk","Pestaña catálogo APK","kaizen-apk-catalog-probe"],
+    ["variantes_android","Pestañas de variantes Android","kaizen-android-extension-catalog"],
+    ["diagnostico","Diagnóstico y eventos","kaizen-1524-window-overview"]
+  ];
+  return handlers.map(([id,title,channel])=>({id,title,
+    connected:typeof ipcMain?.hasHandler==="function"?ipcMain.hasHandler(channel):null,
+    note:"Conexión local de la interfaz; no certifica permisos del servidor."}));
+}
 async function overview(){
-  await local.warmupOriginalProfiles();
-  const profiles=local.listOriginalExtensions().map(x=>({
+  const warm=await local.warmupOriginalProfiles();
+  const originalStates=local.listOriginalExtensions();
+  const profiles=originalStates.map(x=>({
     id:x.id,title:x.title,extension:x.name,version:x.version,
     available:!!x.available,prepared:!!x.prepared,
     status:x.available?(x.prepared?"Preparado localmente":"Disponible"):String(x.reason||"Falta paquete").slice(0,90)
@@ -79,8 +113,11 @@ async function overview(){
   const summary={
     version:"1.5.24",
     profiles,prepared:profiles.filter(x=>x.prepared).length,
-    chromiumReady:!profiles.some(x=>x.reason==="Falta Chromium compatible incluido"),
+    chromiumReady:warm.reason!=="Falta Chromium incluido"&&
+      !originalStates.some(x=>x.reason==="Falta Chromium compatible incluido"),
     security:extensionSecurityState(),
+    integrity:integrityStatus(),
+    features:featureState(),
     notes:{
       local:"Los perfiles locales no requieren catálogo remoto.",
       auth:"Cada extensión autentica su sesión directamente con el servidor. No se copian tokens.",
@@ -133,4 +170,4 @@ async function remoteChecks(token){
   }
   return {ok:true,checks:results};
 }
-module.exports={record,overview,remoteChecks};
+module.exports={record,overview,remoteChecks,integrityStatus,featureState};
