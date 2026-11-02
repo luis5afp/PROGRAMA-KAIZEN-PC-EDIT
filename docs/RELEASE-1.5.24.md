@@ -35,7 +35,36 @@ Los nombres de los scripts de fondo pueden variar si así lo indica el campo `ba
 
 Nunca se deben añadir credenciales, tokens, cookies, sesiones ni perfiles de usuarios al paquete. Solo se deben utilizar extensiones cuya distribución esté autorizada.
 
-## Probar con el ejecutable ya descargado
+
+## Instalador con tres extensiones integradas (implementación vigente)
+
+**El usuario final no importa archivos ZIP.** Una compilación autorizada instala:
+
+- \`resources/KAIZEN_EXTENSIONS/KAIZZEN_MAIN\` v2.5.6
+- \`resources/KAIZEN_EXTENSIONS/KAIZZEN_GOOGLE\` v1.0.3
+- \`resources/KAIZEN_EXTENSIONS/KAIZZEN_CUSTOM\` v1.0.6
+- \`KAIZEN_CHROMIUM/chrome-win64/chrome.exe\`
+- \`resources/extensionForSecurity/ex1\` y \`ex2\` sin alterar sus seis hashes originales
+
+\`app/kaizen-original-extensions-host.js\` da prioridad a las carpetas **internas de la instalación** sobre cualquier importación antigua, prepara tres directorios de datos locales y solo inicia Chromium cuando se pulsa «Abrir perfil Chromium». Las tres tarjetas se habilitan cuando están los archivos originales y el Chromium incluido. En esa condición, la interfaz oculta la fila de importación opcional. No se copia ningún token o contraseña al navegador.
+
+### Compilación privada de un único Setup EXE en Windows
+
+1. Instalar Node.js 22+, PowerShell 7+ y disponer de acceso a internet para descargar Chromium y herramientas de construcción.
+2. Obtener de forma autorizada la carpeta \`KAIZEN_EXTENSIONS\` con los tres paquetes originales o el ZIP \`KAIZEN_EXTENSIONS_Originales.zip\` **solo en la máquina de compilación**, nunca en el repositorio público.
+3. Ejecutar desde la raíz del código:
+   \`pwsh -File scripts/build-windows-integrated.ps1 -ExtensionsSource "C:\ruta-privada\KAIZEN_EXTENSIONS_Originales.zip"\`
+4. El script verifica los manifiestos, prepara los recursos internos, incluye Chromium, preserva los archivos de seguridad originales, y genera un Setup NSIS en \`dist/installer/\`.
+5. Una vez instalado el Setup, **no hay que copiar carpetas ni seleccionar ZIP**.
+
+El workflow \`.github/workflows/kaizen-member-test.yml\` sigue disponible para **ejecución manual en un repositorio privado**, con un ZIP HTTPS autorizado mediante el secreto \`KAIZEN_EXTENSIONS_BUNDLE_URL\`. No publica un artefacto completo desde este repositorio público. Esto es deliberado: los paquetes originales contienen permisos de cookies/proxy/navegación y potenciales secretos integrados. Revisar/rotar secretos antes de redistribuir; todo código incluido en un instalador puede ser extraído por el receptor.
+
+### Comprobación automatizada y límites
+
+\`app/tests/embedded-extension-integration-scenarios.js\` comprueba que los tres perfiles se detecten dentro de \`resources\`, se preparen sin importación ni red, estén aislados y creen comandos correctos para abrir Chromium al pulsar. Estas comprobaciones utilizan un proceso Chromium simulado: **no reemplazan una prueba interactiva de la instalación, de autenticación ni del catálogo**. El instalador final todavía necesita una ejecución privada real y aceptación en Windows. La versión PREVIEW pública continúa sin los tres paquetes originales.
+
+
+## Probar con el ejecutable ya descargado (procedimiento de PREVIEW antigua)
 
 1. Descomprime el artefacto de GitHub Actions (conservando todos los archivos, incluido `KAIZEN_CHROMIUM`).
 2. Copia la carpeta `KAIZEN_EXTENSIONS` completa junto al `KAIZEN-PC-v1.5.24.exe`, **o** coloca el ZIP `KAIZEN_EXTENSIONS_Originales.zip` en la misma ubicación.
@@ -44,15 +73,15 @@ Nunca se deben añadir credenciales, tokens, cookies, sesiones ni perfiles de us
 
 El artefacto existente de la ejecución 41340089853 no se modifica retroactivamente.
 
-## Crear una nueva compilación completa en Actions
+## Crear una nueva compilación completa en Actions (solo repositorio privado)
 
-El workflow empaqueta y valida las extensiones junto al EXE solo si hay una fuente válida:
+El workflow manual empaqueta y valida las extensiones dentro de `resources/` solo si hay una fuente válida:
 
 - Carpeta `runtime-resources/KAIZEN_EXTENSIONS`, o
 - Archivo `runtime-resources/KAIZEN_EXTENSIONS_Originales.zip`, o
 - En una ejecución manual `workflow_dispatch`, un enlace **HTTPS** temporal configurado como secreto del repositorio con el nombre `KAIZEN_EXTENSIONS_BUNDLE_URL`, que apunte a un ZIP autorizado con la estructura anterior. Este mecanismo evita tener que guardar el paquete original en el repositorio público.
 
-En un Pull Request no se descargan enlaces secretos. Si falta el paquete o su estructura es inválida, el workflow falla expresamente y **no sube** el artefacto de Windows. El paso de compilación sigue realizando las pruebas unitarias sin credenciales ni conexiones de inicio de sesión.
+En este repositorio público el workflow de instalación está **deshabilitado deliberadamente** (se omite), para evitar exponer el código y posibles secretos en artefactos públicos. En un repositorio privado con ejecución manual, si falta el paquete o su estructura es inválida, falla y **no sube** el artefacto de Windows. El paso de compilación sigue realizando las pruebas unitarias sin credenciales ni conexiones de inicio de sesión.
 
 ## Publicación en Releases
 
@@ -77,7 +106,7 @@ Revisión del código existente:
 **Antes de activarlas:** revisar su código no ofuscado o auditado, destinatarios y retención de los datos transmitidos, permisos, comportamiento al desinstalar y consentimiento explícito. La incorporación inactiva no garantiza su seguridad ni su correcto funcionamiento en Windows.
 
 
-## Importar las tres extensiones originales desde KAIZEN (nuevo)
+## Importación manual opcional de respaldo (no necesaria en el instalador integrado)
 
 En la nueva compilación aparece el botón **«Importar extensiones originales (.zip)»** en **Perfiles Chromium**. Permite seleccionar un ZIP local provisto por el distribuidor autorizado, sin pedir permisos para escribir en Program Files y sin tener que copiarlo junto al ejecutable.
 
