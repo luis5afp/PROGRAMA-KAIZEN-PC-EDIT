@@ -31,7 +31,7 @@
       }).catch(()=>{});
     }
   }
-  const frame=window===window.top?"principal":"secundario";
+  const marco=window===window.top?"principal":"secundario";
   async function initialize(){
     let product=null, trace=null;
     for(let i=0;i<9;i++){
