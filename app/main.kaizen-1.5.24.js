@@ -71,7 +71,7 @@ let diagWindow=null;
 function openDiagnosticsWindow(){
   if(diagWindow&&!diagWindow.isDestroyed()){diagWindow.show();diagWindow.focus();return;}
   diagWindow=new BrowserWindow({
-    width:1020,height:820,minWidth:760,minHeight:550,title:"KAIZEN PC 1.5.24 · Diagnóstico integral",
+    width:1020,height:820,minWidth:760,minHeight:550,title:"KAIZEN PC 1.5.25 · Diagnóstico integral",
     autoHideMenuBar:true,webPreferences:{
       preload:path.join(__dirname,"kaizen-diagnostics-preload-1.5.24.js"),
       contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true
