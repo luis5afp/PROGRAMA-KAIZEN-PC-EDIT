@@ -45,7 +45,7 @@ function run(label,folders,profileName=label){
   const result=spawnSync(chrome,args,{encoding:"utf8",timeout:45000,maxBuffer:4*1024*1024,windowsHide:true});
   const html=String(result.stdout||"");
   const blocked=/ERR_BLOCKED_BY_CLIENT|page has been blocked|pagina.*bloqueada|página.*bloqueada/i.test(html);
-  const hasApp=/KAIZEN|KAIZZEN|<html|<!doctype/i.test(html);
+  const hasApp=/<title>KAIZEN<\/title>|id="root"|Bienvenido de vuelta/i.test(html);
   const ok=!result.error&&result.status===0&&!blocked&&hasApp;
   console.log("[smoke] "+label+": "+(ok?"PASS":"FAIL")+
     " exit="+result.status+
