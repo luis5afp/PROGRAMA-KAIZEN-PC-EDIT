@@ -7,7 +7,9 @@ Esta versión incorpora los cambios aprobados de KAIZEN PC v1.5.24 para Windows 
 - Perfiles Chromium **Principal (KAIZZEN-MAIN 2.5.6)**, **Google (KAIZZEN-GOOGLE 1.0.3)** y **Streaming / Custom (KAIZZEN-CUSTOM 1.0.6)** preparados automáticamente desde archivos integrados en la instalación. No hace falta seleccionar ni extraer archivos ZIP.
 - Botones para abrir Chromium con una extensión y un directorio de datos aislado por perfil.
 - **Chromium incluido** en la instalación para compatibilidad con extensiones locales.
-- Ventana **Diagnóstico integral**, accesible desde el menú o con `Ctrl+Shift+D`, con estados de paquetes, aperturas y comprobaciones limitadas de sesión/catálogos sin exportar cookies ni tokens.
+- Ventana **Diagnóstico integral**, accesible desde el menú o con `Ctrl+Shift+D`, y botón en las nuevas pestañas. Verifica estado de Principal, Google y Streaming/Custom, Chromium, conexiones IPC de catálogo APK/variantes Android y seis SHA-256 originales de EX1/EX2; indica archivos faltantes o modificados, sin exportar cookies ni tokens.
+- Aviso de arranque específico si faltan los recursos originales o no coinciden sus SHA-256. No se elimina ni omite el mecanismo de seguridad del cliente legado.
+- Verificación adicional del instalador NSIS en Windows: comprueba que la instalación conserva Chromium, los cinco paquetes originales y sus ubicaciones correctas.
 - Compatibilidad con los archivos originales de seguridad **EX1 1.2** y **EX2 1.1**, conservando su verificación de integridad. La referencia ausente a `inject.js` de EX1 se muestra como advertencia, no como bloqueo del empaquetado.
 - Conservación de los controles de autorización del servidor: el inicio de sesión, permisos y verificación en dos pasos no se omiten ni se modifican.
 
