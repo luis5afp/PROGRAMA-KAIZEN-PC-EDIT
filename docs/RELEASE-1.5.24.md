@@ -40,28 +40,28 @@ Nunca se deben añadir credenciales, tokens, cookies, sesiones ni perfiles de us
 
 **El usuario final no importa archivos ZIP.** Una compilación autorizada instala:
 
-- \`resources/KAIZEN_EXTENSIONS/KAIZZEN_MAIN\` v2.5.6
-- \`resources/KAIZEN_EXTENSIONS/KAIZZEN_GOOGLE\` v1.0.3
-- \`resources/KAIZEN_EXTENSIONS/KAIZZEN_CUSTOM\` v1.0.6
-- \`KAIZEN_CHROMIUM/chrome-win64/chrome.exe\`
-- \`resources/extensionForSecurity/ex1\` y \`ex2\` sin alterar sus seis hashes originales
+- `resources/KAIZEN_EXTENSIONS/KAIZZEN_MAIN` v2.5.6
+- `resources/KAIZEN_EXTENSIONS/KAIZZEN_GOOGLE` v1.0.3
+- `resources/KAIZEN_EXTENSIONS/KAIZZEN_CUSTOM` v1.0.6
+- `KAIZEN_CHROMIUM/chrome-win64/chrome.exe`
+- `resources/extensionForSecurity/ex1` y `ex2` sin alterar sus seis hashes originales
 
-\`app/kaizen-original-extensions-host.js\` da prioridad a las carpetas **internas de la instalación** sobre cualquier importación antigua, prepara tres directorios de datos locales y solo inicia Chromium cuando se pulsa «Abrir perfil Chromium». Las tres tarjetas se habilitan cuando están los archivos originales y el Chromium incluido. En esa condición, la interfaz oculta la fila de importación opcional. No se copia ningún token o contraseña al navegador.
+`app/kaizen-original-extensions-host.js` da prioridad a las carpetas **internas de la instalación** sobre cualquier importación antigua, prepara tres directorios de datos locales y solo inicia Chromium cuando se pulsa «Abrir perfil Chromium». Las tres tarjetas se habilitan cuando están los archivos originales y el Chromium incluido. En esa condición, la interfaz oculta la fila de importación opcional. No se copia ningún token o contraseña al navegador.
 
 ### Compilación privada de un único Setup EXE en Windows
 
 1. Instalar Node.js 22+, PowerShell 7+ y disponer de acceso a internet para descargar Chromium y herramientas de construcción.
-2. Obtener de forma autorizada la carpeta \`KAIZEN_EXTENSIONS\` con los tres paquetes originales o el ZIP \`KAIZEN_EXTENSIONS_Originales.zip\` **solo en la máquina de compilación**, nunca en el repositorio público.
+2. Obtener de forma autorizada la carpeta `KAIZEN_EXTENSIONS` con los tres paquetes originales o el ZIP `KAIZEN_EXTENSIONS_Originales.zip` **solo en la máquina de compilación**, nunca en el repositorio público.
 3. Ejecutar desde la raíz del código:
-   \`pwsh -File scripts/build-windows-integrated.ps1 -ExtensionsSource "C:\ruta-privada\KAIZEN_EXTENSIONS_Originales.zip"\`
-4. El script verifica los manifiestos, prepara los recursos internos, incluye Chromium, preserva los archivos de seguridad originales, y genera un Setup NSIS en \`dist/installer/\`.
+   `pwsh -File scripts/build-windows-integrated.ps1 -ExtensionsSource "C:\ruta-privada\KAIZEN_EXTENSIONS_Originales.zip"`
+4. El script verifica los manifiestos, prepara los recursos internos, incluye Chromium, preserva los archivos de seguridad originales, y genera un Setup NSIS en `dist/installer/`.
 5. Una vez instalado el Setup, **no hay que copiar carpetas ni seleccionar ZIP**.
 
-El workflow \`.github/workflows/kaizen-member-test.yml\` sigue disponible para **ejecución manual en un repositorio privado**, con un ZIP HTTPS autorizado mediante el secreto \`KAIZEN_EXTENSIONS_BUNDLE_URL\`. No publica un artefacto completo desde este repositorio público. Esto es deliberado: los paquetes originales contienen permisos de cookies/proxy/navegación y potenciales secretos integrados. Revisar/rotar secretos antes de redistribuir; todo código incluido en un instalador puede ser extraído por el receptor.
+El workflow `.github/workflows/kaizen-member-test.yml` sigue disponible para **ejecución manual en un repositorio privado**, con un ZIP HTTPS autorizado mediante el secreto `KAIZEN_EXTENSIONS_BUNDLE_URL`. No publica un artefacto completo desde este repositorio público. Esto es deliberado: los paquetes originales contienen permisos de cookies/proxy/navegación y potenciales secretos integrados. Revisar/rotar secretos antes de redistribuir; todo código incluido en un instalador puede ser extraído por el receptor.
 
 ### Comprobación automatizada y límites
 
-\`app/tests/embedded-extension-integration-scenarios.js\` comprueba que los tres perfiles se detecten dentro de \`resources\`, se preparen sin importación ni red, estén aislados y creen comandos correctos para abrir Chromium al pulsar. Estas comprobaciones utilizan un proceso Chromium simulado: **no reemplazan una prueba interactiva de la instalación, de autenticación ni del catálogo**. El instalador final todavía necesita una ejecución privada real y aceptación en Windows. La versión PREVIEW pública continúa sin los tres paquetes originales.
+`app/tests/embedded-extension-integration-scenarios.js` comprueba que los tres perfiles se detecten dentro de `resources`, se preparen sin importación ni red, estén aislados y creen comandos correctos para abrir Chromium al pulsar. Estas comprobaciones utilizan un proceso Chromium simulado: **no reemplazan una prueba interactiva de la instalación, de autenticación ni del catálogo**. El instalador final todavía necesita una ejecución privada real y aceptación en Windows. La versión PREVIEW pública continúa sin los tres paquetes originales.
 
 
 ## Probar con el ejecutable ya descargado (procedimiento de PREVIEW antigua)
