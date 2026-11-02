@@ -23,9 +23,9 @@ const http={get:async (url,opts)=>{
 const fakeLocal={
  warmupOriginalProfiles:async()=>({ok:true,prepared:3}),
  listOriginalExtensions:()=>[
-  {id:"main",title:"Principal",name:"KAIZZEN-MAIN",version:"2.5.9",available:true,prepared:true},
-  {id:"google",title:"Google",name:"KAIZZEN-GOOGLE",version:"1.0.6",available:true,prepared:true},
-  {id:"custom",title:"Streaming",name:"KAIZZEN-CUSTOM",version:"1.0.9",available:true,prepared:true}
+  {id:"main",title:"Principal",name:"KAIZZEN-MAIN",version:"2.5.10",available:true,prepared:true},
+  {id:"google",title:"Google",name:"KAIZZEN-GOOGLE",version:"1.0.7",available:true,prepared:true},
+  {id:"custom",title:"Streaming",name:"KAIZZEN-CUSTOM",version:"1.0.10",available:true,prepared:true}
  ]
 };
 const fakeApp={isPackaged:false};
@@ -97,7 +97,7 @@ const {record,overview,remoteChecks}=sandbox.module.exports;
  assert(panel.includes("summary.features"));
  assert(preload.includes('require("./kaizen-diagnostics-ui-1.5.24")'));
  const pkg=JSON.parse(fs.readFileSync(path.join(__dirname,"..","package.json"),"utf8"));
- assert.equal(pkg.version,"1.5.26");
+ assert.equal(pkg.version,"1.5.27");
  assert.equal(pkg.main,"main.kaizen-1.5.24.js");
  console.log("KAIZEN 1.5.24 diagnostics and release metadata: PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});
