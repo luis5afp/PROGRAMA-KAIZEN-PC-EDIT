@@ -34,11 +34,30 @@ module.exports=function installKaizenDiagnostics(ipcRenderer){
         el("span",row,p.status,"font:13px system-ui;color:"+
           (p.available&&p.prepared?"#86efac":"#fca5a5")+";");
       }
-      const browser=el("div",content,"",
+      el("p",content,
         "Chromium incluido: "+(summary.chromiumReady?"Disponible":"No detectado"),
         style.small+"margin-top:14px;");
-      const security=el("div",content,"",style.table);
+      el("h3",content,"Integridad del instalador (archivos originales)",
+        "font:700 17px system-ui;margin:23px 0 9px;");
+      el("p",content,
+        "SHA-256 EX1/EX2: "+(summary.integrity?.verified??0)+"/"+
+          (summary.integrity?.total??6)+" archivos correctos. "+
+          (summary.integrity?.failedFiles?.length?
+          "Problemas: "+summary.integrity.failedFiles.join(", "):"Sin alteraciones detectadas."),
+        style.small+"margin:10px 0;color:"+
+          (summary.integrity?.ok?"#86efac":"#fca5a5")+";");
+      el("h3",content,"Conexiones con pestañas y funciones nuevas",
+        "font:700 17px system-ui;margin:23px 0 9px;");
+      const features=el("div",content,"",style.table);
+      for(const x of summary.features||[]){
+        const row=el("div",features,"",style.row);
+        el("strong",row,x.title,"font:600 14px system-ui;");
+        el("span",row,x.connected===true?"IPC conectada":
+          x.connected===false?"IPC no conectada":"No comprobable",
+          style.small+"color:"+(x.connected===true?"#86efac":"#fca5a5")+";");
+      }
       el("h3",content,"Extensiones de seguridad","font:700 17px system-ui;margin:23px 0 9px;");
+      const security=el("div",content,"",style.table);
       for(const x of summary.security||[]){
         const row=el("div",security,"",style.row);
         el("strong",row,x.name+" · "+(x.installed?(x.warning?"incluida · aviso":"incluida"):x.present?"incompleta":"no incluida"),
