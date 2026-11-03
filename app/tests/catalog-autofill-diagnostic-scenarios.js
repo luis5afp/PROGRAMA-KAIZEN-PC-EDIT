@@ -28,12 +28,15 @@ for(const [folder,name,version] of [
   assert(catalog.includes("/api/shops/extension"),"Identificar el endpoint del catálogo");
   assert(catalog.includes("sesion-temporal-preparada"),"Detectar la preparación original de product");
   for(const stage of ["comunicacion-http-envio","comunicacion-http-respuesta",
-    "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta"])
+    "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta",
+    "comunicacion-red-envio","comunicacion-red-respuesta"])
     assert(catalog.includes(stage),"Falta evento de comunicación: "+stage);
   assert(catalog.includes("apiRoute(url)")&&catalog.includes("communicationContext()"),
     "Correlacionar solo HTTP del servidor KAIZZEN sin copiar URLs");
   assert(catalog.includes('MESSAGE_ROUTES.has(data?.ref)'),
     "Solo etiquetas permitidas de mensajes al background");
+  assert(catalog.includes("chrome.webRequest.onBeforeRequest") && catalog.includes("apiRequests"),
+    "Observar red Chromium solo cuando el permiso ya está disponible");
   assert(catalog.includes("Peticiones tras el clic: "),
     "Resumen de tráfico observado al pulsar tarjeta");
   assert(!catalog.includes("JSON.stringify(args)")&&!catalog.includes("JSON.stringify(message)"),
