@@ -28,6 +28,12 @@ for(const [folder,name,version] of [
   assert(catalog.includes("/api/shops/extension"),"Identificar el endpoint del catálogo");
   assert(catalog.includes("sesion-temporal-preparada"),"Detectar la preparación original de product");
   assert(catalog.includes("catalogo-respuesta"),"Mostrar categorías recibidas");
+  assert(catalog.includes("diagnostico-cliente"),"Identificar perfil y cliente de la extensión");
+  assert(catalog.includes("bloqueoExplicito") && catalog.includes("bloqueoPremium"),
+    "Distinguir bloqueo explícito de restricción premium");
+  assert(catalog.includes("habilitadas") && catalog.includes("sinParAcceso"),
+    "Contabilizar herramientas habilitadas y disponibilidad de datos");
+  assert(!catalog.includes("product.isLock=false"),"No alterar autorización");
   assert(catalog.includes("clic-codigos") && catalog.includes('currentSource="codigos"') === false,
     "Capturar botón CÓDIGOS como acción separada");
   assert(catalog.includes('action("clic-codigos","codigos")') && catalog.includes('action("clic-tarjeta","tarjeta")'),
@@ -60,4 +66,4 @@ for(const [folder,name,version] of [
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
-console.log("KAIZEN 1.5.33: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.34: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
