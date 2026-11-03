@@ -1,5 +1,5 @@
 # Diagnostico offline de instalacion, sin ejecutar ni alterar extensiones.
-# Uso: powershell -ExecutionPolicy Bypass -File scripts/diagnose-installed-kaizen.ps1 -ProgramFolder "C:\ruta\KAIZEN-PC-v1.5.36-win32-x64"
+# Uso: powershell -ExecutionPolicy Bypass -File scripts/diagnose-installed-kaizen.ps1 -ProgramFolder "C:\ruta\KAIZEN-PC-v1.5.37-win32-x64"
 param([Parameter(Mandatory=$true)][string]$ProgramFolder)
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path -LiteralPath $ProgramFolder).Path
