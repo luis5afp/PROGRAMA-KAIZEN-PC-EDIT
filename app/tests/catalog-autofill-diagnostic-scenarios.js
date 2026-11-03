@@ -87,6 +87,18 @@ for(const [folder,name,version] of [
   assert(bundle.includes("/api/shops/extension")&&bundle.includes("/api/products/getmostusedtool"),
     "Ambos endpoints originales disponibles");
   assert(bundle.includes("kZ=t=>!!(t?.isLock"),"Mantener estado original de bloqueo");
+  const requestAt=bundle.indexOf("params:{subtitle_id:");
+  assert(requestAt>=0,"Solicitud autenticada de catálogo presente");
+  const requestParameters=bundle.slice(requestAt,requestAt+250);
+  assert(!requestParameters.includes("isLock"),
+    "No enviar isLock calculado por tarjeta como permiso al servidor");
+  const lockedBranchAt=bundle.indexOf("Página pública abierta sin sesión gestionada");
+  const productSessionAt=bundle.indexOf("chrome.storage.local.set({product:");
+  assert(lockedBranchAt>=0&&productSessionAt>lockedBranchAt,
+    "La ruta pública restringida precede a la preparación de la sesión autorizada");
+  assert(bundle.includes("getmostusedtool")&&bundle.includes("JSON.parse(await "),
+    "Mantener petición autenticada y descifrado integral");
+
   // No se transfieren valores de d/e/k hacia el diagnóstico: solo booleanos.
   assert(bundle.includes("d:!!p?.d,e:!!p?.e,k:!!p?.k"),
     "Nunca copiar URL o credenciales al diagnóstico");
