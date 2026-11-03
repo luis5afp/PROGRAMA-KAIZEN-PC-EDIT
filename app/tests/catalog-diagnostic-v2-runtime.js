@@ -20,7 +20,8 @@ for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identif
   "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic",
   "diagnostico-cliente","bloqueoExplicito","bloqueoPremium",
   "comunicacion-http-envio","comunicacion-http-respuesta",
-  "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta"])
+  "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta",
+  "comunicacion-red-envio","comunicacion-red-respuesta"])
   assert(catalog.includes(stage),"Falta etapa: "+stage);
 for(const stage of ["diagnostico-pestana-activa","script-formulario-activo","formulario-observado",
   "formulario-con-campos-rellenos","formulario-sin-sesion",
@@ -85,6 +86,7 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert.equal(store.events().length,0,"No observar pestañas sin vínculo dirigido");
 
   const listeners={updated:[],removed:[],windowsRemoved:[]};
+  const networkEvents={};
   const sent=[];
   const nativeWindowCreate=(opts,cb)=>{
     const w={id:cb?124:123};
@@ -93,6 +95,11 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   };
   const chrome={
     storage:{local:store.local,onChanged:store.onChanged},
+    webRequest:{
+      onBeforeRequest:{addListener:fn=>{networkEvents.before=fn;}},
+      onCompleted:{addListener:fn=>{networkEvents.completed=fn;}},
+      onErrorOccurred:{addListener:fn=>{networkEvents.failed=fn;}}
+    },
     runtime:{
       getManifest:()=>({name:"KAIZZEN-MAIN"}),
       sendMessage:(message,callback)=>{
@@ -177,6 +184,10 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   const xhr=new target.XMLHttpRequest();
   xhr.open("GET","https://www.kaizzen.org/s/known/api/products/getmostusedtool?token=NOLOG_XHR");
   xhr.send();
+  assert.equal(typeof networkEvents.before,"function");
+  networkEvents.before({url:"https://www.kaizzen.org/s/test/api/products/getmostusedtool?token=NETWORK_SECRET",
+    requestId:"network-test",method:"GET",initiator:""});
+  networkEvents.completed({requestId:"network-test",statusCode:200});
   await chrome.runtime.sendMessage({ref:"track_tool_domain",domain:"secret.test"});
   let callbackOk=false;
   chrome.runtime.sendMessage({ref:"reset_proxy",proxy:"DONT_LOG_PROXY"},()=>{callbackOk=true;});
@@ -193,6 +204,10 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     x.ruta==="productos"&&x.transporte==="xhr"&&x.http===200&&x.flujo===sourceFlow));
   assert(events.some(x=>x.stage==="comunicacion-mensaje-envio"&&
     x.mensaje==="track_tool_domain"&&x.receptor==="extension-background"&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-red-envio"&&
+    x.ruta==="productos"&&x.emisor==="chromium"&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-red-respuesta"&&
+    x.ruta==="productos"&&x.http===200&&x.flujo===sourceFlow));
   assert(events.some(x=>x.stage==="comunicacion-mensaje-respuesta"&&
     x.mensaje==="reset_proxy"&&x.respuesta===true&&x.flujo===sourceFlow));
   assert(events.some(x=>x.stage==="comunicacion-formulario-recibida"&&x.pestana===456));
@@ -225,7 +240,7 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   const serialized=JSON.stringify(events);
   for(const secret of ["ENCRYPTED_TEST_PAYLOAD","SECRET","user@example.com","https://secret","hidden@example.com",
     "DO_NOT_EXPORT","REDACT_THIS","someone@example.com",
-    "DONT_LOG_TOKEN","DONT_LOG_PROXY","SECRET_QUERY","secret.test","NOLOG_XHR"])
+    "DONT_LOG_TOKEN","DONT_LOG_PROXY","SECRET_QUERY","secret.test","NOLOG_XHR","NETWORK_SECRET"])
     assert(!serialized.includes(secret),"Se filtró un secreto en el informe");
 
   // La rama original usa chrome.windows.create({url}, callback).
