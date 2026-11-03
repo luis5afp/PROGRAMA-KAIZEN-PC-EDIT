@@ -411,7 +411,16 @@
         " · d "+decoded.conUrl+" · e "+decoded.conCorreo+" · k "+decoded.conClave+
         " · proxy "+decoded.conProxy+" · bloqueadas "+decoded.bloqueadas:
         "sin lote descifrado observado"),
-      "Acceso según respuesta: "+(decoded?"autorizadas "+decoded.habilitadas+" / "+decoded.cuenta+" · restringidas "+decoded.bloqueadas:"sin productos evaluados"),
+      "Acceso según respuesta: "+(decoded?
+        "autorizadas "+decoded.habilitadas+" / "+decoded.cuenta+
+        " · restringidas "+decoded.bloqueadas+
+        " · sin par e/k (modo no cookie) "+decoded.sinParAcceso:
+        "sin productos evaluados"),
+      "Interpretación: "+(decoded&&decoded.bloqueadas===decoded.cuenta&&decoded.cuenta>0?
+        "todos los productos figuran restringidos; no hay acceso gestionado autorizado desde este catálogo":
+        decoded&&decoded.habilitadas>0?
+        "existen productos autorizados; revisar sus campos y sesión temporal al pulsarlos":
+        "sin conclusión de autorización todavía"),
       "Acción: "+(last?(source==="codigos"?"botón CÓDIGOS (no es tarjeta)":"tarjeta de herramientas"):"sin acción observada"),
       "Tarjeta pulsada: "+(source==="codigos"&&last?"no aplica: es el botón CÓDIGOS":
         selected?"d "+bool(selected.d)+" · e "+bool(selected.e)+
@@ -434,7 +443,7 @@
         noSession?"observador activo; "+noSession.motivo:"sin observación asociada"),
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
-      "Nota: CÓDIGOS no es una tarjeta. Las sesiones se asocian solo a clics recientes y solo se registran indicadores de presencia."
+      "Nota: e/k = no disponibles no distingue campos omitidos de valores vacíos; nunca muestra credenciales ni modifica isLock."
     ].join("\n");
   }
   async function refresh() {
