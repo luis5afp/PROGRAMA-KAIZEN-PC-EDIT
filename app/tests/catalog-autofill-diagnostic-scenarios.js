@@ -27,6 +27,18 @@ for(const [folder,name,version] of [
   const catalog=fs.readFileSync(path.join(dir,"catalog-diagnostic.js"),"utf8");
   assert(catalog.includes("/api/shops/extension"),"Identificar el endpoint del catálogo");
   assert(catalog.includes("sesion-temporal-preparada"),"Detectar la preparación original de product");
+  for(const stage of ["comunicacion-http-envio","comunicacion-http-respuesta",
+    "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta"])
+    assert(catalog.includes(stage),"Falta evento de comunicación: "+stage);
+  assert(catalog.includes("apiRoute(url)")&&catalog.includes("communicationContext()"),
+    "Correlacionar solo HTTP del servidor KAIZZEN sin copiar URLs");
+  assert(catalog.includes('MESSAGE_ROUTES.has(data?.ref)'),
+    "Solo etiquetas permitidas de mensajes al background");
+  assert(catalog.includes("Peticiones tras el clic: "),
+    "Resumen de tráfico observado al pulsar tarjeta");
+  assert(!catalog.includes("JSON.stringify(args)")&&!catalog.includes("JSON.stringify(message)"),
+    "No exportar argumentos de llamadas ni cuerpos de mensajes");
+
   assert(catalog.includes("catalogo-respuesta"),"Mostrar categorías recibidas");
   assert(catalog.includes("diagnostico-cliente"),"Identificar perfil y cliente de la extensión");
   assert(catalog.includes("bloqueoExplicito") && catalog.includes("bloqueoPremium"),
@@ -61,9 +73,10 @@ for(const [folder,name,version] of [
   assert(catalog.includes("Copiar informe"),"Exportar sin DevTools");
   const form=fs.readFileSync(path.join(dir,"form-diagnostic.js"),"utf8");
   assert(form.includes("script-formulario-activo") && form.includes("formulario-observado"));
+  assert(form.includes("comunicacion-formulario-recibida"),"Confirmar recepción en pestaña");
   assert(form.includes("correoConContenido") && form.includes("claveConContenido"));
   assert(!catalog.includes("JSON.stringify(data)"),"No copiar la respuesta íntegra");
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
-console.log("KAIZEN 1.5.34: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.35: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
