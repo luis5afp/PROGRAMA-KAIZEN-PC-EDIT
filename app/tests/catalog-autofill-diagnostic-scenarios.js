@@ -28,7 +28,8 @@ for(const [folder,name,version] of [
   assert(catalog.includes("/api/shops/extension"),"Identificar el endpoint del catálogo");
   assert(catalog.includes("sesion-temporal-preparada"),"Detectar la preparación original de product");
   assert(catalog.includes("catalogo-respuesta"),"Mostrar categorías recibidas");
-  for(const stage of ["productos-envio","productos-respuesta",
+  assert(catalog.includes("isProducts(url)"),"Distinguir petición de productos");
+  for(const stage of ["productos-respuesta",
     "productos-descifrados","producto-campos","tarjeta-campos-al-clic"])
     assert(catalog.includes(stage),"Falta etapa de productos: "+stage);
   const filenames={KAIZZEN_MAIN:"index-B-06emjA.js",
@@ -43,7 +44,7 @@ for(const [folder,name,version] of [
   // No se transfieren valores de d/e/k hacia el diagnóstico: solo booleanos.
   assert(bundle.includes("d:!!p?.d,e:!!p?.e,k:!!p?.k"),
     "Nunca copiar URL o credenciales al diagnóstico");
-  assert(catalog.includes("catalogo-envio")&&catalog.includes("catalogo-error"),"Registrar envío y fallo sin datos sensibles");
+  assert(catalog.includes('event(route+"-envio"')&&catalog.includes('event(route+"-error"'),"Registrar envío y fallo sin datos sensibles");
   assert(catalog.includes("Copiar informe"),"Exportar sin DevTools");
   const form=fs.readFileSync(path.join(dir,"form-diagnostic.js"),"utf8");
   assert(form.includes("script-formulario-activo") && form.includes("formulario-observado"));
