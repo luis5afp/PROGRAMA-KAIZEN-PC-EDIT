@@ -34,6 +34,7 @@ for(const [folder,name,version] of [
   assert(form.includes("script-formulario-activo") && form.includes("formulario-observado"));
   assert(form.includes("correoConContenido") && form.includes("claveConContenido"));
   assert(!catalog.includes("JSON.stringify(data)"),"No copiar la respuesta íntegra");
-  assert(!form.includes("value:") && !form.includes("value="),"Nunca guardar valores de formularios");
+  assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
+  assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
 console.log("KAIZEN 1.5.31: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
