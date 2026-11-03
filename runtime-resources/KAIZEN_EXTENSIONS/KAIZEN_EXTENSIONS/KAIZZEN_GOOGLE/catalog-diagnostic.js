@@ -11,7 +11,7 @@
   const SAFE_KEYS = new Set([
     "flujo","transporte","metodo","http","duracionMs","normal","premium",
     "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas",
-    "estructura","medio","resultado","url","correo","clave","claveCifrada",
+    "estructura","medio","resultado","ventana","pestana","url","correo","clave","claveCifrada",
     "identificador","motivo","tipo","marco","dominioCoincide"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
@@ -158,48 +158,123 @@
     };
   } catch {}
 
-  // Observe browser opening without replacing or modifying the original result.
+  // Seguimiento dirigido a la pestaña que abre la extensión del catálogo.
+  // Esta señal no contiene credenciales ni modifica permisos del servidor.
+  const openedWindows=new Map();
+  const openedTabs=new Map();
+  function validId(id){return Number.isSafeInteger(id)&&id>=0;}
+  function linkTab(flujo,ventana,pestana){
+    if(!validId(pestana))return;
+    const old=openedTabs.get(pestana);
+    if(old&&old.flujo===flujo&&old.ventana===ventana)return;
+    const item={flujo,ventana,pestana,confirmed:false,attempts:0};
+    openedTabs.set(pestana,item);
+    event("pestana-identificada",{flujo,ventana,pestana});
+    // Reintentos limitados: el content script puede cargarse después de tabs.onUpdated.
+    for(const ms of [300,950,1900,3400,6000,9000]){
+      setTimeout(()=>{if(openedTabs.get(pestana)===item&&!item.confirmed)
+        void pingTab(item);},ms);
+    }
+  }
+  async function pingTab(item){
+    if(item.confirmed||++item.attempts>7)return;
+    try{
+      const result=await chrome.tabs.sendMessage(item.pestana,{
+        type:"kz-diagnostic-bind-v3",
+        flujo:item.flujo,ventana:item.ventana,pestana:item.pestana
+      });
+      if(result?.ok===true&&!item.confirmed){
+        item.confirmed=true;
+        event("pestana-vinculada",{
+          flujo:item.flujo,ventana:item.ventana,pestana:item.pestana
+        });
+      }
+    }catch{}
+    if(!item.confirmed&&item.attempts===7)
+      event("pestana-sin-respuesta",{flujo:item.flujo,ventana:item.ventana,pestana:item.pestana});
+  }
+  async function discoverTabs(ventana,flujo){
+    try{
+      const tabs=await chrome.tabs.query({windowId:ventana});
+      for(const tab of tabs||[]){
+        if(validId(tab?.id)&&(!tab.url||looksPublicPage(tab.url)))
+          linkTab(flujo,ventana,tab.id);
+      }
+    }catch{
+      event("pestana-consulta-error",{flujo,ventana});
+    }
+  }
+  function observeWindow(flujo,windowInfo){
+    const id=windowInfo?.id;
+    if(!validId(id)){
+      event("apertura-sin-identificador",{flujo});
+      return;
+    }
+    if(openedWindows.has(id))return;
+    openedWindows.set(id,flujo);
+    event("apertura-confirmada",{flujo,medio:"chrome.windows.create",ventana:id});
+    void discoverTabs(id,flujo);
+    setTimeout(()=>{if(openedWindows.get(id)===flujo)void discoverTabs(id,flujo);},1400);
+  }
+  try{
+    chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
+      const ventana=tab?.windowId;
+      const flujo=openedWindows.get(ventana);
+      if(!flujo||!validId(tabId))return;
+      const targetUrl=change?.url||tab?.url;
+      if(targetUrl&&!looksPublicPage(targetUrl))return;
+      if(change?.status==="loading")openedTabs.delete(tabId);
+      linkTab(flujo,ventana,tabId);
+    });
+    chrome.tabs.onRemoved.addListener(id=>openedTabs.delete(id));
+    chrome.windows.onRemoved.addListener(id=>openedWindows.delete(id));
+  }catch{}
   try {
     const native=chrome.windows.create;
     chrome.windows.create=function(...args) {
       const candidate=args[0]?.url;
       const url=Array.isArray(candidate)?candidate[0]:candidate;
-      const monitored=Boolean(currentFlow) && looksPublicPage(url);
-      if(monitored)event("apertura-solicitada",{flujo:currentFlow,medio:"chrome.windows.create"});
-      try {
+      const monitored=Boolean(currentFlow)&&looksPublicPage(url);
+      const flujo=currentFlow;
+      if(monitored)event("apertura-solicitada",{flujo,medio:"chrome.windows.create"});
+      const previous=typeof args[1]==="function"?args[1]:null;
+      if(monitored&&previous){
+        args[1]=function(...cbargs){
+          if(cbargs[0])observeWindow(flujo,cbargs[0]);
+          else event("apertura-error",{flujo,medio:"chrome.windows.create"});
+          return previous.apply(this,cbargs);
+        };
+      }
+      try{
         const result=native.apply(this,args);
-        if(monitored && result && typeof result.then==="function")
-          result.then(()=>event("apertura-confirmada",{flujo:currentFlow,medio:"chrome.windows.create"}))
-            .catch(()=>event("apertura-error",{flujo:currentFlow,medio:"chrome.windows.create"}));
+        if(monitored&&result&&typeof result.then==="function")
+          result.then(info=>observeWindow(flujo,info))
+            .catch(()=>event("apertura-error",{flujo,medio:"chrome.windows.create"}));
         return result;
-      } catch (error) {
-        if(monitored)event("apertura-error",{flujo:currentFlow,medio:"chrome.windows.create"});
+      }catch(error){
+        if(monitored)event("apertura-error",{flujo,medio:"chrome.windows.create"});
         throw error;
       }
     };
-  } catch {}
+  }catch{}
   try {
     const native=window.open;
-    window.open=function(...args) {
-      const monitored=Boolean(currentFlow) && looksPublicPage(args[0]);
-      if(monitored)event("apertura-solicitada",{flujo:currentFlow,medio:"window.open"});
-      try {
+    window.open=function(...args){
+      const monitored=Boolean(currentFlow)&&looksPublicPage(args[0]);
+      const flujo=currentFlow;
+      if(monitored)event("apertura-solicitada",{flujo,medio:"window.open"});
+      try{
         const result=native.apply(this,args);
-        if(monitored)event(result?"apertura-confirmada":"apertura-sin-confirmacion",
-          {flujo:currentFlow,medio:"window.open"});
+        if(monitored)event(result?"apertura-sin-identificador":"apertura-sin-confirmacion",
+          {flujo,medio:"window.open"});
         return result;
-      } catch (error) {
-        if(monitored)event("apertura-error",{flujo:currentFlow,medio:"window.open"});
+      }catch(error){
+        if(monitored)event("apertura-error",{flujo,medio:"window.open"});
         throw error;
       }
     };
-  } catch {}
+  }catch{}
 
-  try {
-    chrome.windows.onCreated.addListener(()=>{
-      if(currentFlow)event("chromium-ventana-detectada",{flujo:currentFlow});
-    });
-  } catch {}
   try {
     chrome.storage.local.get(TRACE).then(v=>{
       const trace=v[TRACE];
@@ -232,26 +307,35 @@
     const e=events.slice().reverse();
     const recent=stage=>e.find(x=>x.stage===stage);
     const last=recent("clic-tarjeta");
-    const traced=stage=>last?.flujo?e.find(x=>x.stage===stage && x.flujo===last.flujo):null;
-    const session=traced("sesion-temporal-preparada");
-    const opening=traced("apertura-solicitada");
-    const page=traced("script-formulario-activo")||traced("formulario-sin-sesion");
-    const created=traced("chromium-ventana-detectada");
-    const form=traced("formulario-observado");
+    const tracked=stage=>last?.flujo?
+      e.find(x=>x.stage===stage&&x.flujo===last.flujo):null;
     const catalog=recent("catalogo-respuesta");
-    const notes=[
-      "Catálogo: "+(catalog?"HTTP "+catalog.http+" · "+(catalog.normal+catalog.premium)+" tarjetas · estructura "+catalog.estructura:"sin respuesta observada"),
+    const opening=tracked("apertura-confirmada");
+    const bind=tracked("pestana-vinculada");
+    const noTab=tracked("pestana-sin-respuesta");
+    const session=tracked("sesion-temporal-preparada");
+    const active=tracked("script-formulario-activo");
+    const noSession=tracked("formulario-sin-sesion");
+    const form=tracked("formulario-observado");
+    return [
+      "Catálogo: "+(catalog?"HTTP "+catalog.http+" · "+(catalog.normal+catalog.premium)+
+        " tarjetas · estructura "+catalog.estructura:"sin respuesta observada desde el inicio del diagnóstico"),
       "Tarjeta: "+(last?"clic registrado":"sin clic registrado"),
-      "Apertura: "+(opening?"solicitada mediante "+opening.medio:"sin llamada de apertura observada")+
-        (created?" · nueva ventana detectada":""),
-      "Sesión: "+(session?"preparación observada":"sin preparación observada tras el último clic"),
-      "Formulario: "+(page?"script ejecutado":"todavía sin evento del script"),
-      "Campos: "+(form?("correo "+form.camposCorreo+", clave "+form.camposClave+
-        "; contenido correo "+Boolean(form.correoConContenido)+", clave "+Boolean(form.claveConContenido)):
-        "sin información de campos"),
-      "Nota: valores presentes no prueban que la extensión efectuó el autocompletado."
-    ];
-    return notes.join("\n");
+      "Ventana: "+(opening?"creada e identificada · ventana "+opening.ventana:
+        tracked("apertura-solicitada")?"solicitada, sin ID confirmado":"sin apertura observada"),
+      "Pestaña: "+(bind?"observador conectado · pestaña "+bind.pestana:
+        noTab?"la pestaña no respondió al diagnóstico":"todavía sin vinculación confirmada"),
+      "Sesión: "+(session?"preparación temporal observada":
+        "sin preparación observada para este clic"),
+      "Formulario: "+(active?"observador ejecutado con sesión temporal":
+        noSession?"observador ejecutado; "+noSession.motivo:
+        "todavía sin observación vinculada"),
+      "Campos: "+(form?"correo "+form.camposCorreo+", clave "+form.camposClave+
+        "; contenido correo "+Boolean(form.correoConContenido)+
+        ", clave "+Boolean(form.claveConContenido):
+        "sin información de campos de la pestaña vinculada"),
+      "Nota: contenido en los campos no demuestra que la extensión lo haya completado."
+    ].join("\n");
   }
   async function refresh() {
     if(!visible || !output)return;
