@@ -17,7 +17,8 @@ new Function(form);
 assert(catalog.includes('event(route+"-envio"') && catalog.includes('event(route+"-error"'));
 for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identificada","pestana-vinculada",
   "catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
-  "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic"])
+  "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic",
+  "diagnostico-cliente","bloqueoExplicito","bloqueoPremium"])
   assert(catalog.includes(stage),"Falta etapa: "+stage);
 for(const stage of ["diagnostico-pestana-activa","script-formulario-activo","formulario-observado",
   "formulario-con-campos-rellenos","formulario-sin-sesion"])
@@ -124,7 +125,8 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   // El lote simula el contrato reducido del bundle: solo booleanos.
   target.__kzDiagnosticProductBatch([
     {d:true,e:true,k:true,proxy:false,lm:true,cookie:false,id:true,isLock:false,locked:false},
-    {d:true,e:false,k:false,proxy:false,lm:false,cookie:false,id:true,isLock:true,locked:true}
+    {d:true,e:false,k:false,proxy:false,lm:false,cookie:false,id:true,isLock:true,locked:true},
+    {d:true,e:false,k:false,proxy:false,lm:false,cookie:false,id:true,isLock:false,locked:true}
   ],false);
   handlers.click({target:{closest:()=>({querySelector:()=>({})})}});
   target.__kzDiagnosticCardClickFields({
@@ -148,16 +150,20 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert(events.some(x=>x.stage==="script-formulario-activo"&&x.pestana===456));
   assert(events.some(x=>x.stage==="productos-respuesta"&&x.cifrado===true));
   const prod=events.find(x=>x.stage==="productos-descifrados");
-  assert.equal(prod.cuenta,2);
+  assert.equal(prod.cuenta,3);
   assert.equal(prod.conCorreo,1);
   assert.equal(prod.conClave,1);
-  assert.equal(prod.bloqueadas,1);
+  assert.equal(prod.bloqueadas,2);
+  assert.equal(prod.habilitadas,1);
+  assert.equal(prod.bloqueoExplicito,1);
+  assert.equal(prod.bloqueoPremium,1);
+  assert.equal(prod.sinParAcceso,2);
   const selected=events.find(x=>x.stage==="tarjeta-campos-al-clic");
   assert.equal(selected.d,true);
   assert.equal(selected.e,true);
   assert.equal(selected.k,true);
   assert.equal(selected.locked,false);
-  assert(events.filter(x=>x.stage==="producto-campos").length===2);
+  assert(events.filter(x=>x.stage==="producto-campos").length===3);
   assert(sent.every(x=>x.id===456),"No enviar mensajes a otras pestañas");
   const response=events.find(x=>x.stage==="catalogo-respuesta");
   assert.equal(response.http,200);
@@ -200,5 +206,5 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     assert(!JSON.stringify(store.events()).includes(secret),"No registrar secretos de CÓDIGOS");
   listeners.removed[0](456);
   listeners.windowsRemoved[0](123);
-  console.log("KAIZEN 1.5.33: separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
+  console.log("KAIZEN 1.5.34: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});

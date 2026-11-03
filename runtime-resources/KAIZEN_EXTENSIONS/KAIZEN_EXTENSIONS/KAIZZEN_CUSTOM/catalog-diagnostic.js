@@ -10,7 +10,7 @@
   const MAX = 160;
   const SAFE_KEYS = new Set([
     "flujo","transporte","metodo","http","duracionMs","normal","premium",
-    "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas",
+    "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas","habilitadas","sinParAcceso","bloqueoExplicito","bloqueoPremium","perfil","cliente",
     "estructura","medio","resultado","ventana","pestana","url","correo","clave","claveCifrada",
     "identificador","motivo","tipo","marco","dominioCoincide",
     "lote","indice","cuenta","cifrado","hayMas","origen","asociada",
@@ -140,7 +140,11 @@
       conClave:rows.filter(x=>x.k).length,
       conProxy:rows.filter(x=>x.proxy).length,
       modoCookie:rows.filter(x=>x.cookie).length,
-      bloqueadas:rows.filter(x=>x.locked).length
+      bloqueadas:rows.filter(x=>x.locked).length,
+      habilitadas:rows.filter(x=>!x.locked).length,
+      bloqueoExplicito:rows.filter(x=>x.isLock).length,
+      bloqueoPremium:rows.filter(x=>x.locked&&!x.isLock).length,
+      sinParAcceso:rows.filter(x=>!x.cookie&&!(x.e&&x.k)).length
     });
     rows.slice(0,30).forEach((o,i)=>event("producto-campos",{lote,indice:i+1,...o}));
   };
@@ -386,6 +390,7 @@
     const tracked=stage=>last?.flujo?
       e.find(x=>x.stage===stage&&x.flujo===last.flujo):null;
     const categories=recent("catalogo-respuesta");
+    const client=recent("diagnostico-cliente");
     const fetched=recent("productos-respuesta");
     const decoded=recent("productos-descifrados");
     const selected=source==="tarjeta"?tracked("tarjeta-campos-al-clic"):null;
@@ -399,6 +404,7 @@
     const form=tracked("formulario-observado");
     const bool=x=>x===true?"sí":"no";
     return [
+      "Cliente de acceso: "+(client?client.cliente+" · perfil "+client.perfil:"sin identificación de extensión"),
       "Categorías: "+(categories?"HTTP "+categories.http+" · normal "+
         categories.normal+" · premium "+categories.premium+
         " (no representan tarjetas)":"sin respuesta observada"),
@@ -409,6 +415,18 @@
         " · d "+decoded.conUrl+" · e "+decoded.conCorreo+" · k "+decoded.conClave+
         " · proxy "+decoded.conProxy+" · bloqueadas "+decoded.bloqueadas:
         "sin lote descifrado observado"),
+      "Acceso según respuesta: "+(decoded?
+        "autorizadas "+decoded.habilitadas+" / "+decoded.cuenta+
+        " · restringidas "+decoded.bloqueadas+
+        " · bloqueos explícitos "+decoded.bloqueoExplicito+
+        " · restricciones premium "+decoded.bloqueoPremium+
+        " · sin par e/k (modo no cookie) "+decoded.sinParAcceso:
+        "sin productos evaluados"),
+      "Interpretación: "+(decoded&&decoded.bloqueadas===decoded.cuenta&&decoded.cuenta>0?
+        "todos los productos figuran restringidos; no hay acceso gestionado autorizado desde este catálogo":
+        decoded&&decoded.habilitadas>0?
+        "existen productos autorizados; revisar sus campos y sesión temporal al pulsarlos":
+        "sin conclusión de autorización todavía"),
       "Acción: "+(last?(source==="codigos"?"botón CÓDIGOS (no es tarjeta)":"tarjeta de herramientas"):"sin acción observada"),
       "Tarjeta pulsada: "+(source==="codigos"&&last?"no aplica: es el botón CÓDIGOS":
         selected?"d "+bool(selected.d)+" · e "+bool(selected.e)+
@@ -431,7 +449,7 @@
         noSession?"observador activo; "+noSession.motivo:"sin observación asociada"),
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
-      "Nota: CÓDIGOS no es una tarjeta. Las sesiones se asocian solo a clics recientes y solo se registran indicadores de presencia."
+      "Nota: e/k = no disponibles no distingue campos omitidos de valores vacíos; nunca muestra credenciales ni modifica isLock."
     ].join("\n");
   }
   async function refresh() {
@@ -482,6 +500,18 @@
       if(visible && area==="local" && Object.keys(changes).some(k=>k===LEGACY || k.startsWith(PREFIX)))refresh();
     });
     event("diagnostico-catalogo-iniciado");
+    try {
+      const name=chrome.runtime?.getManifest?.()?.name||"";
+      const clients={
+        "KAIZZEN-MAIN":"extension",
+        "KAIZZEN-GOOGLE":"extension_google",
+        "KAIZZEN-CUSTOM":"extension_custom"
+      };
+      event("diagnostico-cliente",{
+        perfil:clients[name]?name:"no-identificado",
+        cliente:clients[name]||"no-identificado"
+      });
+    }catch{}
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",installPanel,{once:true});
   else installPanel();
