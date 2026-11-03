@@ -14,9 +14,10 @@ for(const folder of folders){
 }
 new Function(catalog);
 new Function(form);
+assert(catalog.includes('event(route+"-envio"') && catalog.includes('event(route+"-error"'));
 for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identificada","pestana-vinculada",
-  "catalogo-envio","catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
-  "productos-envio","productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic"])
+  "catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
+  "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic"])
   assert(catalog.includes(stage),"Falta etapa: "+stage);
 for(const stage of ["diagnostico-pestana-activa","script-formulario-activo","formulario-observado",
   "formulario-con-campos-rellenos","formulario-sin-sesion"])
