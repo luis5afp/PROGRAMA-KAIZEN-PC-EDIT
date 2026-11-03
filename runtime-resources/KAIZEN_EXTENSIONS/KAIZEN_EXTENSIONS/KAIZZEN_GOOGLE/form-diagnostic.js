@@ -5,7 +5,7 @@
   const PREFIX="kzDiagnosticSafeEventV2:";
   const STORE_OLD="kzDiagnosticSafeEventsV1";
   const ALLOWED=new Set([
-    "flujo","ventana","pestana","marco","motivo","dominioCoincide",
+    "flujo","ventana","pestana","marco","motivo","dominioCoincide","emisor","receptor",
     "correoDisponible","claveDisponible","claveCifradaDisponible",
     "credencialesCompletas","sesionRespaldo","camposCorreo","camposClave",
     "correoConContenido","claveConContenido","intentos"
@@ -114,6 +114,9 @@
       const id=flujo+":"+pestana+":"+String(location.href);
       if(!bindings.has(id)){
         bindings.add(id);
+        event("comunicacion-formulario-recibida",{
+          flujo,ventana,pestana,marco,emisor:"extension-ui",receptor:"observador-formulario"
+        });
         inspect(flujo,ventana,pestana).catch(()=>{
           event("formulario-diagnostico-error",{flujo,ventana,pestana,marco,motivo:"observador"});
         });
