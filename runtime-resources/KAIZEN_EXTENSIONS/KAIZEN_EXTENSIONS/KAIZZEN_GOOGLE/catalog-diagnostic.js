@@ -183,19 +183,19 @@
       return "api-otro";
     }catch{return "";}
   }
-  function httpSend(ruta,transporte,metodo){
+  function httpSend(ruta,transporte,metodo,context=communicationContext()){
     if(!ruta)return;
     event("comunicacion-http-envio",{
       emisor:"extension-ui",receptor:"servidor-kaizzen",ruta,
-      transporte,metodo,...communicationContext()
+      transporte,metodo,...context
     });
   }
-  function httpReply(ruta,transporte,http,start,ok=true){
+  function httpReply(ruta,transporte,http,start,ok=true,context=communicationContext()){
     if(!ruta)return;
     event(ok?"comunicacion-http-respuesta":"comunicacion-http-error",{
       emisor:"servidor-kaizzen",receptor:"extension-ui",ruta,
       transporte,http:http||0,duracionMs:elapsed(start),
-      ...communicationContext()
+      ...context
     });
   }
   const MESSAGE_ROUTES=new Set([
@@ -255,17 +255,18 @@
         const api=apiRoute(url);
         if(!route&&!api)return native.apply(this,args);
         const start=Date.now();
+        const ctx=communicationContext();
         const method=String(args[1]?.method||args[0]?.method||"GET").toUpperCase().slice(0,16);
-        httpSend(api,"fetch",method);
+        httpSend(api,"fetch",method,ctx);
         if(route)event(route+"-envio",{transporte:"fetch",metodo:method});
         let response;
         try{response=await native.apply(this,args);}
         catch(error){
-          httpReply(api,"fetch",0,start,false);
+          httpReply(api,"fetch",0,start,false,ctx);
           if(route)event(route+"-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});
           throw error;
         }
-        httpReply(api,"fetch",response.status,start);
+        httpReply(api,"fetch",response.status,start,true,ctx);
         if(route)response.clone().json().then(body=>{
           if(route==="catalogo")summary(body,response.status,"fetch",elapsed(start));
           else summaryProducts(body,response.status,"fetch",elapsed(start));
@@ -284,17 +285,18 @@
       const route=isCatalog(url)?"catalogo":isProducts(url)?"productos":"";
       const api=apiRoute(url);
       if(route||api){
-        pending.set(this,{route,api,metodo:String(method).toUpperCase().slice(0,16),start:0});
+        pending.set(this,{route,api,metodo:String(method).toUpperCase().slice(0,16),start:0,failed:false,ctx:null});
         this.addEventListener("error",()=>{
           const info=pending.get(this);
-          if(info)httpReply(info.api,"xhr",0,info.start||Date.now(),false);
+          if(info){info.failed=true;httpReply(info.api,"xhr",0,info.start||Date.now(),false,info.ctx);}
           if(route)event(route+"-error",{transporte:"xhr",tipo:"red"});
         },{once:true});
         this.addEventListener("loadend",()=>{
           const request=pending.get(this);
           const duration=request?.start?elapsed(request.start):0;
+          if(request?.failed)return;
           if(request?.api)httpReply(request.api,"xhr",this.status,
-            request.start||Date.now(),this.status!==0);
+            request.start||Date.now(),this.status!==0,request.ctx);
           if(!route)return;
           try{
             const body=this.responseType==="json"?this.response:JSON.parse(this.responseText);
@@ -312,7 +314,8 @@
       const request=pending.get(this);
       if(request){
         request.start=Date.now();
-        httpSend(request.api,"xhr",request.metodo);
+        request.ctx=communicationContext();
+        httpSend(request.api,"xhr",request.metodo,request.ctx);
         if(request.route)event(request.route+"-envio",
           {transporte:"xhr",metodo:request.metodo});
       }
