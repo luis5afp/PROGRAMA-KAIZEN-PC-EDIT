@@ -18,7 +18,7 @@ assert(catalog.includes('event(route+"-envio"') && catalog.includes('event(route
 for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identificada","pestana-vinculada",
   "catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
   "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic",
-  "diagnostico-cliente","bloqueoExplicito","bloqueoPremium",
+  "diagnostico-cliente","bloqueoExplicito","bloqueoPremium","origen-tras-descifrado",
   "comunicacion-http-envio","comunicacion-http-respuesta",
   "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta",
   "comunicacion-red-envio","comunicacion-red-respuesta"])
@@ -151,6 +151,30 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   target.globalThis=target;
   vm.runInNewContext(catalog,target,{filename:"catalog-diagnostic.js"});
   assert.equal(typeof handlers.click,"function");
+  // Simulación de metadatos ANTES del mapeo React. Sin datos sensibles.
+  const base={eProp:false,kProp:false,eValue:false,kValue:false,
+    eNull:false,kNull:false,eEmpty:false,kEmpty:false,eSpaces:false,
+    kSpaces:false,eOther:false,kOther:false,lockProp:true,lockTrue:true,
+    lockFalse:false,lockOther:false,premium:false};
+  target.__kzDiagnosticRawBatch([
+    {...base,eProp:true,kProp:true,eValue:true,kValue:true,
+      lockTrue:false,lockFalse:true},
+    {...base,eProp:true,kProp:true,eEmpty:true,kNull:true},
+    {...base,lockTrue:false,lockFalse:false,lockOther:false,premium:true}
+  ]);
+  await flush();
+  const raw=store.events().find(x=>x.stage==="origen-tras-descifrado");
+  assert(raw,"Falta el lote inmediatamente descifrado");
+  assert.equal(raw.cuenta,3);
+  assert.equal(raw.eProp,2);
+  assert.equal(raw.kProp,2);
+  assert.equal(raw.eValue,1);
+  assert.equal(raw.kValue,1);
+  assert.equal(raw.eEmpty,1);
+  assert.equal(raw.kNull,1);
+  assert.equal(raw.lockTrue,1);
+  assert.equal(raw.lockFalse,1);
+  assert.equal(raw.premium,1);
   // El lote simula el contrato reducido del bundle: solo booleanos.
   target.__kzDiagnosticProductBatch([
     {d:true,e:true,k:true,proxy:false,lm:true,cookie:false,id:true,isLock:false,locked:false},
@@ -274,5 +298,5 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     assert(!JSON.stringify(store.events()).includes(secret),"No registrar secretos de CÓDIGOS");
   listeners.removed[0](456);
   listeners.windowsRemoved[0](123);
-  console.log("KAIZEN 1.5.35: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
+  console.log("KAIZEN 1.5.36: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});
