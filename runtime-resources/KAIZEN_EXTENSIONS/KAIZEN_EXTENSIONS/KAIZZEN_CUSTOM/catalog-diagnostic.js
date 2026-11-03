@@ -12,11 +12,14 @@
     "flujo","transporte","metodo","http","duracionMs","normal","premium",
     "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas",
     "estructura","medio","resultado","ventana","pestana","url","correo","clave","claveCifrada",
-    "identificador","motivo","tipo","marco","dominioCoincide"
+    "identificador","motivo","tipo","marco","dominioCoincide",
+    "lote","indice","cuenta","cifrado","hayMas",
+    "d","e","k","proxy","lm","id","isLock","locked","cookie"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let currentFlow = "";
   let currentFlowAt = 0;
+  let productBatch = 0;
   let visible = false;
   let output = null;
   let note = null;
@@ -105,60 +108,110 @@
     try { return new URL(String(url),location.href).pathname.endsWith("/api/shops/extension"); }
     catch { return false; }
   }
+  function isProducts(url) {
+    try{return new URL(String(url),location.href).pathname.endsWith("/api/products/getmostusedtool");}
+    catch{return false;}
+  }
+  function summaryProducts(body,status,transport,duration=0){
+    const source=body&&typeof body==="object"?body:null;
+    event("productos-respuesta",{
+      transporte:transport,http:Number(status)||0,duracionMs:duration,
+      cifrado:typeof source?.products==="string"&&source.products.length>0,
+      hayMas:source?.hasMore===true
+    });
+  }
+  function flags(p){
+    // Solo se admiten booleanos producidos por el bundle; nunca guardar valores.
+    const o={};
+    for(const key of ["d","e","k","proxy","lm","cookie","id","isLock","locked"])
+      o[key]=p?.[key]===true;
+    return o;
+  }
+  globalThis.__kzDiagnosticProductBatch=function(items,hasMore){
+    if(!Array.isArray(items)||items.length>500)return;
+    const lote=++productBatch;
+    const rows=items.map(flags);
+    event("productos-descifrados",{
+      lote,cuenta:rows.length,hayMas:hasMore===true,
+      conUrl:rows.filter(x=>x.d).length,
+      conCorreo:rows.filter(x=>x.e).length,
+      conClave:rows.filter(x=>x.k).length,
+      conProxy:rows.filter(x=>x.proxy).length,
+      modoCookie:rows.filter(x=>x.cookie).length,
+      bloqueadas:rows.filter(x=>x.locked).length
+    });
+    rows.slice(0,30).forEach((o,i)=>event("producto-campos",{lote,indice:i+1,...o}));
+  };
+  globalThis.__kzDiagnosticCardClickFields=function(candidate){
+    if(!currentFlow||Date.now()-currentFlowAt>10000)return;
+    event("tarjeta-campos-al-clic",{flujo:currentFlow,...flags(candidate)});
+  };
   function looksPublicPage(url) {
     try {const x=new URL(String(url),location.href);return x.protocol==="https:" || x.protocol==="http:";}
     catch {return false;}
   }
   function elapsed(start) {return Math.max(0,Date.now()-start);}
 
-  // Observe only the catalog endpoint; never export the original JSON response.
+  // Solo metadatos de dos endpoints. Nunca almacenar JSON bruto ni contenido cifrado.
   try {
-    const native = globalThis.fetch;
-    if (typeof native === "function") {
-      globalThis.fetch = async function(...args) {
+    const native=globalThis.fetch;
+    if(typeof native==="function"){
+      globalThis.fetch=async function(...args){
         const url=typeof args[0]==="string"?args[0]:args[0]?.url;
-        if (!isCatalog(url)) return native.apply(this,args);
+        const route=isCatalog(url)?"catalogo":isProducts(url)?"productos":"";
+        if(!route)return native.apply(this,args);
         const start=Date.now();
-        event("catalogo-envio",{transporte:"fetch",metodo:String(args[1]?.method||args[0]?.method||"GET").toUpperCase()});
+        event(route+"-envio",{transporte:"fetch",
+          metodo:String(args[1]?.method||args[0]?.method||"GET").toUpperCase()});
         let response;
-        try {response=await native.apply(this,args);}
-        catch(error) {event("catalogo-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});throw error;}
-        response.clone().json().then(body=>summary(body,response.status,"fetch",elapsed(start)))
-          .catch(()=>event("catalogo-respuesta-invalida",{transporte:"fetch",http:response.status}));
+        try{response=await native.apply(this,args);}
+        catch(error){
+          event(route+"-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});
+          throw error;
+        }
+        response.clone().json().then(body=>{
+          if(route==="catalogo")summary(body,response.status,"fetch",elapsed(start));
+          else summaryProducts(body,response.status,"fetch",elapsed(start));
+        }).catch(()=>event(route+"-respuesta-invalida",{
+          transporte:"fetch",http:response.status
+        }));
         return response;
       };
     }
-  } catch {}
-  try {
+  }catch{}
+  try{
     const originalOpen=XMLHttpRequest.prototype.open;
     const originalSend=XMLHttpRequest.prototype.send;
     const pending=new WeakMap();
-    XMLHttpRequest.prototype.open=function(method,url,...rest) {
-      if (isCatalog(url)) {
-        pending.set(this,{metodo:String(method).toUpperCase().slice(0,16),start:0});
-        this.addEventListener("error",()=>event("catalogo-error",{transporte:"xhr",tipo:"red"}),{once:true});
+    XMLHttpRequest.prototype.open=function(method,url,...rest){
+      const route=isCatalog(url)?"catalogo":isProducts(url)?"productos":"";
+      if(route){
+        pending.set(this,{route,metodo:String(method).toUpperCase().slice(0,16),start:0});
+        this.addEventListener("error",()=>event(route+"-error",{transporte:"xhr",tipo:"red"}),{once:true});
         this.addEventListener("loadend",()=>{
           const request=pending.get(this);
-          const duracionMs=request?.start?elapsed(request.start):0;
-          try {
-            const data=this.responseType==="json"?this.response:JSON.parse(this.responseText);
-            summary(data,this.status,"xhr",duracionMs);
-          } catch {
-            event("catalogo-respuesta-invalida",{transporte:"xhr",http:this.status,duracionMs});
+          const duration=request?.start?elapsed(request.start):0;
+          try{
+            const body=this.responseType==="json"?this.response:JSON.parse(this.responseText);
+            if(route==="catalogo")summary(body,this.status,"xhr",duration);
+            else summaryProducts(body,this.status,"xhr",duration);
+          }catch{
+            event(route+"-respuesta-invalida",{
+              transporte:"xhr",http:this.status,duracionMs:duration});
           }
         },{once:true});
       }
       return originalOpen.call(this,method,url,...rest);
     };
-    XMLHttpRequest.prototype.send=function(...args) {
+    XMLHttpRequest.prototype.send=function(...args){
       const request=pending.get(this);
-      if (request) {
+      if(request){
         request.start=Date.now();
-        event("catalogo-envio",{transporte:"xhr",metodo:request.metodo});
+        event(request.route+"-envio",{transporte:"xhr",metodo:request.metodo});
       }
       return originalSend.apply(this,args);
     };
-  } catch {}
+  }catch{}
 
   // Seguimiento dirigido a la pestaña que abre la extensión del catálogo.
   // Esta señal no contiene credenciales ni modifica permisos del servidor.
@@ -307,7 +360,10 @@
     const last=recent("clic-tarjeta");
     const tracked=stage=>last?.flujo?
       e.find(x=>x.stage===stage&&x.flujo===last.flujo):null;
-    const catalog=recent("catalogo-respuesta");
+    const categories=recent("catalogo-respuesta");
+    const fetched=recent("productos-respuesta");
+    const decoded=recent("productos-descifrados");
+    const selected=tracked("tarjeta-campos-al-clic");
     const opening=tracked("apertura-confirmada");
     const bind=tracked("pestana-vinculada");
     const noTab=tracked("pestana-sin-respuesta");
@@ -315,24 +371,37 @@
     const active=tracked("script-formulario-activo");
     const noSession=tracked("formulario-sin-sesion");
     const form=tracked("formulario-observado");
+    const bool=x=>x===true?"sí":"no";
     return [
-      "Catálogo: "+(catalog?"HTTP "+catalog.http+" · "+(catalog.normal+catalog.premium)+
-        " tarjetas · estructura "+catalog.estructura:"sin respuesta observada desde el inicio del diagnóstico"),
-      "Tarjeta: "+(last?"clic registrado":"sin clic registrado"),
-      "Ventana: "+(opening?"creada e identificada · ventana "+opening.ventana:
+      "Categorías: "+(categories?"HTTP "+categories.http+" · normal "+
+        categories.normal+" · premium "+categories.premium+
+        " (no representan tarjetas)":"sin respuesta observada"),
+      "Productos (servidor): "+(fetched?"HTTP "+fetched.http+
+        " · bloque cifrado "+bool(fetched.cifrado):
+        "sin respuesta observada de /api/products/getmostusedtool"),
+      "Productos (tras descifrar): "+(decoded?decoded.cuenta+
+        " · d "+decoded.conUrl+" · e "+decoded.conCorreo+" · k "+decoded.conClave+
+        " · proxy "+decoded.conProxy+" · bloqueadas "+decoded.bloqueadas:
+        "sin lote descifrado observado"),
+      "Tarjeta pulsada: "+(selected?"d "+bool(selected.d)+" · e "+bool(selected.e)+
+        " · k "+bool(selected.k)+" · proxy "+bool(selected.proxy)+
+        " · lm "+bool(selected.lm)+" · isLock "+bool(selected.isLock)+
+        " · restringida "+bool(selected.locked):
+        last?"clic detectado; campos pendientes de la tarjeta":"sin clic registrado"),
+      "Ruta: "+(selected?(selected.locked?"página pública, sin sesión gestionada":
+        "tarjeta autorizada, comprobar preparación de product"):"sin ruta clasificada"),
+      "Ventana: "+(opening?"creada · ID "+opening.ventana:
         tracked("apertura-solicitada")?"solicitada, sin ID confirmado":"sin apertura observada"),
-      "Pestaña: "+(bind?"observador conectado · pestaña "+bind.pestana:
-        noTab?"la pestaña no respondió al diagnóstico":"todavía sin vinculación confirmada"),
-      "Sesión: "+(session?"preparación temporal observada":
-        "sin preparación observada para este clic"),
-      "Formulario: "+(active?"observador ejecutado con sesión temporal":
-        noSession?"observador ejecutado; "+noSession.motivo:
-        "todavía sin observación vinculada"),
-      "Campos: "+(form?"correo "+form.camposCorreo+", clave "+form.camposClave+
-        "; contenido correo "+Boolean(form.correoConContenido)+
-        ", clave "+Boolean(form.claveConContenido):
-        "sin información de campos de la pestaña vinculada"),
-      "Nota: contenido en los campos no demuestra que la extensión lo haya completado."
+      "Pestaña: "+(bind?"conectada · ID "+bind.pestana:
+        noTab?"sin respuesta del observador":"sin vinculación confirmada"),
+      "Sesión product: "+(session?"preparada":
+        noSession?"ausente en la pestaña":
+        "sin preparación observada"),
+      "Formulario: "+(active?"observador con product":
+        noSession?"observador activo; "+noSession.motivo:"sin observación asociada"),
+      "Campos del formulario: "+(form?"correo "+form.camposCorreo+
+        ", contraseña "+form.camposClave:"sin información observada"),
+      "Nota: solo indicadores de presencia, nunca valores, contraseñas o tokens."
     ].join("\n");
   }
   async function refresh() {
@@ -348,7 +417,7 @@
     btn.style.cssText="position:fixed;bottom:16px;right:16px;z-index:2147483646;background:#164e63;color:white;border:1px solid #67e8f9;border-radius:10px;padding:10px 14px;font:600 13px system-ui;cursor:pointer";
     const panel=document.createElement("section");
     panel.style.cssText="display:none;position:fixed;bottom:62px;right:16px;z-index:2147483647;background:#0b1220;color:#e2e8f0;border:1px solid #64748b;border-radius:12px;padding:14px;width:min(680px,calc(100vw - 32px));max-height:75vh;box-sizing:border-box;font:13px system-ui";
-    const title=document.createElement("strong");title.textContent="Diagnóstico detallado · apertura y formulario";
+    const title=document.createElement("strong");title.textContent="Diagnóstico completo · categorías, productos, tarjeta y formulario";
     note=document.createElement("p");note.textContent="Solo metadatos: nunca copia direcciones, credenciales, tokens, cookies ni respuestas completas.";
     note.style.cssText="font-size:12px;color:#cbd5e1";
     output=document.createElement("pre");
@@ -361,7 +430,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:2,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:3,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
