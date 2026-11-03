@@ -27,7 +27,22 @@ for(const [folder,name,version] of [
   const catalog=fs.readFileSync(path.join(dir,"catalog-diagnostic.js"),"utf8");
   assert(catalog.includes("/api/shops/extension"),"Identificar el endpoint del catálogo");
   assert(catalog.includes("sesion-temporal-preparada"),"Detectar la preparación original de product");
-  assert(catalog.includes("catalogo-respuesta"),"Mostrar respuesta agregada");
+  assert(catalog.includes("catalogo-respuesta"),"Mostrar categorías recibidas");
+  for(const stage of ["productos-envio","productos-respuesta",
+    "productos-descifrados","producto-campos","tarjeta-campos-al-clic"])
+    assert(catalog.includes(stage),"Falta etapa de productos: "+stage);
+  const filenames={KAIZZEN_MAIN:"index-B-06emjA.js",
+    KAIZZEN_GOOGLE:"index-DhjpRuHp.js",
+    KAIZZEN_CUSTOM:"index-DtDn-2PW.js"};
+  const bundle=fs.readFileSync(path.join(dir,"assets",filenames[folder]),"utf8");
+  assert(bundle.includes("__kzDiagnosticProductBatch"),"Hook después del descifrado");
+  assert(bundle.includes("__kzDiagnosticCardClickFields"),"Hook en tarjeta seleccionada");
+  assert(bundle.includes("/api/shops/extension")&&bundle.includes("/api/products/getmostusedtool"),
+    "Ambos endpoints originales disponibles");
+  assert(bundle.includes("kZ=t=>!!(t?.isLock"),"Mantener estado original de bloqueo");
+  // No se transfieren valores de d/e/k hacia el diagnóstico: solo booleanos.
+  assert(bundle.includes("d:!!p?.d,e:!!p?.e,k:!!p?.k"),
+    "Nunca copiar URL o credenciales al diagnóstico");
   assert(catalog.includes("catalogo-envio")&&catalog.includes("catalogo-error"),"Registrar envío y fallo sin datos sensibles");
   assert(catalog.includes("Copiar informe"),"Exportar sin DevTools");
   const form=fs.readFileSync(path.join(dir,"form-diagnostic.js"),"utf8");
@@ -37,4 +52,4 @@ for(const [folder,name,version] of [
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
-console.log("KAIZEN 1.5.31: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.32: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
