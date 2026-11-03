@@ -11,7 +11,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-assert(pkg.version === '1.5.30', 'expected KAIZEN 1.5.30')
+assert(pkg.version === '1.5.31', 'expected KAIZEN 1.5.31')
 assert(main.includes("ensurePersistentKaizenStorage"), 'persistent storage bootstrap missing')
 assert(main.includes("KAIZEN-Logistica"), 'persistent logistics root missing')
 assert(main.includes("guestRecoverAccidentalResourcesProfile"), 'resources recovery missing')
