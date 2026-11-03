@@ -14,6 +14,7 @@
     "estructura","medio","resultado","ventana","pestana","url","correo","clave","claveCifrada",
     "identificador","motivo","tipo","marco","dominioCoincide",
     "lote","indice","cuenta","cifrado","hayMas","origen","asociada",
+    "emisor","receptor","ruta","momento","mensaje","respuesta",
     "d","e","k","proxy","lm","id","isLock","locked","cookie"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
@@ -158,24 +159,114 @@
   }
   function elapsed(start) {return Math.max(0,Date.now()-start);}
 
-  // Solo metadatos de dos endpoints. Nunca almacenar JSON bruto ni contenido cifrado.
+  function communicationContext(){
+    if(currentFlow && Date.now()-currentFlowAt<15000){
+      return {flujo:currentFlow,momento:currentSource==="codigos"?"codigos":"tarjeta"};
+    }
+    return {momento:"carga"};
+  }
+  // Clasificar solo rutas conocidas del backend: nunca almacenar URL, query,
+  // token, headers, bodies, ID de producto, credenciales ni payload cifrado.
+  function apiRoute(url){
+    try{
+      const u=new URL(String(url),location.href);
+      if(!["www.kaizzen.org","kaizzen.org"].includes(u.hostname))return "";
+      const p=u.pathname;
+      if(!p.includes("/api/"))return "";
+      if(p.endsWith("/api/users/login"))return "login";
+      if(p.endsWith("/api/shops/extension"))return "categorias";
+      if(p.endsWith("/api/products/getmostusedtool"))return "productos";
+      if(p.endsWith("/api/products/activitystatus/add"))return "actividad";
+      if(p.includes("/api/products/cookies"))return "cookies";
+      if(p.includes("/api/users/"))return "usuarios-otro";
+      if(p.includes("/api/products/"))return "productos-otro";
+      return "api-otro";
+    }catch{return "";}
+  }
+  function httpSend(ruta,transporte,metodo){
+    if(!ruta)return;
+    event("comunicacion-http-envio",{
+      emisor:"extension-ui",receptor:"servidor-kaizzen",ruta,
+      transporte,metodo,...communicationContext()
+    });
+  }
+  function httpReply(ruta,transporte,http,start,ok=true){
+    if(!ruta)return;
+    event(ok?"comunicacion-http-respuesta":"comunicacion-http-error",{
+      emisor:"servidor-kaizzen",receptor:"extension-ui",ruta,
+      transporte,http:http||0,duracionMs:elapsed(start),
+      ...communicationContext()
+    });
+  }
+  const MESSAGE_ROUTES=new Set([
+    "set_proxy","reset_proxy","wipe_site_session","track_tool_domain",
+    "import_cookies","clear_google_cookies","clear_google_session",
+    "capture_session","close_tool_windows","read_web_storage"
+  ]);
+  // Observa solo el nombre de mensajes conocidos entre la interfaz y
+  // background. Conserva íntegramente la Promise y el callback originales.
+  try{
+    const original=chrome.runtime.sendMessage;
+    if(typeof original==="function")chrome.runtime.sendMessage=function(...args){
+      const data=args.find(v=>v&&typeof v==="object"&&typeof v.ref==="string");
+      const label=MESSAGE_ROUTES.has(data?.ref)?data.ref:"";
+      const context=communicationContext();
+      if(!label||!context.flujo)return original.apply(this,args);
+      event("comunicacion-mensaje-envio",{
+        emisor:"extension-ui",receptor:"extension-background",
+        mensaje:label,...context
+      });
+      let done=false;
+      const answer=ok=>{
+        if(done)return;
+        done=true;
+        event("comunicacion-mensaje-respuesta",{
+          emisor:"extension-background",receptor:"extension-ui",
+          mensaje:label,respuesta:ok,...context
+        });
+      };
+      const ci=args.findIndex(x=>typeof x==="function");
+      if(ci>=0){
+        const old=args[ci];
+        args[ci]=function(...responses){
+          answer(responses.length>0);
+          return old.apply(this,responses);
+        };
+      }
+      try{
+        const result=original.apply(this,args);
+        if(result&&typeof result.then==="function")
+          result.then(()=>answer(true),()=>answer(false));
+        else if(ci<0&&result!==undefined)answer(true);
+        return result;
+      }catch(error){answer(false);throw error;}
+    };
+  }catch{}
+
+  // Seguimiento HTTP del backend desde la interfaz de la extensión.
+  // Solo etiquetas de rutas y estados; los cuerpos se examinan únicamente
+  // en los dos endpoints de catálogo usando resúmenes de presencia.
   try {
     const native=globalThis.fetch;
     if(typeof native==="function"){
       globalThis.fetch=async function(...args){
         const url=typeof args[0]==="string"?args[0]:args[0]?.url;
         const route=isCatalog(url)?"catalogo":isProducts(url)?"productos":"";
-        if(!route)return native.apply(this,args);
+        const api=apiRoute(url);
+        if(!route&&!api)return native.apply(this,args);
         const start=Date.now();
-        event(route+"-envio",{transporte:"fetch",
-          metodo:String(args[1]?.method||args[0]?.method||"GET").toUpperCase()});
+        const method=String(args[1]?.method||args[0]?.method||"GET").toUpperCase().slice(0,16);
+        httpSend(api,"fetch",method);
+        if(route)event(route+"-envio",{transporte:"fetch",metodo:method});
         let response;
         try{response=await native.apply(this,args);}
         catch(error){
-          event(route+"-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});
+          httpReply(api,"fetch",0,start,false);
+          if(route)event(route+"-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});
           throw error;
         }
-        response.clone().json().then(body=>{
+        httpReply(api,"fetch",response.status,start);
+        if(route)response.clone().json().then(body=>{
           if(route==="catalogo")summary(body,response.status,"fetch",elapsed(start));
           else summaryProducts(body,response.status,"fetch",elapsed(start));
         }).catch(()=>event(route+"-respuesta-invalida",{
@@ -191,12 +282,20 @@
     const pending=new WeakMap();
     XMLHttpRequest.prototype.open=function(method,url,...rest){
       const route=isCatalog(url)?"catalogo":isProducts(url)?"productos":"";
-      if(route){
-        pending.set(this,{route,metodo:String(method).toUpperCase().slice(0,16),start:0});
-        this.addEventListener("error",()=>event(route+"-error",{transporte:"xhr",tipo:"red"}),{once:true});
+      const api=apiRoute(url);
+      if(route||api){
+        pending.set(this,{route,api,metodo:String(method).toUpperCase().slice(0,16),start:0});
+        this.addEventListener("error",()=>{
+          const info=pending.get(this);
+          if(info)httpReply(info.api,"xhr",0,info.start||Date.now(),false);
+          if(route)event(route+"-error",{transporte:"xhr",tipo:"red"});
+        },{once:true});
         this.addEventListener("loadend",()=>{
           const request=pending.get(this);
           const duration=request?.start?elapsed(request.start):0;
+          if(request?.api)httpReply(request.api,"xhr",this.status,
+            request.start||Date.now(),this.status!==0);
+          if(!route)return;
           try{
             const body=this.responseType==="json"?this.response:JSON.parse(this.responseText);
             if(route==="catalogo")summary(body,this.status,"xhr",duration);
@@ -213,7 +312,9 @@
       const request=pending.get(this);
       if(request){
         request.start=Date.now();
-        event(request.route+"-envio",{transporte:"xhr",metodo:request.metodo});
+        httpSend(request.api,"xhr",request.metodo);
+        if(request.route)event(request.route+"-envio",
+          {transporte:"xhr",metodo:request.metodo});
       }
       return originalSend.apply(this,args);
     };
@@ -402,6 +503,10 @@
     const active=tracked("script-formulario-activo");
     const noSession=tracked("formulario-sin-sesion");
     const form=tracked("formulario-observado");
+    const httpCalls=last?.flujo?e.filter(x=>
+      x.stage==="comunicacion-http-envio"&&x.flujo===last.flujo):[];
+    const messages=last?.flujo?e.filter(x=>
+      x.stage==="comunicacion-mensaje-envio"&&x.flujo===last.flujo):[];
     const bool=x=>x===true?"sí":"no";
     return [
       "Cliente de acceso: "+(client?client.cliente+" · perfil "+client.perfil:"sin identificación de extensión"),
@@ -428,6 +533,10 @@
         "existen productos autorizados; revisar sus campos y sesión temporal al pulsarlos":
         "sin conclusión de autorización todavía"),
       "Acción: "+(last?(source==="codigos"?"botón CÓDIGOS (no es tarjeta)":"tarjeta de herramientas"):"sin acción observada"),
+      "Peticiones tras el clic: "+(last?httpCalls.length+
+        " desde la interfaz al servidor · "+messages.length+
+        " mensajes UI a background (solo rutas y mensajes observados)":
+        "sin acción seleccionada"),
       "Tarjeta pulsada: "+(source==="codigos"&&last?"no aplica: es el botón CÓDIGOS":
         selected?"d "+bool(selected.d)+" · e "+bool(selected.e)+
         " · k "+bool(selected.k)+" · proxy "+bool(selected.proxy)+
@@ -449,7 +558,8 @@
         noSession?"observador activo; "+noSession.motivo:"sin observación asociada"),
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
-      "Nota: e/k = no disponibles no distingue campos omitidos de valores vacíos; nunca muestra credenciales ni modifica isLock."
+      "Alcance: tráfico HTTP de UI hacia backend KAIZZEN, mensajes UI a background, almacenamiento product y observador de pestaña. No incluye tráfico interno del background ni de Electron.",
+      "Nota: e/k no disponibles no distingue ausencia de campos vacíos; no se guardan URLs, cuerpos, credenciales, cookies o tokens."
     ].join("\n");
   }
   async function refresh() {
@@ -465,7 +575,7 @@
     btn.style.cssText="position:fixed;bottom:16px;right:16px;z-index:2147483646;background:#164e63;color:white;border:1px solid #67e8f9;border-radius:10px;padding:10px 14px;font:600 13px system-ui;cursor:pointer";
     const panel=document.createElement("section");
     panel.style.cssText="display:none;position:fixed;bottom:62px;right:16px;z-index:2147483647;background:#0b1220;color:#e2e8f0;border:1px solid #64748b;border-radius:12px;padding:14px;width:min(680px,calc(100vw - 32px));max-height:75vh;box-sizing:border-box;font:13px system-ui";
-    const title=document.createElement("strong");title.textContent="Diagnóstico completo · categorías, productos, tarjeta y formulario";
+    const title=document.createElement("strong");title.textContent="Diagnóstico de comunicación · servidor ↔ extensión ↔ tarjeta ↔ formulario";
     note=document.createElement("p");note.textContent="Solo metadatos: nunca copia direcciones, credenciales, tokens, cookies ni respuestas completas.";
     note.style.cssText="font-size:12px;color:#cbd5e1";
     output=document.createElement("pre");
@@ -478,7 +588,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:4,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:5,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
