@@ -16,6 +16,7 @@
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let currentFlow = "";
+  let currentFlowAt = 0;
   let visible = false;
   let output = null;
   let note = null;
@@ -26,7 +27,8 @@
     for (const [key,value] of Object.entries(info)) {
       if (!SAFE_KEYS.has(key)) continue;
       if (typeof value === "boolean") safe[key] = value;
-      else if (typeof value === "number" && Number.isFinite(value)) safe[key] = Math.max(0,Math.min(1000000,Math.floor(value)));
+      else if (typeof value === "number" && Number.isFinite(value)) safe[key] =
+        Math.max(0,Math.min(["ventana","pestana"].includes(key)?2147483647:1000000,Math.floor(value)));
       else if (typeof value === "string" && value.length < 85 &&
         /^[a-zA-Z0-9_.:-]+$/.test(value)) safe[key] = value;
     }
@@ -234,7 +236,7 @@
     chrome.windows.create=function(...args) {
       const candidate=args[0]?.url;
       const url=Array.isArray(candidate)?candidate[0]:candidate;
-      const monitored=Boolean(currentFlow)&&looksPublicPage(url);
+      const monitored=Boolean(currentFlow)&&Date.now()-currentFlowAt<30000&&looksPublicPage(url);
       const flujo=currentFlow;
       if(monitored)event("apertura-solicitada",{flujo,medio:"chrome.windows.create"});
       const previous=typeof args[1]==="function"?args[1]:null;
@@ -260,7 +262,7 @@
   try {
     const native=window.open;
     window.open=function(...args){
-      const monitored=Boolean(currentFlow)&&looksPublicPage(args[0]);
+      const monitored=Boolean(currentFlow)&&Date.now()-currentFlowAt<30000&&looksPublicPage(args[0]);
       const flujo=currentFlow;
       if(monitored)event("apertura-solicitada",{flujo,medio:"window.open"});
       try{
@@ -276,11 +278,6 @@
   }catch{}
 
   try {
-    chrome.storage.local.get(TRACE).then(v=>{
-      const trace=v[TRACE];
-      if(trace && typeof trace.id==="string" &&
-          Date.now()-trace.at<120000 && !currentFlow) currentFlow=trace.id;
-    }).catch(()=>{});
     chrome.storage.onChanged.addListener((changes,area)=>{
       if(area!=="local" || !Object.hasOwn(changes,"product")) return;
       const product=changes.product.newValue;
@@ -297,6 +294,7 @@
       const card=e.target?.closest?.('[role="button"]');
       if(!card || !card.querySelector("img"))return;
       currentFlow="f"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      currentFlowAt=Date.now();
       event("clic-tarjeta",{flujo:currentFlow});
       // A trace marker has no authority and contains neither the card ID nor a URL.
       chrome.storage.local.set({[TRACE]:{id:currentFlow,at:Date.now()}}).catch(()=>{});
