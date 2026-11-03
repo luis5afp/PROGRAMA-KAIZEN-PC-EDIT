@@ -178,7 +178,27 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     "La variante callback también debe vincular la pestaña");
   assert(events.some(x=>x.stage==="script-formulario-activo"&&x.pestana===457),
     "El observador debe recibir la señal de la variante callback");
+  // Botón CÓDIGOS: otro origen, separado del catálogo de tarjetas.
+  handlers.click({target:{closest:selector=>
+    selector==="button"?{textContent:"CÓDIGOS ↗"}:null}});
+  await flush();
+  let before=store.events();
+  const codes=before.filter(x=>x.stage==="clic-codigos").at(-1);
+  assert(codes && codes.origen==="codigos","El botón CÓDIGOS debe identificarse");
+  assert(!before.some(x=>x.stage==="tarjeta-campos-al-clic"&&x.flujo===codes.flujo),
+    "CÓDIGOS no es una tarjeta");
+  await store.local.set({product:{t:Date.now(),d:"https://example.com/login",
+    e:"",k:"",ek:"CIFRADO_SIN_CLAVE"}});
+  await flush();
+  before=store.events();
+  const credential=before.filter(x=>x.stage==="sesion-temporal-preparada").at(-1);
+  assert(credential&&credential.flujo===codes.flujo&&credential.origen==="codigos");
+  assert(credential.asociada===true);
+  assert(credential.correo===false&&credential.clave===false&&credential.claveCifrada===true);
+  await store.local.remove("product");
+  for(const secret of ["CIFRADO_SIN_CLAVE","example.com/login"])
+    assert(!JSON.stringify(store.events()).includes(secret),"No registrar secretos de CÓDIGOS");
   listeners.removed[0](456);
   listeners.windowsRemoved[0](123);
-  console.log("KAIZEN 1.5.32: categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
+  console.log("KAIZEN 1.5.33: separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});

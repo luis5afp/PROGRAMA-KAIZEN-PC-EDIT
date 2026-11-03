@@ -116,7 +116,7 @@ async function overview(){
     status:x.available?(x.prepared?"Preparado localmente":"Disponible"):String(x.reason||"Falta paquete").slice(0,90)
   }));
   const summary={
-    version:"1.5.32",
+    version:"1.5.33",
     profiles,prepared:profiles.filter(x=>x.prepared).length,
     chromiumReady:warm.reason!=="Falta Chromium incluido"&&
       !originalStates.some(x=>x.reason==="Falta Chromium compatible incluido"),

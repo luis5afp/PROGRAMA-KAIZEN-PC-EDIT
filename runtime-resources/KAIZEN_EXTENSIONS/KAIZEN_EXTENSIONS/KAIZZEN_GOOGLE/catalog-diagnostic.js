@@ -13,12 +13,14 @@
     "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas",
     "estructura","medio","resultado","ventana","pestana","url","correo","clave","claveCifrada",
     "identificador","motivo","tipo","marco","dominioCoincide",
-    "lote","indice","cuenta","cifrado","hayMas",
+    "lote","indice","cuenta","cifrado","hayMas","origen","asociada",
     "d","e","k","proxy","lm","id","isLock","locked","cookie"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let currentFlow = "";
   let currentFlowAt = 0;
+  let currentSource = "sin-asociar";
+  let lastProductOwner = {flujo:"",origen:"sin-asociar",asociada:false};
   let productBatch = 0;
   let visible = false;
   let output = null;
@@ -330,40 +332,64 @@
     };
   }catch{}
 
+  // La escritura de product puede venir de CÓDIGOS, de una tarjeta, o de otra
+  // acción. Solo se atribuye a una acción reciente observada (20 segundos).
   try {
     chrome.storage.onChanged.addListener((changes,area)=>{
       if(area!=="local" || !Object.hasOwn(changes,"product")) return;
       const product=changes.product.newValue;
-      if(!product) {event("sesion-temporal-eliminada",{flujo:currentFlow});return;}
+      if(!product){
+        event("sesion-temporal-eliminada",lastProductOwner);
+        lastProductOwner={flujo:"",origen:"sin-asociar",asociada:false};
+        return;
+      }
+      const age=Date.now()-currentFlowAt;
+      const asociada=Boolean(currentFlow && age>=0 && age<20000);
+      lastProductOwner={
+        flujo:asociada?currentFlow:"",
+        origen:asociada?currentSource:"sin-asociar",
+        asociada
+      };
       event("sesion-temporal-preparada",{
-        flujo:currentFlow,url:nonempty(product.d),correo:nonempty(product.e),
+        ...lastProductOwner,
+        url:nonempty(product.d),correo:nonempty(product.e),
         clave:nonempty(product.k),claveCifrada:nonempty(product.ek),
         identificador:nonempty(product.pid)
       });
     });
   } catch {}
+  function action(stage,origen){
+    currentFlow="f"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    currentFlowAt=Date.now();
+    currentSource=origen;
+    event(stage,{flujo:currentFlow,origen});
+    // Este marcador no es autorización ni contiene URL o credenciales.
+    chrome.storage.local.set({[TRACE]:{id:currentFlow,at:Date.now()}}).catch(()=>{});
+  }
   try {
     document.addEventListener("click",e=>{
+      const button=e.target?.closest?.("button");
+      if(button && /^\s*C[ÓO]DIGOS(?:\s|$)/i.test(button.textContent||"")){
+        action("clic-codigos","codigos");
+        return;
+      }
       const card=e.target?.closest?.('[role="button"]');
-      if(!card || !card.querySelector("img"))return;
-      currentFlow="f"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-      currentFlowAt=Date.now();
-      event("clic-tarjeta",{flujo:currentFlow});
-      // A trace marker has no authority and contains neither the card ID nor a URL.
-      chrome.storage.local.set({[TRACE]:{id:currentFlow,at:Date.now()}}).catch(()=>{});
+      if(card && card.querySelector("img"))action("clic-tarjeta","tarjeta");
     },true);
   } catch {}
 
   function diagnosis(events) {
     const e=events.slice().reverse();
     const recent=stage=>e.find(x=>x.stage===stage);
-    const last=recent("clic-tarjeta");
+    const last=e.find(x=>x.stage==="clic-tarjeta"||x.stage==="clic-codigos");
+    const source=last?.stage==="clic-codigos"?"codigos":"tarjeta";
     const tracked=stage=>last?.flujo?
       e.find(x=>x.stage===stage&&x.flujo===last.flujo):null;
     const categories=recent("catalogo-respuesta");
     const fetched=recent("productos-respuesta");
     const decoded=recent("productos-descifrados");
-    const selected=tracked("tarjeta-campos-al-clic");
+    const selected=source==="tarjeta"?tracked("tarjeta-campos-al-clic"):null;
+    const orphanSession=recent("sesion-temporal-preparada");
     const opening=tracked("apertura-confirmada");
     const bind=tracked("pestana-vinculada");
     const noTab=tracked("pestana-sin-respuesta");
@@ -383,25 +409,29 @@
         " · d "+decoded.conUrl+" · e "+decoded.conCorreo+" · k "+decoded.conClave+
         " · proxy "+decoded.conProxy+" · bloqueadas "+decoded.bloqueadas:
         "sin lote descifrado observado"),
-      "Tarjeta pulsada: "+(selected?"d "+bool(selected.d)+" · e "+bool(selected.e)+
+      "Acción: "+(last?(source==="codigos"?"botón CÓDIGOS (no es tarjeta)":"tarjeta de herramientas"):"sin acción observada"),
+      "Tarjeta pulsada: "+(source==="codigos"&&last?"no aplica: es el botón CÓDIGOS":
+        selected?"d "+bool(selected.d)+" · e "+bool(selected.e)+
         " · k "+bool(selected.k)+" · proxy "+bool(selected.proxy)+
         " · lm "+bool(selected.lm)+" · isLock "+bool(selected.isLock)+
         " · restringida "+bool(selected.locked):
         last?"clic detectado; campos pendientes de la tarjeta":"sin clic registrado"),
-      "Ruta: "+(selected?(selected.locked?"página pública, sin sesión gestionada":
+      "Ruta: "+(source==="codigos"&&last?"CÓDIGOS: flujo independiente de las tarjetas":
+        selected?(selected.locked?"página pública, sin sesión gestionada":
         "tarjeta autorizada, comprobar preparación de product"):"sin ruta clasificada"),
       "Ventana: "+(opening?"creada · ID "+opening.ventana:
         tracked("apertura-solicitada")?"solicitada, sin ID confirmado":"sin apertura observada"),
       "Pestaña: "+(bind?"conectada · ID "+bind.pestana:
         noTab?"sin respuesta del observador":"sin vinculación confirmada"),
-      "Sesión product: "+(session?"preparada":
+      "Sesión product: "+(session?"preparada · origen "+(session.origen||"sin-asociar"):
         noSession?"ausente en la pestaña":
+        orphanSession?"detectada en otro momento · origen "+(orphanSession.origen||"sin-asociar"):
         "sin preparación observada"),
       "Formulario: "+(active?"observador con product":
         noSession?"observador activo; "+noSession.motivo:"sin observación asociada"),
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
-      "Nota: solo indicadores de presencia, nunca valores, contraseñas o tokens."
+      "Nota: CÓDIGOS no es una tarjeta. Las sesiones se asocian solo a clics recientes y solo se registran indicadores de presencia."
     ].join("\n");
   }
   async function refresh() {
@@ -430,7 +460,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:3,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:4,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
