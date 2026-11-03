@@ -74,13 +74,31 @@ for(const [folder,name,version] of [
   assert(bundle.includes('active_users:')&&bundle.includes("JSON.parse(await "),
     "Mantener la transformación original y el descifrado");
   assert(catalog.includes("origen-tras-descifrado"),"Comparación de valores presentes antes del mapeo");
-  assert(catalog.includes("eSpaces")&&catalog.includes("kNull")&&catalog.includes("lockProp"),
+  assert(bundle.includes('eAlias:["email","correo"')&&bundle.includes('kAlias:["password","clave"'),
+    "Detectar nombres alternativos sin copiar credenciales");
+  assert(bundle.includes('ekPresente:typeof p?.ek==="string"'),
+    "Observar solo presencia de clave cifrada en los objetos");
+  assert(catalog.includes("Veredicto de origen: ")&&catalog.includes("Límite de certeza:"),
+    "Separar hechos del cliente y limitaciones del servidor");
+    assert(catalog.includes("eSpaces")&&catalog.includes("kNull")&&catalog.includes("lockProp"),
     "Distinguir ausencia, vacío, nulo y marca de restricción");
 
   assert(bundle.includes("__kzDiagnosticCardClickFields"),"Hook en tarjeta seleccionada");
   assert(bundle.includes("/api/shops/extension")&&bundle.includes("/api/products/getmostusedtool"),
     "Ambos endpoints originales disponibles");
   assert(bundle.includes("kZ=t=>!!(t?.isLock"),"Mantener estado original de bloqueo");
+  const requestAt=bundle.indexOf("params:{subtitle_id:");
+  assert(requestAt>=0,"Solicitud autenticada de catálogo presente");
+  const requestParameters=bundle.slice(requestAt,requestAt+250);
+  assert(!requestParameters.includes("isLock"),
+    "No enviar isLock calculado por tarjeta como permiso al servidor");
+  const lockedBranchAt=bundle.indexOf("Página pública abierta sin sesión gestionada");
+  const productSessionAt=bundle.indexOf("chrome.storage.local.set({product:");
+  assert(lockedBranchAt>=0&&productSessionAt>lockedBranchAt,
+    "La ruta pública restringida precede a la preparación de la sesión autorizada");
+  assert(bundle.includes("getmostusedtool")&&bundle.includes("JSON.parse(await "),
+    "Mantener petición autenticada y descifrado integral");
+
   // No se transfieren valores de d/e/k hacia el diagnóstico: solo booleanos.
   assert(bundle.includes("d:!!p?.d,e:!!p?.e,k:!!p?.k"),
     "Nunca copiar URL o credenciales al diagnóstico");
@@ -94,4 +112,4 @@ for(const [folder,name,version] of [
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
-console.log("KAIZEN 1.5.37: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.38: diagnóstico en catálogos y formularios de las 3 extensiones PASS");

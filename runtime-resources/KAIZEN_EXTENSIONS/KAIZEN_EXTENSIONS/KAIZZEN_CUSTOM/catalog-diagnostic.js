@@ -18,7 +18,7 @@
     "d","e","k","proxy","lm","id","isLock","locked","cookie",
     "eProp","kProp","eValue","kValue","eNull","kNull","eEmpty","kEmpty",
     "eSpaces","kSpaces","eOther","kOther","lockProp","lockTrue","lockFalse",
-    "lockOther","premium","camposOrigen","sinCambios"
+    "lockOther","premium","camposOrigen","sinCambios","eAlias","kAlias","ekPresente"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let currentFlow = "";
@@ -140,7 +140,7 @@
   const ORIGIN_FLAGS=[
     "eProp","kProp","eValue","kValue","eNull","kNull","eEmpty","kEmpty",
     "eSpaces","kSpaces","eOther","kOther","lockProp","lockTrue","lockFalse",
-    "lockOther","premium"
+    "lockOther","premium","eAlias","kAlias","ekPresente"
   ];
   globalThis.__kzDiagnosticRawBatch=function(items){
     if(!Array.isArray(items)||items.length>500)return;
@@ -158,7 +158,9 @@
       eOther:count("eOther"),kOther:count("kOther"),
       lockProp:count("lockProp"),lockTrue:count("lockTrue"),
       lockFalse:count("lockFalse"),lockOther:count("lockOther"),
-      premium:count("premium")
+      premium:count("premium"),
+      eAlias:count("eAlias"),kAlias:count("kAlias"),
+      ekPresente:count("ekPresente")
     });
   };
   globalThis.__kzDiagnosticProductBatch=function(items,hasMore){
@@ -610,7 +612,10 @@
         ", k espacios "+origin.kSpaces+", k otro tipo "+origin.kOther+
         " · isLock presente "+origin.lockProp+
         ", true "+origin.lockTrue+", false "+origin.lockFalse+
-        ", otro tipo "+origin.lockOther:
+        ", otro tipo "+origin.lockOther+
+        " · correo con nombre alternativo "+origin.eAlias+
+        ", clave con nombre alternativo "+origin.kAlias+
+        ", clave cifrada ek "+origin.ekPresente:
         "sin observación antes de map"),
       "Comparación descifrado → catálogo: "+(origin&&decoded?
         (origin.cuenta===decoded.cuenta&&
@@ -620,6 +625,17 @@
          "conteos de e/k/isLock sin diferencias observadas":
          "conteos distintos: revisar tipos y transformación de productos"):
         "pendiente de ambos puntos de observación"),
+      "Veredicto de origen: "+(origin&&decoded?
+        (origin.cuenta===decoded.cuenta&&origin.eValue===0&&origin.kValue===0&&
+         origin.eAlias===0&&origin.kAlias===0?
+          "ninguno de los objetos descifrados contiene credenciales con nombres e/k ni alias conocidos; el mapeo de tarjetas no puede recuperarlas":
+          origin.eAlias>0||origin.kAlias>0?
+          "el JSON descifrado contiene nombres alternativos en algunos productos; solo se usan en herramientas autorizadas":
+          origin.eValue!==decoded.conCorreo||origin.kValue!==decoded.conClave?
+          "diferencias entre origen y catálogo: revisar el adaptador de campos de tarjetas autorizadas":
+          "las propiedades observadas permanecen después de construir el catálogo"):
+        "pendiente: se necesitan observaciones de origen y catálogo del mismo lote"),
+      "Límite de certeza: el cliente no envía isLock para solicitar los productos. Sin código o registros del backend no puede concluirse por qué el servidor omitió un campo ni concederse permisos.",
       "Acceso según respuesta: "+(decoded?
         "autorizadas "+decoded.habilitadas+" / "+decoded.cuenta+
         " · restringidas "+decoded.bloqueadas+
@@ -660,7 +676,7 @@
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
-      "Nota: origen-tras-descifrado distingue propiedades ausentes, vacías o nulas; no incluye valores, IDs, nombres de producto, URLs, cuerpos, cookies o tokens."
+      "Nota: origen-tras-descifrado distingue propiedades ausentes, vacías o nulas, alias conocidos y ek presente; no incluye valores, IDs, nombres de producto, URLs, cuerpos, cookies ni tokens."
     ].join("\n");
   }
   async function refresh() {
@@ -689,7 +705,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:6,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:7,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
