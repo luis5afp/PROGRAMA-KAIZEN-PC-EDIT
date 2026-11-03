@@ -87,6 +87,17 @@ jobs:
           "SETUP=$($setup[0].FullName)" >> $env:GITHUB_ENV
           "SHA=$($setup[0].FullName).sha256" >> $env:GITHUB_ENV
           Write-Host "SHA-256 Setup 1.5.31: $digest"
+      - name: Conservar instalador verificado como descarga de Actions
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: KAIZEN-PC-v1.5.31-Setup-Windows-x64
+          path: |
+            dist/installer/*.exe
+            dist/installer/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
       - name: Publicar KAIZEN PC 1.5.31 solo al integrar en main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
