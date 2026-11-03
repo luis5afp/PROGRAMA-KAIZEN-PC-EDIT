@@ -1,5 +1,5 @@
 appId: org.kaizzen.kaizenpc
-productName: KAIZEN-PC-v1.5.30
+productName: KAIZEN-PC-v1.5.31
 electronVersion: 36.0.0
 directories:
   output: ../dist/installer
@@ -9,7 +9,7 @@ win:
     - nsis
   signAndEditExecutable: false
 nsis:
-  artifactName: KAIZEN-PC-v1.5.30-Setup-${arch}.${ext}
+  artifactName: KAIZEN-PC-v1.5.31-Setup-${arch}.${ext}
   oneClick: true
   perMachine: false
   allowElevation: true
