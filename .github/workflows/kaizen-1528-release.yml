@@ -1,4 +1,4 @@
-name: KAIZEN PC 1.5.35 - Validar Windows y publicar tras integrar
+name: KAIZEN PC 1.5.36 - Validar Windows y publicar tras integrar
 on:
   pull_request:
     paths:
@@ -13,7 +13,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: kaizen-1535-release
+  group: kaizen-1536-release
   cancel-in-progress: false
 jobs:
   release:
@@ -32,9 +32,9 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
-          if(git ls-remote --tags origin refs/tags/v1.5.35) { throw 'v1.5.35 ya existe; no sobrescribir Release' }
+          if(git ls-remote --tags origin refs/tags/v1.5.36) { throw 'v1.5.36 ya existe; no sobrescribir Release' }
           $pkg=(Get-Content app/package.json -Raw | ConvertFrom-Json)
-          if($pkg.version -ne '1.5.35') { throw "Version de aplicacion incorrecta: $($pkg.version)" }
+          if($pkg.version -ne '1.5.36') { throw "Version de aplicacion incorrecta: $($pkg.version)" }
           node app/tests/guest-local-update-scenarios.js
           node app/tests/release-1.5.24-diagnostics.js
           node app/tests/embedded-extension-integration-scenarios.js
@@ -48,14 +48,14 @@ jobs:
           node app/scripts/verify-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS/KAIZEN_EXTENSIONS
           node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
           node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
-          if(!(Test-Path 'docs/RELEASE-NOTES-v1.5.35.md')) { throw 'Faltan notas de version 1.5.35' }
+          if(!(Test-Path 'docs/RELEASE-NOTES-v1.5.36.md')) { throw 'Faltan notas de version 1.5.36' }
       - name: Compilar instalador Windows con los cinco paquetes reales
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
           & './scripts/build-windows-integrated.ps1' -ExtensionsSource 'runtime-resources/KAIZEN_EXTENSIONS'
-          $root='dist/KAIZEN-PC-v1.5.35-win32-x64'
+          $root='dist/KAIZEN-PC-v1.5.36-win32-x64'
           & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder $root
           if($LASTEXITCODE -ne 0) { throw 'Integridad de recursos empaquetados invalida' }
           node app/scripts/verify-uploaded-original-extensions.js "$root/resources/KAIZEN_EXTENSIONS"
@@ -69,7 +69,7 @@ jobs:
           $p=Start-Process -FilePath $setup[0].FullName -ArgumentList '/S' -Wait -PassThru
           if($p.ExitCode -ne 0) { throw "No se pudo instalar el Setup: $($p.ExitCode)" }
           $programs=Join-Path $env:LOCALAPPDATA 'Programs'
-          $installed=@(Get-ChildItem $programs -Recurse -Filter 'KAIZEN-PC-v1.5.35.exe' -File -ErrorAction SilentlyContinue)
+          $installed=@(Get-ChildItem $programs -Recurse -Filter 'KAIZEN-PC-v1.5.36.exe' -File -ErrorAction SilentlyContinue)
           if($installed.Count -ne 1) { throw 'EXE instalado no encontrado o duplicado' }
           $folder=Split-Path -Parent $installed[0].FullName
           & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder $folder
@@ -87,18 +87,18 @@ jobs:
           "$digest *$($setup[0].Name)" | Set-Content -LiteralPath ($setup[0].FullName+'.sha256') -Encoding ascii
           "SETUP=$($setup[0].FullName)" >> $env:GITHUB_ENV
           "SHA=$($setup[0].FullName).sha256" >> $env:GITHUB_ENV
-          Write-Host "SHA-256 Setup 1.5.35: $digest"
+          Write-Host "SHA-256 Setup 1.5.36: $digest"
       - name: Conservar instalador verificado como descarga de Actions
         uses: actions/upload-artifact@v4
         with:
-          name: KAIZEN-PC-v1.5.35-Setup-Windows-x64
+          name: KAIZEN-PC-v1.5.36-Setup-Windows-x64
           path: |
             dist/installer/*.exe
             dist/installer/*.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-      - name: Publicar KAIZEN PC 1.5.35 solo al integrar en main
+      - name: Publicar KAIZEN PC 1.5.36 solo al integrar en main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
@@ -107,5 +107,5 @@ jobs:
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
           $sha=(git rev-parse HEAD).Trim()
-          & gh release create v1.5.35 "$env:SETUP" "$env:SHA" --repo "$env:GITHUB_REPOSITORY" --target "$sha" --title 'KAIZEN PC 1.5.35 - Diagnóstico de catálogos y formularios' --notes-file docs/RELEASE-NOTES-v1.5.35.md --latest
-          if($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la version 1.5.35' }
+          & gh release create v1.5.36 "$env:SETUP" "$env:SHA" --repo "$env:GITHUB_REPOSITORY" --target "$sha" --title 'KAIZEN PC 1.5.36 - Diagnóstico de catálogos y formularios' --notes-file docs/RELEASE-NOTES-v1.5.36.md --latest
+          if($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la version 1.5.36' }

@@ -15,7 +15,10 @@
     "identificador","motivo","tipo","marco","dominioCoincide",
     "lote","indice","cuenta","cifrado","hayMas","origen","asociada",
     "emisor","receptor","ruta","momento","mensaje","respuesta","canal",
-    "d","e","k","proxy","lm","id","isLock","locked","cookie"
+    "d","e","k","proxy","lm","id","isLock","locked","cookie",
+    "eProp","kProp","eValue","kValue","eNull","kNull","eEmpty","kEmpty",
+    "eSpaces","kSpaces","eOther","kOther","lockProp","lockTrue","lockFalse",
+    "lockOther","premium","camposOrigen","sinCambios"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let currentFlow = "";
@@ -23,6 +26,7 @@
   let currentSource = "sin-asociar";
   let lastProductOwner = {flujo:"",origen:"sin-asociar",asociada:false};
   let productBatch = 0;
+  let rawBatch = 0;
   let visible = false;
   let output = null;
   let note = null;
@@ -130,6 +134,33 @@
       o[key]=p?.[key]===true;
     return o;
   }
+  // La llamada se efectúa inmediatamente después de JSON.parse(decrypt(...))
+  // y ANTES de map({ ...producto, active_users }). Solo llegan booleanos.
+  // Ni un solo valor de producto, correo, clave o identificador entra aquí.
+  const ORIGIN_FLAGS=[
+    "eProp","kProp","eValue","kValue","eNull","kNull","eEmpty","kEmpty",
+    "eSpaces","kSpaces","eOther","kOther","lockProp","lockTrue","lockFalse",
+    "lockOther","premium"
+  ];
+  globalThis.__kzDiagnosticRawBatch=function(items){
+    if(!Array.isArray(items)||items.length>500)return;
+    if(!items.every(p=>p&&typeof p==="object"&&
+       ORIGIN_FLAGS.every(k=>typeof p[k]==="boolean")))return;
+    const lote=++rawBatch;
+    const count=k=>items.filter(p=>p[k]).length;
+    event("origen-tras-descifrado",{
+      lote,cuenta:items.length,
+      eProp:count("eProp"),kProp:count("kProp"),
+      eValue:count("eValue"),kValue:count("kValue"),
+      eNull:count("eNull"),kNull:count("kNull"),
+      eEmpty:count("eEmpty"),kEmpty:count("kEmpty"),
+      eSpaces:count("eSpaces"),kSpaces:count("kSpaces"),
+      eOther:count("eOther"),kOther:count("kOther"),
+      lockProp:count("lockProp"),lockTrue:count("lockTrue"),
+      lockFalse:count("lockFalse"),lockOther:count("lockOther"),
+      premium:count("premium")
+    });
+  };
   globalThis.__kzDiagnosticProductBatch=function(items,hasMore){
     if(!Array.isArray(items)||items.length>500)return;
     const lote=++productBatch;
@@ -539,6 +570,7 @@
     const client=recent("diagnostico-cliente");
     const fetched=recent("productos-respuesta");
     const decoded=recent("productos-descifrados");
+    const origin=decoded?e.find(x=>x.stage==="origen-tras-descifrado"&&x.lote===decoded.lote):recent("origen-tras-descifrado");
     const selected=source==="tarjeta"?tracked("tarjeta-campos-al-clic"):null;
     const orphanSession=recent("sesion-temporal-preparada");
     const opening=tracked("apertura-confirmada");
@@ -567,6 +599,27 @@
         " · d "+decoded.conUrl+" · e "+decoded.conCorreo+" · k "+decoded.conClave+
         " · proxy "+decoded.conProxy+" · bloqueadas "+decoded.bloqueadas:
         "sin lote descifrado observado"),
+      "Inmediatamente tras descifrar: "+(origin?
+        origin.cuenta+" objetos · e presente "+origin.eProp+
+        ", e con texto "+origin.eValue+
+        ", e vacío "+origin.eEmpty+", e nulo "+origin.eNull+
+        ", e espacios "+origin.eSpaces+", e otro tipo "+origin.eOther+
+        " · k presente "+origin.kProp+
+        ", k con texto "+origin.kValue+
+        ", k vacío "+origin.kEmpty+", k nulo "+origin.kNull+
+        ", k espacios "+origin.kSpaces+", k otro tipo "+origin.kOther+
+        " · isLock presente "+origin.lockProp+
+        ", true "+origin.lockTrue+", false "+origin.lockFalse+
+        ", otro tipo "+origin.lockOther:
+        "sin observación antes de map"),
+      "Comparación descifrado → catálogo: "+(origin&&decoded?
+        (origin.cuenta===decoded.cuenta&&
+         origin.eValue===decoded.conCorreo&&
+         origin.kValue===decoded.conClave&&
+         origin.lockTrue===decoded.bloqueoExplicito?
+         "conteos de e/k/isLock sin diferencias observadas":
+         "conteos distintos: revisar tipos y transformación de productos"):
+        "pendiente de ambos puntos de observación"),
       "Acceso según respuesta: "+(decoded?
         "autorizadas "+decoded.habilitadas+" / "+decoded.cuenta+
         " · restringidas "+decoded.bloqueadas+
@@ -607,7 +660,7 @@
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
-      "Nota: e/k no disponibles no distingue ausencia de campos vacíos; no se guardan URLs, cuerpos, credenciales, cookies o tokens."
+      "Nota: origen-tras-descifrado distingue propiedades ausentes, vacías o nulas; no incluye valores, IDs, nombres de producto, URLs, cuerpos, cookies o tokens."
     ].join("\n");
   }
   async function refresh() {
@@ -636,7 +689,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:5,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:6,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
