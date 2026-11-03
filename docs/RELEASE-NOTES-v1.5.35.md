@@ -15,17 +15,18 @@ Esta versión añade un trazador de **metadatos** en las extensiones Principal, 
 - `comunicacion-http-envio`: `extension-ui` → `servidor-kaizzen`, tipo de ruta, método y transporte (`fetch`/`xhr`).
 - `comunicacion-http-respuesta`: `servidor-kaizzen` → `extension-ui`, etiqueta de ruta, estado HTTP y duración.
 - `comunicacion-http-error`: fallo técnico de la petición.
+- `comunicacion-red-envio`, `comunicacion-red-respuesta` y `comunicacion-red-error`: observación opcional de peticiones HTTP a KAIZZEN mediante el permiso existente `webRequest` de Chromium. Los eventos solo indican ruta clasificada, estado y flujo, nunca origen sensible ni contenido. Pueden duplicar llamadas de UI ya registradas.
 - `productos-respuesta` y `productos-descifrados`: presencia del bloque cifrado y disponibilidad booleana de `d`, `e`, `k`, `proxy`, `lm`, `isLock`; nunca se exportan valores.
 - `clic-tarjeta` + `tarjeta-campos-al-clic`: mismo `flujo` que las comunicaciones posteriores, si las hay.
 - `comunicacion-mensaje-envio` y `comunicacion-mensaje-respuesta`: `extension-ui` ↔ `extension-background`, **solo** nombres de mensaje de una lista permitida, sin parámetros ni contenido.
 - `sesion-temporal-preparada` y `sesion-temporal-eliminada`: evento de Chrome storage cuando aparece o desaparece `product`, junto con presencia de campos.
 - `comunicacion-formulario-recibida`, `pestana-vinculada`, `script-formulario-activo`: vínculo UI → content script y observación del formulario.
 
-El resumen **Peticiones tras el clic** contabiliza solo envíos desde la interfaz de la extensión asociados a ese clic. Un valor de 0 significa **ninguna petición observada en ese ámbito**, no que otros procesos no hayan contactado el servidor.
+El resumen **Peticiones tras el clic** distingue envíos desde la UI, solicitudes opcionales observadas en la red Chromium y mensajes UI a background. Las cifras HTTP UI y webRequest **pueden solaparse**. Un valor de 0 significa **ninguna petición observada en ese ámbito**, no que otros procesos no hayan contactado el servidor.
 
 ## Alcance y límites de observación
 
-- El trazador de HTTP observa únicamente solicitudes desde la **interfaz** de la extensión hacia dominios `kaizzen.org` reconocidos; no observa peticiones hechas internamente por el service worker/background, otros procesos Chromium, ni el proceso principal de Electron.
+- El trazador `fetch`/`XHR` observa las solicitudes de la **interfaz** de la extensión hacia dominios `kaizzen.org` reconocidos. Cuando Chromium permite usar `webRequest` desde esta página, también se observan eventos de red cuyo iniciador es la propia extensión o es desconocido; estos eventos **no identifican con certeza** el proceso emisor ni garantizan cobertura del background. No observa IPC interno del proceso principal Electron.
 - Los mensajes de UI a background se registran por etiquetas conocidas; no se inspecciona el contenido del mensaje ni de su respuesta.
 - No se guarda **ninguna** URL, cabecera de autorización, token, contraseña, cookie, cuerpo cifrado, ID de producto o dirección de correo.
 - Los estados `isLock` y `premium` del servidor **no se cambian**. El diagnóstico no concede acceso ni inventa credenciales.
