@@ -6,6 +6,7 @@ on:
       - "runtime-resources/KAIZEN_EXTENSIONS/**"
       - "scripts/build-windows-integrated.ps1"
       - ".github/workflows/kaizen-1528-release.yml"
+  workflow_dispatch:
   push:
     branches: [main]
     paths: [".github/workflows/kaizen-1528-release.yml"]
@@ -89,7 +90,6 @@ jobs:
           Write-Host "SHA-256 Setup 1.5.32: $digest"
       - name: Conservar instalador verificado como descarga de Actions
         uses: actions/upload-artifact@v4
-        continue-on-error: true
         with:
           name: KAIZEN-PC-v1.5.32-Setup-Windows-x64
           path: |
