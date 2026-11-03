@@ -61,4 +61,4 @@ for(const dir of dirs){
 }
 assert(!src.includes("chrome.storage")&&!src.includes("fetch(") &&
   !src.includes("sendMessage("),"No conservar ni enviar credenciales");
-console.log("KAIZEN 1.5.37: adaptador e/k solo para tarjetas autorizadas PASS");
+console.log("KAIZEN 1.5.38: adaptador e/k solo para tarjetas autorizadas PASS");
