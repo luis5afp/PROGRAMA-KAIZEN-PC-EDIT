@@ -18,10 +18,13 @@ assert(catalog.includes('event(route+"-envio"') && catalog.includes('event(route
 for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identificada","pestana-vinculada",
   "catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
   "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic",
-  "diagnostico-cliente","bloqueoExplicito","bloqueoPremium"])
+  "diagnostico-cliente","bloqueoExplicito","bloqueoPremium",
+  "comunicacion-http-envio","comunicacion-http-respuesta",
+  "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta"])
   assert(catalog.includes(stage),"Falta etapa: "+stage);
 for(const stage of ["diagnostico-pestana-activa","script-formulario-activo","formulario-observado",
-  "formulario-con-campos-rellenos","formulario-sin-sesion"])
+  "formulario-con-campos-rellenos","formulario-sin-sesion",
+  "comunicacion-formulario-recibida"])
   assert(form.includes(stage),"Falta etapa: "+stage);
 assert(!catalog.includes("JSON.stringify(data)"),"No exportar cuerpos del catálogo");
 assert(!catalog.includes("chrome.storage.local.get(null)"),"No leer almacén completo");
@@ -90,6 +93,13 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   };
   const chrome={
     storage:{local:store.local,onChanged:store.onChanged},
+    runtime:{
+      getManifest:()=>({name:"KAIZZEN-MAIN"}),
+      sendMessage:(message,callback)=>{
+        if(typeof callback==="function"){callback({ok:true});return;}
+        return Promise.resolve({ok:true});
+      }
+    },
     windows:{
       create:nativeWindowCreate,
       onRemoved:{addListener:fn=>listeners.windowsRemoved.push(fn)}
@@ -149,6 +159,29 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert(events.some(x=>x.stage==="pestana-vinculada"&&x.pestana===456));
   assert(events.some(x=>x.stage==="script-formulario-activo"&&x.pestana===456));
   assert(events.some(x=>x.stage==="productos-respuesta"&&x.cifrado===true));
+  // HTTP y background: solo etiquetas, respuestas y correlación del clic.
+  const sourceFlow=events.find(x=>x.stage==="clic-tarjeta")?.flujo;
+  await target.fetch("https://www.kaizzen.org/s/vHwxhS39x9wSS393xxhS3xhS9wxwxx3hh9wx9wxhS39/api/products/activitystatus/add?token=DONT_LOG_TOKEN");
+  await chrome.runtime.sendMessage({ref:"track_tool_domain",domain:"secret.test"});
+  let callbackOk=false;
+  chrome.runtime.sendMessage({ref:"reset_proxy",proxy:"DONT_LOG_PROXY"},()=>{callbackOk=true;});
+  assert(callbackOk,"Conservar semántica callback original");
+  await flush();
+  events=store.events();
+  assert(events.some(x=>x.stage==="comunicacion-http-envio"&&
+    x.ruta==="actividad"&&x.emisor==="extension-ui"&&x.receptor==="servidor-kaizzen"&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-http-respuesta"&&
+    x.ruta==="actividad"&&x.http===200&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-mensaje-envio"&&
+    x.mensaje==="track_tool_domain"&&x.receptor==="extension-background"&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-mensaje-respuesta"&&
+    x.mensaje==="reset_proxy"&&x.respuesta===true&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-formulario-recibida"&&x.pestana===456));
+  await target.fetch("https://www.kaizzen.org/s/vHwxhS39x9wSS393xxhS3xhS9wxwxx3hh9wx9wxhS39/api/users/login?token=SECRET_QUERY");
+  await flush();
+  events=store.events();
+  assert(events.some(x=>x.stage==="comunicacion-http-envio"&&x.ruta==="login"));
+
   const prod=events.find(x=>x.stage==="productos-descifrados");
   assert.equal(prod.cuenta,3);
   assert.equal(prod.conCorreo,1);
@@ -172,7 +205,8 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert.equal(response.conCorreo,1);
   const serialized=JSON.stringify(events);
   for(const secret of ["ENCRYPTED_TEST_PAYLOAD","SECRET","user@example.com","https://secret","hidden@example.com",
-    "DO_NOT_EXPORT","REDACT_THIS","someone@example.com"])
+    "DO_NOT_EXPORT","REDACT_THIS","someone@example.com",
+    "DONT_LOG_TOKEN","DONT_LOG_PROXY","SECRET_QUERY","secret.test"])
     assert(!serialized.includes(secret),"Se filtró un secreto en el informe");
 
   // La rama original usa chrome.windows.create({url}, callback).
@@ -206,5 +240,5 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     assert(!JSON.stringify(store.events()).includes(secret),"No registrar secretos de CÓDIGOS");
   listeners.removed[0](456);
   listeners.windowsRemoved[0](123);
-  console.log("KAIZEN 1.5.34: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
+  console.log("KAIZEN 1.5.35: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});
