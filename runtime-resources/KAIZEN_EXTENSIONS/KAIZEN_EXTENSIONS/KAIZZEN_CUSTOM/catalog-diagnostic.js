@@ -14,7 +14,7 @@
     "estructura","medio","resultado","ventana","pestana","url","correo","clave","claveCifrada",
     "identificador","motivo","tipo","marco","dominioCoincide",
     "lote","indice","cuenta","cifrado","hayMas","origen","asociada",
-    "emisor","receptor","ruta","momento","mensaje","respuesta",
+    "emisor","receptor","ruta","momento","mensaje","respuesta","canal",
     "d","e","k","proxy","lm","id","isLock","locked","cookie"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
@@ -323,6 +323,48 @@
     };
   }catch{}
 
+  // Observación adicional y opcional de peticiones del navegador.
+  // Solo rutas /api de KAIZZEN y únicamente de esta extensión o de
+  // iniciador no identificado. No bloquea, redirige ni modifica peticiones.
+  try{
+    const apiRequests=new Map();
+    const own=chrome.runtime?.getURL?.("").replace(/\/$/,"")||"";
+    const allowed=details=>{
+      const origin=String(details?.initiator||"");
+      return !origin||Boolean(own&&origin===own);
+    };
+    const filter={urls:["https://www.kaizzen.org/*","https://kaizzen.org/*"]};
+    if(chrome.webRequest?.onBeforeRequest?.addListener){
+      chrome.webRequest.onBeforeRequest.addListener(details=>{
+        const ruta=apiRoute(details?.url);
+        if(!ruta||!allowed(details))return;
+        const ctx=communicationContext();
+        const id=String(details?.requestId||"");
+        if(id){
+          if(apiRequests.size>80)apiRequests.clear();
+          apiRequests.set(id,{ruta,ctx,at:Date.now()});
+        }
+        event("comunicacion-red-envio",{
+          emisor:"chromium",receptor:"servidor-kaizzen",canal:"webrequest",
+          ruta,metodo:String(details?.method||"GET").toUpperCase().slice(0,16),...ctx
+        });
+      },filter);
+      const finish=(details,failed)=>{
+        const id=String(details?.requestId||"");
+        const entry=apiRequests.get(id);
+        if(!entry)return;
+        apiRequests.delete(id);
+        event(failed?"comunicacion-red-error":"comunicacion-red-respuesta",{
+          emisor:"servidor-kaizzen",receptor:"chromium",canal:"webrequest",
+          ruta:entry.ruta,http:failed?0:Number(details?.statusCode)||0,
+          duracionMs:elapsed(entry.at),...entry.ctx
+        });
+      };
+      chrome.webRequest.onCompleted?.addListener(details=>finish(details,false),filter);
+      chrome.webRequest.onErrorOccurred?.addListener(details=>finish(details,true),filter);
+    }
+  }catch{}
+
   // Seguimiento dirigido a la pestaña que abre la extensión del catálogo.
   // Esta señal no contiene credenciales ni modifica permisos del servidor.
   const openedWindows=new Map();
@@ -510,6 +552,8 @@
       x.stage==="comunicacion-http-envio"&&x.flujo===last.flujo):[];
     const messages=last?.flujo?e.filter(x=>
       x.stage==="comunicacion-mensaje-envio"&&x.flujo===last.flujo):[];
+    const net=last?.flujo?e.filter(x=>
+      x.stage==="comunicacion-red-envio"&&x.flujo===last.flujo):[];
     const bool=x=>x===true?"sí":"no";
     return [
       "Cliente de acceso: "+(client?client.cliente+" · perfil "+client.perfil:"sin identificación de extensión"),
@@ -537,8 +581,9 @@
         "sin conclusión de autorización todavía"),
       "Acción: "+(last?(source==="codigos"?"botón CÓDIGOS (no es tarjeta)":"tarjeta de herramientas"):"sin acción observada"),
       "Peticiones tras el clic: "+(last?httpCalls.length+
-        " desde la interfaz al servidor · "+messages.length+
-        " mensajes UI a background (solo rutas y mensajes observados)":
+        " desde la interfaz al servidor · "+net.length+
+        " peticiones de red Chromium (pueden solaparse) · "+messages.length+
+        " mensajes UI a background":
         "sin acción seleccionada"),
       "Tarjeta pulsada: "+(source==="codigos"&&last?"no aplica: es el botón CÓDIGOS":
         selected?"d "+bool(selected.d)+" · e "+bool(selected.e)+
@@ -561,7 +606,7 @@
         noSession?"observador activo; "+noSession.motivo:"sin observación asociada"),
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
-      "Alcance: tráfico HTTP de UI hacia backend KAIZZEN, mensajes UI a background, almacenamiento product y observador de pestaña. No incluye tráfico interno del background ni de Electron.",
+      "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
       "Nota: e/k no disponibles no distingue ausencia de campos vacíos; no se guardan URLs, cuerpos, credenciales, cookies o tokens."
     ].join("\n");
   }
