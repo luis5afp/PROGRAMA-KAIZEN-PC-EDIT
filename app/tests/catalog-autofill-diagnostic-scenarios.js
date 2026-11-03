@@ -74,7 +74,13 @@ for(const [folder,name,version] of [
   assert(bundle.includes('active_users:')&&bundle.includes("JSON.parse(await "),
     "Mantener la transformación original y el descifrado");
   assert(catalog.includes("origen-tras-descifrado"),"Comparación de valores presentes antes del mapeo");
-  assert(catalog.includes("eSpaces")&&catalog.includes("kNull")&&catalog.includes("lockProp"),
+  assert(bundle.includes('eAlias:["email","correo"')&&bundle.includes('kAlias:["password","clave"'),
+    "Detectar nombres alternativos sin copiar credenciales");
+  assert(bundle.includes('ekPresente:typeof p?.ek==="string"'),
+    "Observar solo presencia de clave cifrada en los objetos");
+  assert(catalog.includes("Veredicto de origen: ")&&catalog.includes("Límite de certeza:"),
+    "Separar hechos del cliente y limitaciones del servidor");
+    assert(catalog.includes("eSpaces")&&catalog.includes("kNull")&&catalog.includes("lockProp"),
     "Distinguir ausencia, vacío, nulo y marca de restricción");
 
   assert(bundle.includes("__kzDiagnosticCardClickFields"),"Hook en tarjeta seleccionada");
@@ -94,4 +100,4 @@ for(const [folder,name,version] of [
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
-console.log("KAIZEN 1.5.37: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.38: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
