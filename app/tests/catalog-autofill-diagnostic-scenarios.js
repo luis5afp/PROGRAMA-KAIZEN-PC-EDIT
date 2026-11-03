@@ -15,6 +15,9 @@ for(const [folder,name,version] of [
   assert.equal(manifest.version,version);
   assert.equal(manifest.options_page,undefined,"No usar gestor de contraseñas de Chromium");
   assert(html.includes('src="/catalog-diagnostic.js"'),"Panel dentro del catálogo");
+  assert(html.includes('src="/authorized-field-aliases.js"'),"Adaptador para e/k de productos autorizados");
+  assert(html.indexOf("authorized-field-aliases.js") < html.indexOf('type="module"'),
+    "Normalizador debe estar disponible antes de React");
   assert(!html.includes("owner-guide-panel.js"),"Retirar panel de gestor de Chrome");
   assert(html.indexOf("catalog-diagnostic.js") < html.indexOf('type="module"'),"Instrumentación antes del bundle");
   const observer=manifest.content_scripts.find(x=>x.js?.includes("form-diagnostic.js"));
@@ -65,6 +68,8 @@ for(const [folder,name,version] of [
     KAIZZEN_CUSTOM:"index-DtDn-2PW.js"};
   const bundle=fs.readFileSync(path.join(dir,"assets",filenames[folder]),"utf8");
   assert(bundle.includes("__kzDiagnosticProductBatch"),"Hook después del descifrado");
+  assert(bundle.includes("...(globalThis.__kzAuthorizedFieldAliases?.("),
+    "Normalización de e/k antes de dibujar la tarjeta autorizada");
   assert(bundle.includes("__kzDiagnosticRawBatch"),"Hook ANTES del mapeo tras descifrado");
   assert(bundle.includes('active_users:')&&bundle.includes("JSON.parse(await "),
     "Mantener la transformación original y el descifrado");
@@ -89,4 +94,4 @@ for(const [folder,name,version] of [
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
-console.log("KAIZEN 1.5.36: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.37: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
