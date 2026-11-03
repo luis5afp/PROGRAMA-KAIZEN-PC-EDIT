@@ -1,109 +1,125 @@
 "use strict";
 (() => {
-  // Never read, persist or transmit entered values. Diagnostics only.
-  const LEGACY="kzDiagnosticSafeEventsV1";
+  // Solo observabilidad: este archivo NO modifica formularios, sesiones ni permisos.
+  // Una página web normal no se supervisa hasta recibir la señal dirigida a su tab.
   const PREFIX="kzDiagnosticSafeEventV2:";
-  const TRACE="kzDiagnosticPendingOpenV2";
-  const MAX=160;
+  const STORE_OLD="kzDiagnosticSafeEventsV1";
   const ALLOWED=new Set([
-    "flujo","marco","dominioCoincide","correoDisponible","claveDisponible",
-    "claveCifradaDisponible","credencialesCompletas","camposCorreo","camposClave",
-    "correoConContenido","claveConContenido","intentos","motivo"
+    "flujo","ventana","pestana","marco","motivo","dominioCoincide",
+    "correoDisponible","claveDisponible","claveCifradaDisponible",
+    "credencialesCompletas","sesionRespaldo","camposCorreo","camposClave",
+    "correoConContenido","claveConContenido","intentos"
   ]);
+  const bindings=new Set();
   let fallback=Promise.resolve();
   function event(stage,info={}){
-    const row={time:new Date().toISOString(),stage:String(stage).slice(0,55)};
-    for(const [key,val] of Object.entries(info)){
+    const row={time:new Date().toISOString(),stage:String(stage).slice(0,60)};
+    for(const [key,value] of Object.entries(info)){
       if(!ALLOWED.has(key))continue;
-      if(typeof val==="boolean")row[key]=val;
-      else if(typeof val==="number" && Number.isFinite(val))row[key]=Math.max(0,Math.min(1000000,Math.floor(val)));
-      else if(typeof val==="string" && val.length<85 && /^[a-zA-Z0-9_.:-]+$/.test(val))row[key]=val;
+      if(typeof value==="boolean")row[key]=value;
+      else if(typeof value==="number"&&Number.isSafeInteger(value)&&value>=0)row[key]=value;
+      else if(typeof value==="string"&&value.length<85&&/^[a-zA-Z0-9_.:-]+$/.test(value))
+        row[key]=value;
     }
     if(typeof chrome.storage.local.getKeys==="function"){
       const key=PREFIX+Date.now().toString(36)+":"+Math.random().toString(36).slice(2,12);
       chrome.storage.local.set({[key]:row}).catch(()=>{});
     }else{
       fallback=fallback.then(async()=>{
-        const old=(await chrome.storage.local.get(LEGACY))[LEGACY];
+        const old=(await chrome.storage.local.get(STORE_OLD))[STORE_OLD];
         const rows=Array.isArray(old)?old:[];
         rows.push(row);
-        await chrome.storage.local.set({[LEGACY]:rows.slice(-MAX)});
+        await chrome.storage.local.set({[STORE_OLD]:rows.slice(-160)});
       }).catch(()=>{});
     }
   }
   const marco=window===window.top?"principal":"secundario";
-  async function initialize(){
-    let product=null, trace=null;
-    for(let i=0;i<9;i++){
-      const state=await chrome.storage.local.get(["product",TRACE]);
-      const marker=state[TRACE];
-      const isPending=marker && typeof marker.id==="string" &&
-        typeof marker.at==="number" && Date.now()-marker.at<120000;
-      trace=isPending?marker:null;
-      const candidate=state.product;
-      const fresh=candidate && typeof candidate.t==="number" &&
-        Date.now()-candidate.t>=0 && Date.now()-candidate.t<120000;
-      if(fresh){product=candidate;break;}
-      if(!trace)return; // unrelated web page: record nothing
-      if(i<8)await new Promise(resolve=>setTimeout(resolve,400));
+  function freshProduct(product){
+    if(!product||typeof product!=="object")return {ok:false,motivo:"ausente"};
+    if(typeof product.t!=="number"||!Number.isFinite(product.t))
+      return {ok:false,motivo:"fecha-invalida"};
+    if(Date.now()-product.t>120000||product.t>Date.now()+5000)
+      return {ok:false,motivo:"caducada"};
+    return {ok:true};
+  }
+  async function inspect(flujo,ventana,pestana){
+    const ctx={flujo,ventana,pestana,marco};
+    event("diagnostico-pestana-activa",ctx);
+    let product=null,reason="ausente",respaldo=false;
+    for(let i=0;i<12;i++){
+      const state=await chrome.storage.local.get(["product","autofillSession"]);
+      const info=freshProduct(state.product);
+      respaldo=!!(state.autofillSession&&typeof state.autofillSession==="object");
+      reason=info.motivo||"";
+      if(info.ok){product=state.product;break;}
+      if(i<11)await new Promise(resolve=>setTimeout(resolve,400));
     }
-    const flujo=trace?.id||"";
     if(!product){
-      event("formulario-sin-sesion",{flujo,marco,motivo:"sin-producto-temporal"});
+      event("formulario-sin-sesion",{...ctx,motivo:respaldo?"solo-respaldo":reason,
+        sesionRespaldo:respaldo});
       return;
     }
-    let hostMatch=false;
+    let domainMatch=false;
     try{
-      const u=new URL(product.d);
-      hostMatch=location.hostname===u.hostname ||
-        location.hostname.endsWith("."+u.hostname);
+      const host=new URL(product.d).hostname;
+      domainMatch=location.hostname===host||location.hostname.endsWith("."+host);
     }catch{}
-    const hasEmail=typeof product.e==="string"&&product.e.trim().length>0;
-    const hasPlain=typeof product.k==="string"&&product.k.length>0;
-    const hasEncrypted=typeof product.ek==="string"&&product.ek.length>0;
+    const email=typeof product.e==="string"&&product.e.trim().length>0;
+    const plain=typeof product.k==="string"&&product.k.length>0;
+    const encrypted=typeof product.ek==="string"&&product.ek.length>0;
     event("script-formulario-activo",{
-      flujo,marco,dominioCoincide:hostMatch,
-      correoDisponible:hasEmail,claveDisponible:hasPlain,
-      claveCifradaDisponible:hasEncrypted,
-      credencialesCompletas:hasEmail&&(hasPlain||hasEncrypted)
+      ...ctx,dominioCoincide:domainMatch,correoDisponible:email,
+      claveDisponible:plain,claveCifradaDisponible:encrypted,
+      credencialesCompletas:email&&(plain||encrypted),sesionRespaldo:respaldo
     });
-    let previous="";
-    let attempts=0;
+    // Solo contar campos, nunca registrar su valor.
+    let last="",attempts=0,timer=null;
     const scan=()=>{
       attempts++;
       const all=Array.from(document.querySelectorAll("input"));
-      const passwords=all.filter(el=>(el.type||"").toLowerCase()==="password");
-      const usernames=all.filter(el=>{
-        const type=(el.type||"").toLowerCase();
-        const label=[el.name,el.id,el.autocomplete,el.placeholder].join(" ");
-        return type==="email" || (type==="text" && /email|correo|login|usuario|user|account|identifier/i.test(label));
+      const passes=all.filter(n=>(n.type||"").toLowerCase()==="password");
+      const mails=all.filter(n=>{
+        const type=(n.type||"").toLowerCase();
+        const desc=[n.name,n.id,n.autocomplete,n.placeholder].join(" ");
+        return type==="email"||(type==="text"&&/email|correo|login|usuario|user|account|identifier/i.test(desc));
       });
-      const current={
-        flujo,marco,camposCorreo:usernames.length,camposClave:passwords.length,
-        correoConContenido:usernames.some(el=>Boolean(el.value)),
-        claveConContenido:passwords.some(el=>Boolean(el.value))
-      };
-      const fingerprint=JSON.stringify(current);
-      if(fingerprint!==previous){
-        previous=fingerprint;
-        event("formulario-observado",current);
-      }
-      if(current.correoConContenido && current.claveConContenido){
-        clearInterval(timer);
-        event("formulario-con-campos-rellenos",{
-          flujo,marco,camposCorreo:current.camposCorreo,camposClave:current.camposClave,
-          motivo:"origen-del-relleno-no-verificado"
-        });
+      const result={...ctx,camposCorreo:mails.length,camposClave:passes.length,
+        correoConContenido:mails.some(n=>!!n.value),claveConContenido:passes.some(n=>!!n.value)};
+      const fingerprint=JSON.stringify(result);
+      if(fingerprint!==last){last=fingerprint;event("formulario-observado",result);}
+      if(result.correoConContenido&&result.claveConContenido){
+        if(timer)clearInterval(timer);
+        event("formulario-con-campos-rellenos",{...ctx,motivo:"origen-no-verificado",
+          camposCorreo:result.camposCorreo,camposClave:result.camposClave});
       }else if(attempts>=30){
-        clearInterval(timer);
-        event("formulario-tiempo-agotado",{
-          flujo,marco,intentos:attempts,
-          camposCorreo:current.camposCorreo,camposClave:current.camposClave
-        });
+        if(timer)clearInterval(timer);
+        event("formulario-tiempo-agotado",{...ctx,intentos:attempts,
+          camposCorreo:result.camposCorreo,camposClave:result.camposClave});
       }
     };
-    const timer=setInterval(scan,1000);
+    // Evitar error de temporal dead zone en un formulario que ya esté rellenado.
+    timer=setInterval(scan,1000);
     scan();
   }
-  initialize().catch(()=>{});
+  try {
+    chrome.runtime.onMessage.addListener((message,_sender,sendResponse)=>{
+      if(message?.type!=="kz-diagnostic-bind-v3")return false;
+      const flujo=message.flujo;
+      const ventana=message.ventana;
+      const pestana=message.pestana;
+      if(typeof flujo!=="string"||!/^f[a-z0-9]{8,35}$/.test(flujo)||
+         !Number.isSafeInteger(ventana)||ventana<0||
+         !Number.isSafeInteger(pestana)||pestana<0)return false;
+      // La señal solo identifica el tab: nunca transporta producto ni credenciales.
+      const id=flujo+":"+pestana+":"+String(location.href);
+      if(!bindings.has(id)){
+        bindings.add(id);
+        inspect(flujo,ventana,pestana).catch(()=>{
+          event("formulario-diagnostico-error",{flujo,ventana,pestana,marco,motivo:"observador"});
+        });
+      }
+      sendResponse({ok:true});
+      return false;
+    });
+  }catch{}
 })();
