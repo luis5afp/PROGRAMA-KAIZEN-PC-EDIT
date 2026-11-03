@@ -65,6 +65,13 @@ for(const [folder,name,version] of [
     KAIZZEN_CUSTOM:"index-DtDn-2PW.js"};
   const bundle=fs.readFileSync(path.join(dir,"assets",filenames[folder]),"utf8");
   assert(bundle.includes("__kzDiagnosticProductBatch"),"Hook después del descifrado");
+  assert(bundle.includes("__kzDiagnosticRawBatch"),"Hook ANTES del mapeo tras descifrado");
+  assert(bundle.includes('active_users:')&&bundle.includes("JSON.parse(await "),
+    "Mantener la transformación original y el descifrado");
+  assert(catalog.includes("origen-tras-descifrado"),"Comparación de valores presentes antes del mapeo");
+  assert(catalog.includes("eSpaces")&&catalog.includes("kNull")&&catalog.includes("lockProp"),
+    "Distinguir ausencia, vacío, nulo y marca de restricción");
+
   assert(bundle.includes("__kzDiagnosticCardClickFields"),"Hook en tarjeta seleccionada");
   assert(bundle.includes("/api/shops/extension")&&bundle.includes("/api/products/getmostusedtool"),
     "Ambos endpoints originales disponibles");
@@ -82,4 +89,4 @@ for(const [folder,name,version] of [
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
 }
-console.log("KAIZEN 1.5.35: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
+console.log("KAIZEN 1.5.36: diagnóstico en catálogos y formularios de las 3 extensiones PASS");
