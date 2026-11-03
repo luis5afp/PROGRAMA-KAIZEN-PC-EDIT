@@ -126,7 +126,19 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     })}),
     chrome,window:{open:()=>({})},location:{href:"chrome-extension://fake/index.html"},
     document:{readyState:"loading",addEventListener:(type,fn)=>handlers[type]=fn},
-    XMLHttpRequest:class {open(){}send(){}addEventListener(){}},
+    XMLHttpRequest:class {
+      constructor(){
+        this.status=200;
+        this.responseType="";
+        this.responseText='{"products":"ENCRYPTED_TEST_PAYLOAD","hasMore":false}';
+        this.callbacks={};
+      }
+      open(){}
+      send(){for(const fn of this.callbacks.loadend||[])fn();}
+      addEventListener(name,fn){
+        (this.callbacks[name]??=[]).push(fn);
+      }
+    },
     URL,console,setTimeout:fn=>{setImmediate(fn);return 1;}
   };
   target.globalThis=target;
@@ -162,6 +174,9 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   // HTTP y background: solo etiquetas, respuestas y correlación del clic.
   const sourceFlow=events.find(x=>x.stage==="clic-tarjeta")?.flujo;
   await target.fetch("https://www.kaizzen.org/s/vHwxhS39x9wSS393xxhS3xhS9wxwxx3hh9wx9wxhS39/api/products/activitystatus/add?token=DONT_LOG_TOKEN");
+  const xhr=new target.XMLHttpRequest();
+  xhr.open("GET","https://www.kaizzen.org/s/known/api/products/getmostusedtool?token=NOLOG_XHR");
+  xhr.send();
   await chrome.runtime.sendMessage({ref:"track_tool_domain",domain:"secret.test"});
   let callbackOk=false;
   chrome.runtime.sendMessage({ref:"reset_proxy",proxy:"DONT_LOG_PROXY"},()=>{callbackOk=true;});
@@ -172,6 +187,10 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     x.ruta==="actividad"&&x.emisor==="extension-ui"&&x.receptor==="servidor-kaizzen"&&x.flujo===sourceFlow));
   assert(events.some(x=>x.stage==="comunicacion-http-respuesta"&&
     x.ruta==="actividad"&&x.http===200&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-http-envio"&&
+    x.ruta==="productos"&&x.transporte==="xhr"&&x.flujo===sourceFlow));
+  assert(events.some(x=>x.stage==="comunicacion-http-respuesta"&&
+    x.ruta==="productos"&&x.transporte==="xhr"&&x.http===200&&x.flujo===sourceFlow));
   assert(events.some(x=>x.stage==="comunicacion-mensaje-envio"&&
     x.mensaje==="track_tool_domain"&&x.receptor==="extension-background"&&x.flujo===sourceFlow));
   assert(events.some(x=>x.stage==="comunicacion-mensaje-respuesta"&&
@@ -206,7 +225,7 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   const serialized=JSON.stringify(events);
   for(const secret of ["ENCRYPTED_TEST_PAYLOAD","SECRET","user@example.com","https://secret","hidden@example.com",
     "DO_NOT_EXPORT","REDACT_THIS","someone@example.com",
-    "DONT_LOG_TOKEN","DONT_LOG_PROXY","SECRET_QUERY","secret.test"])
+    "DONT_LOG_TOKEN","DONT_LOG_PROXY","SECRET_QUERY","secret.test","NOLOG_XHR"])
     assert(!serialized.includes(secret),"Se filtró un secreto en el informe");
 
   // La rama original usa chrome.windows.create({url}, callback).
