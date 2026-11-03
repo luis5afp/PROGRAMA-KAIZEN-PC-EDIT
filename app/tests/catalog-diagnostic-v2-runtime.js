@@ -155,11 +155,11 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   const base={eProp:false,kProp:false,eValue:false,kValue:false,
     eNull:false,kNull:false,eEmpty:false,kEmpty:false,eSpaces:false,
     kSpaces:false,eOther:false,kOther:false,lockProp:true,lockTrue:true,
-    lockFalse:false,lockOther:false,premium:false};
+    lockFalse:false,lockOther:false,premium:false,eAlias:false,kAlias:false,ekPresente:false};
   target.__kzDiagnosticRawBatch([
     {...base,eProp:true,kProp:true,eValue:true,kValue:true,
       lockTrue:false,lockFalse:true},
-    {...base,eProp:true,kProp:true,eEmpty:true,kNull:true},
+    {...base,eProp:true,kProp:true,eEmpty:true,kNull:true,eAlias:true,kAlias:true,ekPresente:true},
     {...base,lockTrue:false,lockFalse:false,lockOther:false,premium:true}
   ]);
   await flush();
@@ -175,6 +175,9 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert.equal(raw.lockTrue,1);
   assert.equal(raw.lockFalse,1);
   assert.equal(raw.premium,1);
+  assert.equal(raw.eAlias,1);
+  assert.equal(raw.kAlias,1);
+  assert.equal(raw.ekPresente,1);
   // El lote simula el contrato reducido del bundle: solo booleanos.
   target.__kzDiagnosticProductBatch([
     {d:true,e:true,k:true,proxy:false,lm:true,cookie:false,id:true,isLock:false,locked:false},
