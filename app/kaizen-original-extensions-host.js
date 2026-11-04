@@ -1,7 +1,7 @@
 "use strict";
 // KAIZEN ORIGINAL extension profiles: one separate Chromium user-data-dir
 // for each original MV3 extension. Each selected profile starts a real
-// Chromium (Chrome for Testing), loads its catalog extension plus EX1/EX2, and navigates
+// Chromium (official unbranded snapshot), loads the catalog extension plus EX1/EX2, and navigates
 // to that extension's login/catalogue UI. No credentials are copied.
 const fs=require("node:fs");
 const path=require("node:path");
@@ -44,13 +44,12 @@ function validatedSecurityExtensions(){
   return ["ex1","ex2"].map(name=>path.join(base,name));
 }
 function browserExecutable() {
-  // Google Chrome official builds no longer accept --load-extension.
-  // Use bundled Chrome for Testing / non-branded Chromium ONLY.
-  const candidates=[
-    path.join(appDirectory(),"KAIZEN_CHROMIUM","chrome-win64","chrome.exe"),
-    path.join(appDirectory(),"KAIZEN_CHROMIUM","chrome.exe")
-  ];
-  return candidates.find(p=>fs.existsSync(p))||"";
+  // Only Chromium's official unbranded snapshot is supported. Deliberately
+  // ignore the previous chrome-win64 Chrome for Testing directory, so a
+  // partial upgrade cannot silently restore the testing-browser banner.
+  // Google Chrome and Microsoft Edge do not reliably allow --load-extension.
+  const chromium=path.join(appDirectory(),"KAIZEN_CHROMIUM","chrome-win","chrome.exe");
+  return fs.existsSync(chromium)?chromium:"";
 }
 function chromeExtensionId(folder) {
   // Chromium crx_file::id_util::GenerateIdForPath: on Windows, hash the
@@ -100,7 +99,7 @@ function listOriginalExtensions(){
       available:!!found&&result.available&&securityAvailable,
       prepared:prepared.has(id)&&securityAvailable,
       local:true,
-      reason:!found?"Falta Chromium compatible incluido":
+      reason:!found?"Falta Chromium oficial incluido":
         !securityAvailable?"EX1/EX2 no están completos o no coinciden sus SHA-256":result.reason};
   });
 }
@@ -134,7 +133,7 @@ async function warmupOriginalProfiles(){
   const task=(async()=>{
     await unpackLocalExtensionArchive();
     const availableBrowser=browserExecutable();
-    if(!availableBrowser)return {ok:false,prepared:0,total:3,reason:"Falta Chromium incluido"};
+    if(!availableBrowser)return {ok:false,prepared:0,total:3,reason:"Falta Chromium oficial incluido"};
     try{validatedSecurityExtensions();}
     catch{
       prepared.clear();
@@ -174,7 +173,7 @@ async function openOriginalExtension(id){
   if(!d)return {ok:false,message:"Perfil de extensión desconocido"};
   if(!d.available)return {ok:false,message:d.reason};
   const chrome=browserExecutable();
-  if(!chrome)return {ok:false,message:"Falta el navegador Chromium incluido en KAIZEN"};
+  if(!chrome)return {ok:false,message:"Falta Chromium oficial en KAIZEN; instala el paquete completo actualizado"};
   if(pending.has(id))return pending.get(id);
   const runningProcess=running.get(id);
   if(runningProcess && runningProcess.exitCode===null && !runningProcess.killed){

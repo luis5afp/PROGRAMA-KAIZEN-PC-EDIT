@@ -3,7 +3,9 @@
 # O:   pwsh -File scripts/build-windows-integrated.ps1 -ExtensionsSource "C:\privado\KAIZEN_EXTENSIONS"
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory=$true)][string]$ExtensionsSource
+  [Parameter(Mandatory=$true)][string]$ExtensionsSource,
+  # Optional official Chromium snapshot revision for reproducible CI builds.
+  [string]$ChromiumRevision = ''
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
@@ -63,9 +65,9 @@ try {
     Pop-Location
   }
 
-  $out = Join-Path $repo 'dist/KAIZEN-PC-v1.5.38-win32-x64'
-  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC-v1.5.38 --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-  if (!(Test-Path "$out/KAIZEN-PC-v1.5.38.exe")) { throw "Fallo la compilacion del ejecutable." }
+  $out = Join-Path $repo 'dist/KAIZEN-PC-v1.5.39-win32-x64'
+  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC-v1.5.39 --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+  if (!(Test-Path "$out/KAIZEN-PC-v1.5.39.exe")) { throw "Fallo la compilacion del ejecutable." }
   $resources = Join-Path $out 'resources'
   foreach ($folder in @('browserProfilesData','extensionsData','syncPath','extensionForSecurity')) {
     $source = Join-Path $repo "runtime-resources/$folder"
@@ -82,20 +84,65 @@ try {
   node app/scripts/verify-original-extensions.js $target
   node -e "require('./app/kaizen-original-extension-importer').validateFolder(process.argv[1])" $target
 
-  $chrome = Join-Path $out 'KAIZEN_CHROMIUM/chrome-win64/chrome.exe'
-  if (!(Test-Path $chrome)) {
-    $meta = Invoke-RestMethod 'https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json'
-    $entry = @($meta.channels.Stable.downloads.chrome | Where-Object { $_.platform -eq 'win64' })[0]
-    if (!$entry.url) { throw "No se encontro Chrome for Testing de Windows x64." }
-    if (!(Test-Path $stage)) { New-Item -ItemType Directory -Path $stage -Force | Out-Null }
-    $browserZip = Join-Path $stage 'chromium-win64.zip'
-    Invoke-WebRequest -Uri $entry.url -OutFile $browserZip -MaximumRedirection 8
-    $browserDir = Join-Path $out 'KAIZEN_CHROMIUM'
-    New-Item -ItemType Directory -Path $browserDir -Force | Out-Null
-    Expand-Archive -LiteralPath $browserZip -DestinationPath $browserDir -Force
+  # Chromium and Chrome for Testing are different distributions. Do NOT
+  # download the Chrome for Testing "Stable" package: it shows a testing banner.
+  # Chromium snapshots do not auto-update and do not include licensed Widevine.
+  $browserRoot = Join-Path $out 'KAIZEN_CHROMIUM'
+  $chrome = Join-Path $browserRoot 'chrome-win/chrome.exe'
+  if (!(Test-Path -LiteralPath $chrome -PathType Leaf)) {
+    $snapshotBase = 'https://commondatastorage.googleapis.com/chromium-browser-snapshots/Win_x64'
+    if (!$ChromiumRevision) {
+      $response = Invoke-WebRequest -Uri "$snapshotBase/LAST_CHANGE" -UseBasicParsing
+      $ChromiumRevision = ([string]$response.Content).Trim()
+    }
+    if ($ChromiumRevision -notmatch '^\d{5,10}$') {
+      throw "Revision oficial de Chromium invalida: $ChromiumRevision"
+    }
+    $archiveUrl = "$snapshotBase/$ChromiumRevision/chrome-win.zip"
+    if (!(Test-Path -LiteralPath $stage)) {
+      New-Item -ItemType Directory -Path $stage -Force | Out-Null
+    }
+    $browserZip = Join-Path $stage 'chromium-snapshot-win64.zip'
+    Write-Host "Descargando Chromium oficial Win_x64 revision $ChromiumRevision"
+    Invoke-WebRequest -Uri $archiveUrl -OutFile $browserZip -MaximumRedirection 8
+    if ((Get-Item -LiteralPath $browserZip).Length -lt 50MB) {
+      throw 'La descarga de Chromium no tiene el tamano esperado.'
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [IO.Compression.ZipFile]::OpenRead($browserZip)
+    try {
+      $entries = @($archive.Entries | Where-Object {
+        $_.FullName.Replace('\\','/') -eq 'chrome-win/chrome.exe'
+      })
+      if ($entries.Count -ne 1) { throw 'ZIP oficial sin chrome-win/chrome.exe' }
+    } finally { $archive.Dispose() }
+    New-Item -ItemType Directory -Path $browserRoot -Force | Out-Null
+    Expand-Archive -LiteralPath $browserZip -DestinationPath $browserRoot -Force
+    if (!(Test-Path -LiteralPath $chrome -PathType Leaf)) {
+      throw 'No se encontro Chromium oficial dentro del ZIP.'
+    }
+    $browserProduct = [string](Get-Item -LiteralPath $chrome).VersionInfo.ProductName
+    if ($browserProduct -match 'Chrome for Testing|Google Chrome') {
+      throw "La descarga no corresponde a Chromium sin marca: $browserProduct"
+    }
+    $sha = (Get-FileHash -LiteralPath $browserZip -Algorithm SHA256).Hash.ToLowerInvariant()
+    @(
+      'Distribucion: Chromium oficial sin marca'
+      "Revision: $ChromiumRevision"
+      "Origen: $archiveUrl"
+      "SHA256-zip: $sha"
+      'Actualizacion: requiere nuevo instalador'
+      'DRM: Widevine no viene incluido en snapshots oficiales'
+    ) | Set-Content -LiteralPath (Join-Path $browserRoot 'CHROMIUM_BUILD.txt') -Encoding UTF8
   }
-  if (!(Test-Path $chrome)) { throw "No se encontro Chromium incluido." }
-
+  if (!(Test-Path -LiteralPath $chrome -PathType Leaf)) {
+    throw 'No se encontro Chromium oficial empaquetado.'
+  }
+  # Do not retain a previous Chrome for Testing folder alongside Chromium.
+  $obsoleteBrowser = Join-Path $browserRoot 'chrome-win64'
+  if (Test-Path -LiteralPath $obsoleteBrowser) {
+    Remove-Item -LiteralPath $obsoleteBrowser -Recurse -Force
+  }
   $installerFolder = Join-Path $repo 'dist/installer'
   if (Test-Path $installerFolder) { Remove-Item -LiteralPath $installerFolder -Force -Recurse }
   npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $out --win nsis --x64 --publish never

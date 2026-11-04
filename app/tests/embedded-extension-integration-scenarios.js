@@ -12,7 +12,7 @@ const specs=[
   ["google","KAIZZEN_GOOGLE","KAIZZEN-GOOGLE","1.0.8"],
   ["custom","KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.11"]
 ];
-const chrome=path.join(root,"KAIZEN_CHROMIUM","chrome-win64","chrome.exe");
+const chrome=path.join(root,"KAIZEN_CHROMIUM","chrome-win","chrome.exe");
 const calls=[];
 const validations=[];
 let securityValid=true;
