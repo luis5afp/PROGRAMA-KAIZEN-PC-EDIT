@@ -69,7 +69,16 @@ $buildInfo = Join-Path $root 'KAIZEN_CHROMIUM/CHROMIUM_BUILD.txt'
 if(Test-Path -LiteralPath $buildInfo -PathType Leaf){
   $info = Get-Content -LiteralPath $buildInfo -Raw -Encoding UTF8
   if($info -notmatch 'Distribucion: Chromium oficial sin marca' -or
-     $info -notmatch '(?m)^Revision: [0-9]+$'){
+     $info -notmatch '(?m)^Revision: [0-9]+\r?){
+    Write-Host '[ERROR] Metadatos del Chromium no reconocidos' -ForegroundColor Red
+    $errors++
+  }
+}
+if($errors -eq 0){Write-Host "PASS: ubicaciones y hashes de instalacion correctos. No garantiza inicio de sesion o apertura real de Chromium." -ForegroundColor Green}
+else{Write-Host "FAIL: $errors problemas. Reinstale el Setup COMPLETO sin copiar solo el EXE." -ForegroundColor Red}
+if($errors){exit 1}
+exit 0
+){
     Write-Host '[ERROR] Metadatos del Chromium no reconocidos' -ForegroundColor Red
     $errors++
   }
