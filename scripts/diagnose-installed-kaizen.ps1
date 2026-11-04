@@ -69,7 +69,7 @@ $buildInfo = Join-Path $root 'KAIZEN_CHROMIUM/CHROMIUM_BUILD.txt'
 if(Test-Path -LiteralPath $buildInfo -PathType Leaf){
   $info = Get-Content -LiteralPath $buildInfo -Raw -Encoding UTF8
   if($info -notmatch 'Distribucion: Chromium oficial sin marca' -or
-     $info -notmatch '(?m)^Revision: [0-9]+\r?){
+     $info -notmatch '(?m)^Revision: [0-9]+\r?$'){
     Write-Host '[ERROR] Metadatos del Chromium no reconocidos' -ForegroundColor Red
     $errors++
   }
