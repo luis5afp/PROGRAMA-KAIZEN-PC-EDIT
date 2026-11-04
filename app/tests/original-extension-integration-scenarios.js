@@ -13,7 +13,7 @@ const dirs=[
   ["KAIZZEN_CUSTOM","KAIZZEN-CUSTOM","1.0.11"]
 ];
 const calls=[];
-const chromiumExe=path.join(root,"KAIZEN_CHROMIUM","chrome-win64","chrome.exe");
+const chromiumExe=path.join(root,"KAIZEN_CHROMIUM","chrome-win","chrome.exe");
 const userData=path.join(root,"userData");
 fs.mkdirSync(path.dirname(chromiumExe),{recursive:true});
 fs.writeFileSync(chromiumExe,"mock binary");
@@ -135,7 +135,10 @@ async function main(){
   assert.equal(api.listOriginalExtensions().find(x=>x.id==="google").available,false);
   fs.writeFileSync(bundledWorker,"// fixture");
   fs.writeFileSync(worker,"// fixture");
-  // The required Chromium must exist; do not silently fall back to Google Chrome.
+  // A legacy Chrome for Testing directory must never be a fallback.
+  const oldTesting=path.join(root,"KAIZEN_CHROMIUM","chrome-win64","chrome.exe");
+  fs.mkdirSync(path.dirname(oldTesting),{recursive:true});
+  fs.writeFileSync(oldTesting,"old Chrome for Testing fixture");
   fs.unlinkSync(chromiumExe);
   assert.equal(api.listOriginalExtensions().every(x=>!x.available),true);
   assert.equal((await api.openOriginalExtension("google")).ok,false);
