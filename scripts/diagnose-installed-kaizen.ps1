@@ -1,5 +1,5 @@
 # Diagnostico offline de instalacion, sin ejecutar ni alterar extensiones.
-# Uso: powershell -ExecutionPolicy Bypass -File scripts/diagnose-installed-kaizen.ps1 -ProgramFolder "C:\ruta\KAIZEN-PC-v1.5.38-win32-x64"
+# Uso: powershell -ExecutionPolicy Bypass -File scripts/diagnose-installed-kaizen.ps1 -ProgramFolder "C:\ruta\KAIZEN-PC-v1.5.39-win32-x64"
 param([Parameter(Mandatory=$true)][string]$ProgramFolder)
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path -LiteralPath $ProgramFolder).Path
@@ -52,11 +52,25 @@ foreach($folder in @('KAIZZEN_MAIN','KAIZZEN_GOOGLE','KAIZZEN_CUSTOM')){
     $errors++
   }
 }
-foreach($relative in @('resources/app.asar','KAIZEN_CHROMIUM/chrome-win64/chrome.exe')){
+foreach($relative in @('resources/app.asar','KAIZEN_CHROMIUM/chrome-win/chrome.exe','KAIZEN_CHROMIUM/CHROMIUM_BUILD.txt')){
   if(Test-Path -LiteralPath (Join-Path $root $relative) -PathType Leaf){
     Write-Host "[OK] $relative" -ForegroundColor Green
   }else{
     Write-Host "[FALTA] $relative" -ForegroundColor Red
+    $errors++
+  }
+}
+$oldChrome = Join-Path $root 'KAIZEN_CHROMIUM/chrome-win64/chrome.exe'
+if(Test-Path -LiteralPath $oldChrome -PathType Leaf){
+  Write-Host '[ERROR] Se encontro Chrome for Testing anterior' -ForegroundColor Red
+  $errors++
+}
+$buildInfo = Join-Path $root 'KAIZEN_CHROMIUM/CHROMIUM_BUILD.txt'
+if(Test-Path -LiteralPath $buildInfo -PathType Leaf){
+  $info = Get-Content -LiteralPath $buildInfo -Raw -Encoding UTF8
+  if($info -notmatch 'Distribucion: Chromium oficial sin marca' -or
+     $info -notmatch '(?m)^Revision: [0-9]+$'){
+    Write-Host '[ERROR] Metadatos del Chromium no reconocidos' -ForegroundColor Red
     $errors++
   }
 }
