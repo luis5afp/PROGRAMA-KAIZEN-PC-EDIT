@@ -105,7 +105,7 @@ ipcMain.handle("kaizen-1524-window-probe",async event=>{
 });
 function installDiagnosticMenu(){
   const menu=Menu.getApplicationMenu()||Menu.buildFromTemplate([]);
-  if(!menu.items.some(item=>item.label==="KAIZEN 1.5.24")){
+  if(!menu.items.some(item=>item.label==="KAIZEN 1.5.39")){
     menu.append(new MenuItem({label:"KAIZEN 1.5.39",submenu:[
       {label:"Diagnóstico integral",accelerator:"CmdOrCtrl+Shift+D",click:openDiagnosticsWindow},
       {label:"Abrir lista de perfiles",click:()=>{
