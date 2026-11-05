@@ -1,4 +1,4 @@
-name: KAIZEN PC 1.5.39 - Validar Windows y publicar tras integrar
+name: KAIZEN PC 1.5.39 - Chromium sin Chrome for Testing
 on:
   pull_request:
     paths:
@@ -59,6 +59,12 @@ jobs:
           node app/tests/verify-original-extensions-scenarios.js
           node app/tests/original-extension-importer-scenarios.js
           node app/tests/original-extension-integration-scenarios.js
+          $productionMain=Get-Content 'app/main.kaizen-1.5.24.js' -Raw
+          $memberMain=Get-Content 'app/main.member-test.js' -Raw
+          if(([regex]::Matches($productionMain,'ipcMain\.handle\("kaizen-original-extension-open"')).Count -ne 1 -or
+             ([regex]::Matches($memberMain,'ipcMain\.handle\("kaizen-original-extension-open"')).Count -ne 0) {
+            throw 'El IPC de apertura Chromium no tiene un único propietario.'
+          }
           node app/scripts/verify-uploaded-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS
           node app/scripts/verify-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS/KAIZEN_EXTENSIONS
           node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
