@@ -39,7 +39,7 @@ const productionMain=fs.readFileSync(path.join(__dirname,"..","main.kaizen-1.5.2
 const memberMain=fs.readFileSync(path.join(__dirname,"..","main.member-test.js"),"utf8");
 // The production launcher must be the sole owner of this IPC channel; a
 // duplicate ipcMain.handle registration prevents Electron from starting.
-const openHandler=/ipcMain\\.handle\\(["']kaizen-original-extension-open["']/g;
+const openHandler='ipcMain.handle("kaizen-original-extension-open"';
 assert.equal((productionMain.match(openHandler)||[]).length,1);
 assert.equal((memberMain.match(openHandler)||[]).length,0);
 assert(source.includes('path.join(appDirectory(),"KAIZEN_CHROMIUM","chrome-win","chrome.exe")'));
