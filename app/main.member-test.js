@@ -100,10 +100,8 @@ ipcMain.handle("kaizen-original-extensions-list", async (event) => {
     "Preparación local: "+Number(result?.prepared||0)+"/3 perfiles");
   return originalExtensions.listOriginalExtensions();
 });
-ipcMain.handle("kaizen-original-extension-open", async (event,id) => {
-  if(!isKaizenUi(event))return {ok:false,message:"Interfaz no autorizada"};
-  return await originalExtensions.openOriginalExtension(id);
-});
+// The production entrypoint main.kaizen-1.5.24.js owns the open IPC handler
+// so it can record a sanitized result. Do not register the same channel twice.
 
 // Comprobar la instalacion empaquetada ANTES de cargar el cliente legado.
 // Conserva todos los hashes originales y evita el aviso genérico de
