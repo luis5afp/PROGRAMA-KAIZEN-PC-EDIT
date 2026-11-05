@@ -35,6 +35,14 @@ function spawnMock(binary,args,options){
   return child;
 }
 const source=fs.readFileSync(path.join(__dirname,"..","kaizen-original-extensions-host.js"),"utf8");
+const productionMain=fs.readFileSync(path.join(__dirname,"..","main.kaizen-1.5.24.js"),"utf8");
+const memberMain=fs.readFileSync(path.join(__dirname,"..","main.member-test.js"),"utf8");
+// The production launcher must be the sole owner of this IPC channel; a
+// duplicate ipcMain.handle registration prevents Electron from starting.
+const openHandler=/ipcMain\\.handle\\(["']kaizen-original-extension-open["']/g;
+assert.equal((productionMain.match(openHandler)||[]).length,1);
+assert.equal((memberMain.match(openHandler)||[]).length,0);
+assert(source.includes('path.join(appDirectory(),"KAIZEN_CHROMIUM","chrome-win","chrome.exe")'));
 const sandbox={module:{exports:{}},exports:{},Buffer,process:{
   execPath:path.join(root,"KAIZEN.exe")
 },console,require:mod=>{
