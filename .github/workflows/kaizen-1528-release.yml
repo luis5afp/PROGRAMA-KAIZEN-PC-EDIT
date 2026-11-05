@@ -6,14 +6,28 @@ on:
       - "runtime-resources/KAIZEN_EXTENSIONS/**"
       - "scripts/build-windows-integrated.ps1"
       - ".github/workflows/kaizen-1528-release.yml"
+      - "scripts/diagnose-installed-kaizen.ps1"
+      - "app/main.member-test.js"
+      - "app/main.kaizen-1.5.24.js"
+      - "app/tests/original-extension-integration-scenarios.js"
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [".github/workflows/kaizen-1528-release.yml"]
+    paths:
+      - ".github/workflows/kaizen-1528-release.yml"
+      - "scripts/diagnose-installed-kaizen.ps1"
+      - "scripts/build-windows-integrated.ps1"
+      - "app/main.member-test.js"
+      - "app/main.kaizen-1.5.24.js"
+      - "app/kaizen-original-extensions-host.js"
+      - "app/tests/original-extension-integration-scenarios.js"
+      - "app/package.json"
+      - "app/electron-builder.yml"
+      - "docs/RELEASE-NOTES-v1.5.39.md"
 permissions:
   contents: write
 concurrency:
-  group: kaizen-1538-release
+  group: kaizen-1539-release
   cancel-in-progress: false
 jobs:
   release:
@@ -55,6 +69,11 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
+          $tokens=$null; $parseErrors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path './scripts/diagnose-installed-kaizen.ps1').Path,
+            [ref]$tokens,[ref]$parseErrors)
+          if($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
           & './scripts/build-windows-integrated.ps1' -ExtensionsSource 'runtime-resources/KAIZEN_EXTENSIONS'
           $root='dist/KAIZEN-PC-v1.5.39-win32-x64'
           & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder $root
@@ -78,6 +97,20 @@ jobs:
           node app/scripts/verify-uploaded-original-extensions.js (Join-Path $folder 'resources/KAIZEN_EXTENSIONS')
           node app/scripts/verify-security-extensions.js (Join-Path $folder 'resources/extensionForSecurity')
           node app/scripts/verify-legacy-core-resources.js (Join-Path $folder 'resources/extensionForSecurity')
+          $browser=Join-Path $folder 'KAIZEN_CHROMIUM/chrome-win/chrome.exe'
+          $versionOutput=(& $browser --version 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $versionOutput -notmatch 'Chromium' -or $versionOutput -match 'Chrome for Testing') {
+            throw "El navegador instalado no es Chromium sin marca: $versionOutput"
+          }
+          Write-Host "Navegador instalado y ejecutable: $versionOutput"
+          $smokeProfile=Join-Path $env:TEMP ("kaizen-chromium-smoke-"+[guid]::NewGuid().ToString('N'))
+          try {
+            & $browser '--headless=new' '--disable-gpu' '--no-first-run' "--user-data-dir=$smokeProfile" '--dump-dom' 'about:blank' | Out-Null
+            if($LASTEXITCODE -ne 0) { throw 'Chromium no pudo abrir una página headless de prueba.' }
+            Write-Host 'Chromium headless startup smoke test: PASS'
+          } finally {
+            if(Test-Path -LiteralPath $smokeProfile) { Remove-Item -LiteralPath $smokeProfile -Recurse -Force }
+          }
       - name: Crear SHA256 y confirmar el instalador definitivo
         shell: pwsh
         run: |
@@ -108,5 +141,5 @@ jobs:
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
           $sha=(git rev-parse HEAD).Trim()
-          & gh release create v1.5.39 "$env:SETUP" "$env:SHA" --repo "$env:GITHUB_REPOSITORY" --target "$sha" --title 'KAIZEN PC 1.5.39 - Diagnóstico de catálogos y formularios' --notes-file docs/RELEASE-NOTES-v1.5.39.md --latest
+          & gh release create v1.5.39 "$env:SETUP" "$env:SHA" --repo "$env:GITHUB_REPOSITORY" --target "$sha" --title 'KAIZEN PC 1.5.39 - Chromium sin Chrome for Testing' --notes-file docs/RELEASE-NOTES-v1.5.39.md --latest
           if($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la version 1.5.39' }
