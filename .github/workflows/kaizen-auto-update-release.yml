@@ -76,6 +76,11 @@ jobs:
           if($feed -notmatch 'PROGRAMA-KAIZEN-PC-EDIT' -or $feed -match 'private:\s*true') {
             throw 'Se instaló un proveedor de actualización incorrecto'
           }
+          # Un EXE firmado no basta: el actualizador también debe reconocer
+          # al editor que firmó el instalador antes de aplicarlo.
+          if($feed -notmatch '(?m)^\s*publisherName\s*:') {
+            throw 'app-update.yml no contiene publisherName de firma: no es seguro activar instalaciones automáticas'
+          }
           $signatureExe=Get-AuthenticodeSignature -LiteralPath $installed[0].FullName
           if($signatureExe.Status -ne 'Valid') { throw 'El ejecutable instalado no esta firmado correctamente' }
           $setup=$installer[0]
