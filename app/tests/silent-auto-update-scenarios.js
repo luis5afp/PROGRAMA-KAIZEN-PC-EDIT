@@ -3,7 +3,7 @@ const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const path=require("node:path");
 const {EventEmitter}=require("node:events");
-const {startStartupUpdate,checkDownloadAndRestart,FEED}=require("../kaizen-silent-updater");
+const {startStartupUpdate,checkDownloadAndRestart,hasVerifiedPublisherConfig,FEED}=require("../kaizen-silent-updater");
 
 class FakeUpdater extends EventEmitter {
   constructor(mode){
@@ -31,6 +31,13 @@ class FakeUpdater extends EventEmitter {
   quitAndInstall(...args){this.installs.push(args);}
 }
 (async()=>{
+  const baseFeed="provider: github\\nowner: luis5afp\\nrepo: PROGRAMA-KAIZEN-PC-EDIT\\nprivate: false\\n";
+  const unsignedFeed=baseFeed.replaceAll("\\n","\n");
+  assert.equal(hasVerifiedPublisherConfig(unsignedFeed),false,"build sin firma no debe actualizarse sin preguntar");
+  assert.equal(hasVerifiedPublisherConfig(unsignedFeed+"publisherName: 'CN=Editor de KAIZEN, O=Personal, C=PE'\n"),true);
+  assert.equal(hasVerifiedPublisherConfig(unsignedFeed+"publisherName: 'CN=Editor de KAIZEN'\nprivate: true\n"),false);
+  assert.equal(hasVerifiedPublisherConfig(unsignedFeed.replace("luis5afp","otro-editor")+"publisherName: 'CN=Otro'\n"),false);
+
   const current=new FakeUpdater("current");
   assert.equal(await checkDownloadAndRestart(current),true);
   assert.equal(current.checks,1);
