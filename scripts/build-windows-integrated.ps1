@@ -13,6 +13,19 @@ $repo = Split-Path -Parent $PSScriptRoot
 $package = Get-Content -LiteralPath (Join-Path $repo 'app/package.json') -Raw | ConvertFrom-Json
 $version = [string]$package.version
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Version SemVer invalida en package.json' }
+# The publisher subject is public identity metadata, NOT a credential. It must
+# be identical to the Subject of the certificate signing the NSIS installer.
+$publisher = [string]$env:KAIZEN_PUBLISHER_NAME
+$hasSigningCertificate = (![string]::IsNullOrWhiteSpace($env:CSC_LINK)) -and (![string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD))
+if ($hasSigningCertificate -and [string]::IsNullOrWhiteSpace($publisher)) {
+  throw 'Falta KAIZEN_PUBLISHER_NAME: no se puede crear un auto-updater firmado sin identidad verificable.'
+}
+if (![string]::IsNullOrWhiteSpace($publisher)) {
+  if (!$hasSigningCertificate) { throw 'KAIZEN_PUBLISHER_NAME exige certificado y contraseña de firma.' }
+  if ($publisher -notmatch '^CN=.+$' -or $publisher -match '[\r\n]') {
+    throw 'KAIZEN_PUBLISHER_NAME debe contener un subject de certificado Windows valido (CN=..., O=..., C=...).'
+  }
+}
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("kaizen-private-build-" + [guid]::NewGuid().ToString('N'))
 Push-Location $repo
 try {
@@ -78,7 +91,14 @@ try {
   }
   node app/scripts/verify-legacy-core-resources.js "$resources/extensionForSecurity"
   # Incluye el feed en el programa ANTES de empacar el instalador NSIS.
-  Copy-Item -LiteralPath (Join-Path $repo 'runtime-resources/app-update.yml') -Destination (Join-Path $resources 'app-update.yml') -Force
+  $feedFile = Join-Path $resources 'app-update.yml'
+  Copy-Item -LiteralPath (Join-Path $repo 'runtime-resources/app-update.yml') -Destination $feedFile -Force
+  if (![string]::IsNullOrWhiteSpace($publisher)) {
+    # Escape single quotes for YAML. Keep the signer identity in the installer
+    # so electron-updater checks the downloaded setup's Authenticode signature.
+    $escapedSubject = $publisher.Replace("'", "''")
+    Add-Content -LiteralPath $feedFile -Value ("publisherName: '" + $escapedSubject + "'") -Encoding UTF8
+  }
 
   $target = Join-Path $resources 'KAIZEN_EXTENSIONS'
   if (Test-Path $target) { Remove-Item -LiteralPath $target -Force -Recurse }
@@ -190,6 +210,19 @@ try {
   $feedText = Get-Content -LiteralPath $feedFile -Raw
   if ($feedText -notmatch 'PROGRAMA-KAIZEN-PC-EDIT' -or $feedText -match 'private:\s*true') {
     throw 'Feed de actualizacion no autorizado o privado.'
+  }
+  if ($hasSigningCertificate) {
+    $signature = Get-AuthenticodeSignature -LiteralPath $installer[0].FullName
+    if ($signature.Status -ne 'Valid' -or !$signature.SignerCertificate) {
+      throw "La versión firmada no tiene una firma Authenticode válida: $($signature.Status)"
+    }
+    if ($signature.SignerCertificate.Subject -cne $publisher) {
+      throw 'La identidad de firma del Setup no coincide exactamente con KAIZEN_PUBLISHER_NAME.'
+    }
+    $expectedYaml = "publisherName: '" + $publisher.Replace("'", "''") + "'"
+    if (!$feedText.Contains($expectedYaml)) {
+      throw 'El Setup no incluye publisherName esperado en resources/app-update.yml.'
+    }
   }
   Write-Host "Instalador creado: $($installer[0].FullName) v$version, latest.yml verificado."
   Write-Host "Principal, Google y Custom quedan dentro de resources/KAIZEN_EXTENSIONS."
