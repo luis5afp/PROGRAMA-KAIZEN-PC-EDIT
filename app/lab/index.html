@@ -34,18 +34,27 @@
     input {background:#0b1320;color:#f2f6fd;border:1px solid #485b79;border-radius:9px;padding:12px;font:inherit;width:100%;box-sizing:border-box}
     #result {white-space:pre-wrap;padding:13px;border-radius:9px;background:#0c2533;border:1px solid #416981;min-height:42px;line-height:1.6}
     .footer {margin:22px 0;color:#8ca6bf;font-size:12px}
+    .integration-row {display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding:10px 2px;border-bottom:1px solid #304059;color:#bed0e6;font-size:13px;line-height:1.6}
+    .integration-row strong {color:#eef5ff;font-size:13px}
+    .integration-grid {display:grid;grid-template-columns:1fr 1.3fr;gap:18px;margin-top:26px}
+    .integration-grid textarea {width:100%;min-height:135px;resize:vertical;background:#0b1320;color:#f2f6fd;border:1px solid #485b79;border-radius:9px;padding:11px;box-sizing:border-box;font:12px/1.5 ui-monospace,monospace}
+    .integration-grid select {max-width:100%}
+    .integration-grid h2{margin-top:0}
+    @media(max-width:720px){.integration-grid{grid-template-columns:1fr}}
     @media(max-width:720px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.bodygrid{grid-template-columns:1fr}body{padding:14px}}
   </style>
   <script defer src="./kaizen-233-core.js"></script>
   <script defer src="./kaizen-233-ui.js"></script>
+  <script defer src="./kaizen-1542-integration.js"></script>
+  <script defer src="./kaizen-1542-integration-ui.js"></script>
 </head>
 <body>
   <header>
-    <div class="eyebrow">KAIZEN PC · PRUEBA AISLADA · CANDIDATA 1.5.41</div>
+    <div class="eyebrow">KAIZEN PC · LABORATORIO + DIAGNÓSTICO REAL · 1.5.42</div>
     <h1>Laboratorio de 233 tarjetas</h1>
     <p>Demostración reproducible de catálogo, autorización <em>simulada</em>, sesión temporal y autocompletado en un formulario ficticio.</p>
   </header>
-  <div class="notice"><strong>Solo pruebas.</strong> Los 233 productos, las direcciones <code>.invalid</code> y las credenciales son ficticios. Esta página no accede a tu servidor, a las extensiones instaladas ni a cuentas externas. No cambia permisos reales.</div>
+  <div class="notice"><strong>Dos modos separados.</strong> Las 233 tarjetas <code>.invalid</code> y sus contraseñas son ficticias. La nueva sección de diagnóstico permite consultar, solo si tú pulsas el botón, metadatos HTTP del servidor usando tu sesión de KAIZEN PC. Los informes sanitizados de MAIN, GOOGLE y CUSTOM se cargan manualmente. No se modifican permisos ni se importan credenciales reales.</div>
 
   <section class="metrics" aria-label="Resumen del catálogo ficticio">
     <div class="stat"><strong id="received">233</strong><span>Tarjetas recibidas</span></div>
@@ -88,6 +97,36 @@
       <small>Los campos son locales, solo de demostración y no se envía nada al servidor. El formulario nunca realiza un envío.</small>
     </section>
   </div>
-  <div class="footer">KAIZEN · Laboratorio sin red · Datos reservados para pruebas · Ningún cambio en el catálogo real.</div>
+  <section id="integration" class="integration-grid" aria-label="Diagnóstico de integración real">
+    <div class="panel">
+      <h2>Conexión API del servidor · Solo lectura</h2>
+      <p>Consulta voluntaria de estado HTTP y cantidades, utilizando exclusivamente la sesión iniciada en KAIZEN PC. <strong>No</strong> descifra credenciales ni cambia productos.</p>
+      <button type="button" id="live-api-probe" class="primary">Comprobar APIs del escritorio</button>
+      <p id="live-api-status" role="status">Sin consultar. La sesión de cada extensión puede tener permisos distintos.</p>
+      <div id="live-api-results" aria-label="Estados HTTP de las rutas"></div>
+      <p class="footer">La consulta es explícita y la procesa Electron, no el laboratorio ficticio. No se muestra ningún token.</p>
+    </div>
+    <div class="panel">
+      <h2>Comparar Principal, Google y Custom</h2>
+      <p>En cada extensión abre <strong>Diagnóstico → Copiar informe</strong>. Pega aquí el informe sanitizado de esa extensión y selecciona su perfil. Solo se conservarán conteos y estados en memoria; el texto pegado se borra al analizar.</p>
+      <label for="integration-profile">Perfil observado
+        <select id="integration-profile">
+          <option value="main">Principal · KAIZZEN-MAIN</option>
+          <option value="google">Google · KAIZZEN-GOOGLE</option>
+          <option value="custom">Custom · KAIZZEN-CUSTOM</option>
+        </select>
+      </label>
+      <label for="integration-report">Informe de diagnóstico exportado
+        <textarea id="integration-report" maxlength="240000" spellcheck="false" autocomplete="off" placeholder="Pega el informe sanitizado de la extensión, sin cookies, tokens ni contraseñas."></textarea>
+      </label>
+      <div class="controls">
+        <button type="button" id="integration-analyze" class="primary">Analizar informe</button>
+        <button type="button" id="integration-clear">Limpiar comparación</button>
+      </div>
+      <p id="integration-status" role="status">Aún no se han analizado perfiles.</p>
+      <div id="integration-summary" aria-label="Comparación de las extensiones"></div>
+    </div>
+  </section>
+  <div class="footer">KAIZEN 1.5.42 · Los resultados de las 233 tarjetas simuladas no representan permisos reales. Informe local sin guardado ni telemetría. El servidor y los permisos originales permanecen intactos.</div>
 </body>
 </html>
