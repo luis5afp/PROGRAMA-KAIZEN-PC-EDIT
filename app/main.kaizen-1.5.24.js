@@ -147,7 +147,7 @@ ipcMain.handle("kaizen-lab-live-probe",async event=>{
     if(!win)return {ok:false,message:"Abre e inicia sesión en la ventana principal de KAIZEN PC."};
     token=await win.webContents.executeJavaScript("window.localStorage.getItem('token') || ''",true);
     if(typeof token!=="string"||!token||token.length>8192)
-      return {ok:false,message:"Inicia sesión en KAIZEN PC antes de comprobar las APIs."};
+      return {ok:false,message:"La ventana principal de KAIZEN PC no tiene una sesión iniciada. El acceso a KAIZZEN-GOOGLE es independiente. Puedes comparar los informes sin iniciar sesión en el escritorio."};
     return await diagnostics.remoteChecks(token);
   }catch(_){
     return {ok:false,message:"No se pudo obtener una respuesta de la sesión del escritorio."};
