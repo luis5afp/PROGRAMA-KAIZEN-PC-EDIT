@@ -108,4 +108,36 @@ jobs:
           }
           Write-Host 'PASS: instalacion NSIS y Chromium real, cinco extensiones, configuración y perfiles.'
 
-      # No upload-artifact ni publicación: el paquete de PR es una prueba sin firma.
+      - name: Preparar instalador de prueba descargable (sin firma)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $setup=@(Get-ChildItem -LiteralPath 'dist/installer' -Filter 'KAIZEN-PC-v1.5.40-Setup-x64.exe' -File)
+          if($setup.Count -ne 1) { throw 'No se encontró el Setup completo 1.5.40' }
+          $hash=(Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$($setup[0].Name)" | Set-Content -LiteralPath ($setup[0].FullName+'.sha256') -Encoding ascii
+          @(
+            'KAIZEN PC 1.5.40 - INSTALADOR DE PRUEBA SIN FIRMA'
+            'Compilacion completa con Chromium y extensiones verificadas en CI.'
+            'Uso personal/manual exclusivamente. No es una version publicada.'
+            'Windows SmartScreen puede mostrar advertencias porque no tiene certificado.'
+            'Esta compilacion sin editor verificado NO instala actualizaciones automaticas.'
+            'Cierra KAIZEN y guarda una copia de tus perfiles antes de instalar.'
+            'Ejecuta KAIZEN-PC-v1.5.40-Setup-x64.exe para instalar.'
+            'SHA256 incluido para verificar integridad del archivo.'
+          ) | Set-Content -LiteralPath 'dist/installer/LEER-ANTES-DE-INSTALAR.txt' -Encoding UTF8
+          Write-Host 'PASS: Setup manual preparado, SHA256 generado.'
+
+      - name: Guardar instalador validado como descarga de GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-PC-v1.5.40-Setup-x64-PRUEBA-SIN-FIRMA
+          path: |
+            dist/installer/KAIZEN-PC-v1.5.40-Setup-x64.exe
+            dist/installer/KAIZEN-PC-v1.5.40-Setup-x64.exe.sha256
+            dist/installer/LEER-ANTES-DE-INSTALAR.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      # Artifacto temporal de Actions, no Release y no auto-update.
