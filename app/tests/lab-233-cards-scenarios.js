@@ -78,5 +78,22 @@ for(const [profile,asset] of [
   assert(real.includes("Página pública abierta sin sesión gestionada"),
     profile+" must retain public-only behavior for locked cards");
 }
+const main=fs.readFileSync(path.join(__dirname,"..","main.kaizen-1.5.24.js"),"utf8");
+const pkg=JSON.parse(fs.readFileSync(path.join(__dirname,"..","package.json"),"utf8"));
+assert.equal(pkg.version,"1.5.41");
+for(const marker of [
+  "openLaboratoryWindow",
+  "Laboratorio 233 tarjetas · SOLO PRUEBAS",
+  'partition:"kaizen-1541-lab-memory-only"',
+  "nodeIntegration:false",
+  "contextIsolation:true",
+  "sandbox:true",
+  "webSecurity:true",
+  'setWindowOpenHandler(()=>({action:"deny"}))',
+  "setPermissionRequestHandler",
+  "setPermissionCheckHandler",
+  'path.join(__dirname,"lab","index.html")'
+])assert(main.includes(marker),"El menú Electron debe integrar el laboratorio aislado: "+marker);
+assert(!main.includes("app/lab/index.html?token="),"No deben inyectarse tokens en el laboratorio");
 console.log("PASS: 233 ficticias recibidas, 233 autorizadas, 0 restringidas, 233 credenciales ficticias y 233 simulaciones de autocompletado.");
 console.log("PASS: 233 bloqueadas no rellenan, 233 sin credenciales no rellenan, dominio/TTL verificados, sin red ni persistencia.");
