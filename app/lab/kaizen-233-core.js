@@ -93,7 +93,7 @@
         }
       }
     }
-    // Deliberately no form.submit(), fetch(), storage or browser cookies.
+    // Deliberately no submissions, network calls, storage or browser cookies.
     return Object.freeze({ok:true,filled:2});
   }
   return Object.freeze({TOTAL,MODES,makeCatalog,metrics,beginAutofill,fillFakeForm});
