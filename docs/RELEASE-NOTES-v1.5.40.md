@@ -33,10 +33,13 @@ No se copiaron credenciales al sistema de actualizaciones.
   las versiones 1.5.39 y anteriores tenían desactivado el auto-updater.
 
 ## Verificaciones pendientes antes de publicar
-1. Configurar en GitHub Actions los secretos de firma `KAIZEN_CSC_LINK` y
-   `KAIZEN_CSC_PASSWORD`.
-2. Compilar en Windows el instalador completo, instalarlo y comprobar firma,
-   EX1/EX2, perfiles, `resources/app-update.yml` y `latest.yml`.
+1. Configurar en GitHub Actions los secretos de firma `KAIZEN_CSC_LINK`,
+   `KAIZEN_CSC_PASSWORD` y `KAIZEN_PUBLISHER_NAME` (el Subject completo
+   del certificado, usado para verificar la identidad de futuras versiones).
+2. La compilación completa y su instalación silenciosa en un Windows de CI,
+   junto con EX1/EX2, Chromium y los hashes del `latest.yml`, fueron
+   verificadas en [GitHub Actions](https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43793675020).
+   Aún falta repetir la validación del Setup **firmado** con los secretos reales.
 3. Hacer ensayo controlado de dos releases sucesivos (por ejemplo,
    1.5.40 → versión siguiente) y confirmar que se descarga, instala y
    abre la segunda versión sin preguntar.
