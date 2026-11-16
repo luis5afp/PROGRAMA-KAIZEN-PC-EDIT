@@ -25,6 +25,7 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.KAIZEN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.KAIZEN_CSC_PASSWORD }}
+          KAIZEN_PUBLISHER_NAME: ${{ secrets.KAIZEN_PUBLISHER_NAME }}
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
@@ -32,8 +33,11 @@ jobs:
           $tag=$env:GITHUB_REF_NAME
           if($tag -ne "v$version") { throw "El tag $tag no coincide con package.json v$version" }
           if($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version SemVer no valida" }
-          if(!$env:CSC_LINK -or !$env:CSC_KEY_PASSWORD) {
-            throw 'Para publicar actualizaciones sin confirmacion debes configurar los secretos de firma KAIZEN_CSC_LINK y KAIZEN_CSC_PASSWORD.'
+          if(!$env:CSC_LINK -or !$env:CSC_KEY_PASSWORD -or !$env:KAIZEN_PUBLISHER_NAME) {
+            throw 'Configura los secretos de firma KAIZEN_CSC_LINK, KAIZEN_CSC_PASSWORD y KAIZEN_PUBLISHER_NAME antes de publicar.'
+          }
+          if($env:KAIZEN_PUBLISHER_NAME -notmatch '^CN=.+$' -or $env:KAIZEN_PUBLISHER_NAME -match '[\r\n]') {
+            throw 'KAIZEN_PUBLISHER_NAME debe coincidir con el Subject completo del certificado Windows.'
           }
           node app/tests/silent-auto-update-scenarios.js
           node app/tests/embedded-extension-integration-scenarios.js
@@ -48,6 +52,7 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.KAIZEN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.KAIZEN_CSC_PASSWORD }}
+          KAIZEN_PUBLISHER_NAME: ${{ secrets.KAIZEN_PUBLISHER_NAME }}
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
@@ -55,6 +60,8 @@ jobs:
 
       - name: Instalar, comprobar actualizador y firma
         shell: pwsh
+        env:
+          KAIZEN_PUBLISHER_NAME: ${{ secrets.KAIZEN_PUBLISHER_NAME }}
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
@@ -62,6 +69,10 @@ jobs:
           if($installer.Count -ne 1 -or $installer[0].Length -lt 100MB) { throw 'Setup incompleto' }
           $signature=Get-AuthenticodeSignature -LiteralPath $installer[0].FullName
           if($signature.Status -ne 'Valid') { throw "Instalador sin firma valida: $($signature.Status)" }
+          if(!$signature.SignerCertificate -or
+             $signature.SignerCertificate.Subject -cne $env:KAIZEN_PUBLISHER_NAME) {
+            throw 'Editor del Setup no coincide con KAIZEN_PUBLISHER_NAME.'
+          }
           $proc=Start-Process -FilePath $installer[0].FullName -ArgumentList '/S' -Wait -PassThru
           if($proc.ExitCode -ne 0) { throw "Instalacion NSIS fallo: $($proc.ExitCode)" }
           $programs=Join-Path $env:LOCALAPPDATA 'Programs'
@@ -80,6 +91,10 @@ jobs:
           # al editor que firmó el instalador antes de aplicarlo.
           if($feed -notmatch '(?m)^\s*publisherName\s*:') {
             throw 'app-update.yml no contiene publisherName de firma: no es seguro activar instalaciones automáticas'
+          }
+          $expected = "publisherName: '" + $env:KAIZEN_PUBLISHER_NAME.Replace("'", "''") + "'"
+          if(!$feed.Contains($expected)) {
+            throw 'El actualizador no está anclado a la identidad del certificado del Setup.'
           }
           $signatureExe=Get-AuthenticodeSignature -LiteralPath $installed[0].FullName
           if($signatureExe.Status -ne 'Valid') { throw 'El ejecutable instalado no esta firmado correctamente' }
