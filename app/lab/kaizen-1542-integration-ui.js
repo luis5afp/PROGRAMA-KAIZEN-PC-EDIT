@@ -93,7 +93,7 @@
     try{
       const result=await bridge.probe();
       if(!result?.ok){
-        liveStatus.textContent=String(result?.message||"No se pudo consultar las APIs").slice(0,115);
+        liveStatus.textContent=String(result?.message||"No se pudo consultar las APIs").slice(0,320);
         return;
       }
       liveStatus.textContent="Respuestas del servidor para la sesión de KAIZEN PC; no equivalen a los permisos de Principal, Google y Custom.";
