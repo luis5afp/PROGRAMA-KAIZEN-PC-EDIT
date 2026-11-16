@@ -18,14 +18,14 @@ class FakeUpdater extends EventEmitter {
     this.checks++;
     if(this.mode==="offline")throw Error("network offline");
     if(this.mode==="available"||this.mode==="broken-download")
-      this.emit("update-available",{version:"1.5.42"});
-    else this.emit("update-not-available",{version:"1.5.41"});
+      this.emit("update-available",{version:"1.5.43"});
+    else this.emit("update-not-available",{version:"1.5.42"});
     return {};
   }
   async downloadUpdate(){
     this.downloads++;
     if(this.mode==="broken-download")throw Error("download failed");
-    this.emit("update-downloaded",{version:"1.5.42"});
+    this.emit("update-downloaded",{version:"1.5.43"});
     return ["test-installer"];
   }
   quitAndInstall(...args){this.installs.push(args);}
@@ -85,7 +85,7 @@ class FakeUpdater extends EventEmitter {
   assert.match(settings,/oneClick: true/);
   assert.match(settings,/perMachine: false/);
   assert.match(settings,/allowElevation: false/);
-  assert.equal(pkg.version,"1.5.41");
+  assert.equal(pkg.version,"1.5.42");
   assert.equal(pkg.productName,"KAIZEN PC","conservar nombre de datos de usuario anterior");
   assert(build.includes("latest.yml"));
   assert(build.includes("app-update.yml"));
