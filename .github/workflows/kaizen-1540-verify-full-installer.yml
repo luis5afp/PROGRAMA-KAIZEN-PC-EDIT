@@ -34,6 +34,7 @@ jobs:
           if($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version SemVer invalida: $version" }
           node app/tests/silent-auto-update-scenarios.js
           node app/tests/lab-233-cards-scenarios.js
+          node app/tests/lab-1542-integration-scenarios.js
           node app/tests/browser-executable-unification-scenarios.js
           node app/tests/embedded-extension-integration-scenarios.js
           node app/tests/original-extension-integration-scenarios.js
