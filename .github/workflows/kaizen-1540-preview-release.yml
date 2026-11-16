@@ -1,0 +1,87 @@
+name: KAIZEN 1.5.40 - Publicar instalador de prueba en Releases
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/kaizen-1540-preview-release.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: kaizen-preview-1540-release
+  cancel-in-progress: false
+jobs:
+  prerelease:
+    if: github.repository == 'luis5afp/PROGRAMA-KAIZEN-PC-EDIT'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar versión y compilación autorizada
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./app/package.json').version")" = "1.5.40"
+          grep -Fq 'hasVerifiedPublisherConfig(feedText)' app/kaizen-silent-updater.js
+          echo "Código 1.5.40 preparado. Las compilaciones sin publisherName no se autoactualizan."
+
+      - name: Descargar Setup completo previamente validado en Windows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # GitHub Actions 43800160346 passed full NSIS packaging, SHA512
+          # verification and real Windows unattended installation.
+          gh run download 43800160346 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "KAIZEN-PC-v1.5.40-Setup-x64-PRUEBA-SIN-FIRMA" \
+            --dir dist-preview
+          test -s "dist-preview/KAIZEN-PC-v1.5.40-Setup-x64.exe"
+          test -s "dist-preview/KAIZEN-PC-v1.5.40-Setup-x64.exe.sha256"
+          test -s "dist-preview/LEER-ANTES-DE-INSTALAR.txt"
+          cd dist-preview
+          sha256sum --check "KAIZEN-PC-v1.5.40-Setup-x64.exe.sha256"
+          size=$(stat -c%s "KAIZEN-PC-v1.5.40-Setup-x64.exe")
+          if (( size < 100000000 )); then
+            echo "Setup incompleto: $size bytes" >&2
+            exit 1
+          fi
+          echo "SHA256 correcto; tamaño $size bytes."
+
+      - name: Documentar limitaciones de esta prueba
+        shell: bash
+        run: |
+          cat > dist-preview/NOTAS-PUBLICACION-PRELIMINAR.txt <<'EOF'
+          KAIZEN PC 1.5.40 - PUBLICACIÓN PRELIMINAR, NO FIRMADA
+          
+          - Sólo instalación manual en Windows x64, para pruebas personales.
+          - No se considera una actualización automática estable.
+          - Windows SmartScreen puede advertir porque no hay firma de editor.
+          - El comprobador de actualizaciones sólo se activa cuando el
+            instalador contiene una identidad de editor verificada.
+          - Se han verificado empaquetado, recursos, SHA-512 y
+            ejecución del instalador /S en Windows de GitHub Actions.
+          - No se ha validado una actualización firmada entre dos versiones.
+          - Haz copia de seguridad de perfiles antes de instalar.
+          
+          Procedencia: https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43800160346
+          EOF
+
+      - name: Publicar preliminar en la sección Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v1.5.40-preview.1"
+          gh release create "$tag" \
+            "dist-preview/KAIZEN-PC-v1.5.40-Setup-x64.exe" \
+            "dist-preview/KAIZEN-PC-v1.5.40-Setup-x64.exe.sha256" \
+            "dist-preview/LEER-ANTES-DE-INSTALAR.txt" \
+            "dist-preview/NOTAS-PUBLICACION-PRELIMINAR.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "KAIZEN PC 1.5.40 - Prueba manual sin firma" \
+            --notes "Versión preliminar del Setup Windows x64, validada en GitHub Actions. Descarga y ejecuta manualmente. No ofrece actualizaciones automáticas: para habilitarlas falta publicar la versión estable firmada con los secretos KAIZEN_CSC_LINK, KAIZEN_CSC_PASSWORD y KAIZEN_PUBLISHER_NAME. Procedencia: Actions 43800160346." \
+            --prerelease
