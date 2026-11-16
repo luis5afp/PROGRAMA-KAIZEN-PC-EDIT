@@ -49,12 +49,26 @@
     const profile=$("integration-profile").value;
     try {
       const outcome=parser.analyze(reportBox.value,profile);
-      reports[profile]=outcome;
-      status.textContent="Informe sanitizado analizado: "+names[profile]+
+      reports[outcome.profile]=outcome;
+      $("integration-profile").value=outcome.profile;
+      status.textContent="Informe sanitizado analizado: "+names[outcome.profile]+
         " · HTTP "+(outcome.http??"sin datos")+
         " · autorizadas "+outcome.authorized+"/"+outcome.received;
-    }catch(_){
-      status.textContent="No se pudo analizar el informe. Usa el archivo de Diagnóstico exportado desde la extensión correspondiente.";
+    }catch(error){
+      // Only predefined parser errors are shown; never echo pasted report text.
+      const safe=[
+        /^El informe está vacío o excede el límite permitido$/,
+        /^El JSON del diagnóstico no es válido$/,
+        /^Falta el campo resumen del diagnóstico$/,
+        /^El informe no identifica el perfil de la extensión$/,
+        /^El informe no contiene todos los conteos de catálogo descifrado$/,
+        /^Los totales de autorizaciones no coinciden con las tarjetas descifradas$/,
+        /^Los conteos de presencia de campos son inconsistentes$/,
+        /^El informe es KAIZZEN-(?:MAIN|GOOGLE|CUSTOM)\. Selecciona KAIZZEN-(?:MAIN|GOOGLE|CUSTOM) o detección automática\.$/
+      ];
+      const msg=String(error?.message||"");
+      status.textContent=safe.some(re=>re.test(msg))?msg:
+        "No se pudo analizar el informe. Copia el reporte desde Diagnóstico de la extensión.";
     }finally{
       // Never preserve raw JSON that could accidentally contain cookies/tokens.
       reportBox.value="";
