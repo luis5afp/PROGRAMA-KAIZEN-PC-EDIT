@@ -2,22 +2,48 @@
 
 Repositorio de trabajo para la versión editable de KAIZEN PC.
 
-## Política de actualizaciones
+## Política de actualizaciones (desde 1.5.40)
 
-Las actualizaciones automáticas están desactivadas en esta variante.
+KAIZEN PC para Windows comprueba **una vez al iniciarse** si existe una versión
+estable posterior en los Releases públicos de
+`luis5afp/PROGRAMA-KAIZEN-PC-EDIT`.
 
-- KAIZEN puede iniciar y funcionar aunque exista una versión más nueva.
-- No se consulta GitHub para buscar actualizaciones al iniciar.
-- No se realizan comprobaciones periódicas de nuevas versiones.
-- No se descargan actualizaciones automáticamente.
-- No se instala una actualización al cerrar la aplicación.
-- Las solicitudes manuales de actualización del cliente actual se ignoran.
+- Si no existe una versión nueva, abre KAIZEN normalmente.
+- Si hay una versión nueva, espera su descarga verificada, cierra el proceso,
+  instala el NSIS **sin solicitar confirmación** (en instalaciones por usuario)
+  y reinicia KAIZEN con la nueva versión.
+- Si no hay internet, faltan metadatos o falla la descarga, inicia la versión
+  actual. No modifica sesiones ni perfiles; vuelve a comprobar al próximo inicio.
+- Las compilaciones de prueba, los borradores y las versiones previas no se
+  utilizan como canal de actualización.
+- No hay comprobaciones periódicas durante una sesión: únicamente en el
+  próximo inicio para no interrumpir tareas y perfiles abiertos.
 
-El punto de entrada actual es `app/main.kaizen-1.5.24.js`, que carga la variante `app/main.member-test.js` antes del núcleo original `app/main.min.js`. Las actualizaciones automáticas quedan desactivadas allí.
+**Migración inicial:** las versiones hasta 1.5.39 tenían el actualizador
+desactivado y se publicaron sin `latest.yml`; no pueden actualizarse por
+sí mismas. Instala **una vez** el Setup completo de la primera versión nueva.
+Las versiones siguientes podrán instalarse automáticamente si se publican
+correctamente.
 
-`runtime-resources/app-update.yml` también fue desligado del repositorio upstream para evitar que una futura reactivación accidental consulte o instale builds externos.
+El paquete NSIS incluye `resources/app-update.yml`; cada Release nuevo debe
+adjuntar el **mismo Setup** que se validó junto con `latest.yml`, su suma
+SHA512 y opcionalmente `.blockmap`. Un instalador sin firmar no puede ser
+publicado por el flujo de versiones automáticas.
 
-> Nota: los cambios del repositorio no modifican retroactivamente el instalador original `KAIZEN-Setup-1.5.2.exe`. Debe generarse un nuevo build para distribuir esta política dentro del programa instalado.
+El workflow `.github/workflows/kaizen-auto-update-release.yml` publica cada
+tag `vX.Y.Z` que coincida con `app/package.json` y supere las pruebas.
+Antes debes guardar un certificado Authenticode y su contraseña en los secretos
+de Actions `KAIZEN_CSC_LINK` y `KAIZEN_CSC_PASSWORD`.
+
+El ejecutable y la identidad de instalación se mantienen estables como
+`KAIZEN-PC` aunque el archivo Setup incorpore un número de versión. La
+primera migración desde instalaciones antiguas puede requerir revisar accesos
+directos, ya que los instaladores anteriores utilizaban nombres versionados.
+
+> La firma, el instalador por usuario y las comprobaciones de integridad
+> minimizan los avisos, pero Windows o las políticas de seguridad del equipo
+> pueden seguir solicitando elevación o impedir una instalación silenciosa.
+> Esta función no cambia autenticación, APIs ni permisos del servidor.
 
 ## Navegador de los perfiles (1.5.39)
 
