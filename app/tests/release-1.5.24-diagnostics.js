@@ -33,6 +33,7 @@ const sandbox={module:{exports:{}},exports:{},Buffer,console,process,Date,URL,re
  if(name==="electron")return {app:fakeApp};
  if(name==="./axiosConfig")return http;
  if(name==="./config")return {BACKEND_URL:"https://example.org/v/abc"};
+ if(name==="./package.json")return require("../package.json");
  if(name==="./kaizen-original-extensions-host")return fakeLocal;
  if(name==="./scripts/verify-legacy-core-resources")
    return require("../scripts/verify-legacy-core-resources");
