@@ -3,6 +3,8 @@
 // A failed/offline check must never prevent the currently installed app
 // from opening. No renderer, account session, browser profile or cookies
 // participate in the update check.
+const fs=require("node:fs");
+const path=require("node:path");
 const FEED=Object.freeze({
   provider:"github",
   owner:"luis5afp",
@@ -81,6 +83,11 @@ function startStartupUpdate(app,updater,options={}){
   if(started)return startupDecision;
   started=true;
   if(!app.isPackaged||(options.platform||process.platform)!=="win32")return startupDecision;
+  // Do not let portable previews or half-installed packages silently
+  // consume the public stable channel. NSIS installs include this file.
+  if(options.requireConfig!==false &&
+      !fs.existsSync(path.join(process.resourcesPath||"","app-update.yml")))
+    return startupDecision;
   startupDecision=Promise.resolve()
     .then(()=>app.whenReady())
     .then(()=>checkDownloadAndRestart(updater,options))
