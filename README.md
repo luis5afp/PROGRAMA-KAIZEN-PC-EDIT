@@ -32,8 +32,12 @@ publicado por el flujo de versiones automáticas.
 
 El workflow `.github/workflows/kaizen-auto-update-release.yml` publica cada
 tag `vX.Y.Z` que coincida con `app/package.json` y supere las pruebas.
-Antes debes guardar un certificado Authenticode y su contraseña en los secretos
-de Actions `KAIZEN_CSC_LINK` y `KAIZEN_CSC_PASSWORD`.
+Antes debes guardar un certificado Authenticode, su contraseña y el Subject
+exacto del editor en los secretos de Actions `KAIZEN_CSC_LINK`,
+`KAIZEN_CSC_PASSWORD` y `KAIZEN_PUBLISHER_NAME` respectivamente. El último
+debe ser un distinguished name de Windows, por ejemplo `CN=Mi Editor, O=Mi Empresa, C=PE`
+(solamente si coincide **exactamente** con el certificado real). El script
+incluye esa identidad en `app-update.yml` y rechaza firmas diferentes.
 
 El ejecutable y la identidad de instalación se mantienen estables como
 `KAIZEN-PC` aunque el archivo Setup incorpore un número de versión. La
