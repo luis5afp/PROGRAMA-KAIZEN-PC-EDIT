@@ -69,6 +69,37 @@ const puppeteer=require("puppeteer-core");
     assert.match(result,/Autocompletados ficticios:\s*0/);
     assert.match(result,/Omitidos por bloqueo\/datos ausentes:\s*233/);
 
+    // The production lab can also summarize SANITIZED diagnostics from the
+    // real extensions, without contacting the backend from Chromium.
+    assert.equal(await page.$eval("#integration-summary",el=>el.textContent.includes("0/3")),true);
+    const safeReport={
+      version:7,
+      resumen:[
+        "Cliente de acceso: extension_main · perfil KAIZZEN-MAIN",
+        "Productos (servidor): HTTP 200 · bloque cifrado sí",
+        "Productos (tras descifrar): 233 · d 233 · e 0 · k 0 · proxy 0 · bloqueadas 233",
+        "Inmediatamente tras descifrar: 233 objetos · e presente 233, e con texto 0, e nulo 233 · k presente 233, k con texto 0, k nulo 233",
+        "Acceso según respuesta: autorizadas 0 / 233 · restringidas 233 · bloqueos explícitos 233",
+        "Pestaña: conectada · ID 501",
+        "Sesión product: sin preparación observada",
+        "Formulario: sin observación asociada"
+      ].join("\\n"),
+      token:"NEVER_DISPLAY_SECRET"
+    };
+    await page.$eval("#integration-report",(el,value)=>{el.value=value;},JSON.stringify(safeReport));
+    await page.select("#integration-profile","main");
+    await page.click("#integration-analyze");
+    const compareText=await page.$eval("#integration-summary",el=>el.textContent);
+    assert.match(compareText,/MAIN/);
+    assert.match(compareText,/233/);
+    assert.match(compareText,/restringidas 233/);
+    assert(!compareText.includes("NEVER_DISPLAY_SECRET"));
+    assert.equal(await page.$eval("#integration-report",el=>el.value),"");
+    await page.click("#live-api-probe");
+    const apiText=await page.$eval("#live-api-status",el=>el.textContent);
+    assert.match(apiText,/solo dentro de KAIZEN PC/);
+    await page.click("#integration-clear");
+    assert.equal(await page.$eval("#integration-summary",el=>el.textContent.includes("0/3")),true);
     assert.equal(external,0,"El laboratorio no debe intentar conectar con Internet");
     assert.deepEqual(errors,[],"No debe haber errores JavaScript en Chromium");
     console.log("PASS: Chromium real mostró 233 tarjetas; 233 autocompletados ficticios; bloqueadas y sin credenciales = 0; sin conexiones de red.");
