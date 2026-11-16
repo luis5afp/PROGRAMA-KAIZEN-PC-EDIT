@@ -109,6 +109,15 @@ jobs:
           }
           Write-Host 'PASS: instalacion NSIS y Chromium real, cinco extensiones, configuración y perfiles.'
 
+      - name: Probar 233 tarjetas en Chromium real sin conectar al servidor
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $browser='dist/KAIZEN-PC-win32-x64/KAIZEN_CHROMIUM/chrome-win/chrome.exe'
+          if(!(Test-Path -LiteralPath $browser)) { throw 'Chromium no encontrado para el laboratorio' }
+          node app/tests/lab-233-browser-smoke.js (Resolve-Path -LiteralPath $browser).Path
+
       - name: Preparar instalador de prueba descargable (sin firma)
         shell: pwsh
         run: |
