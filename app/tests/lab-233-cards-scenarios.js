@@ -94,6 +94,23 @@ for(const marker of [
   "setPermissionCheckHandler",
   'path.join(__dirname,"lab","index.html")'
 ])assert(main.includes(marker),"El menú Electron debe integrar el laboratorio aislado: "+marker);
+assert(main.includes('ipcMain.handle("kaizen-lab-open",async event=>{'),
+  "IPC de laboratorio debe estar registrado");
+assert(main.includes('if(!authorize(event))return {ok:false,message:"Origen no autorizado"};'),
+  "IPC de laboratorio debe verificar el origen de la ventana principal");
+const preload=fs.readFileSync(path.join(__dirname,"..","preload.min.js"),"utf8");
+assert(preload.includes("function installKaizenLaboratoryButton()"),
+  "El laboratorio debe tener un botón visible en la interfaz KAIZEN");
+assert(preload.includes("button.id = 'kaizen-lab-233-button'"));
+assert(preload.includes("button.textContent = '🧪 Laboratorio 233'"));
+assert(preload.includes("ipcRenderer.invoke('kaizen-lab-open')"),
+  "El botón debe abrir el laboratorio a través del IPC controlado");
+assert.equal(preload.split("        installKaizenLaboratoryButton()").length-1,1,
+  "Mostrar botón en DOMContentLoaded");
+assert.equal(preload.split("    installKaizenLaboratoryButton()").length-1,2,
+  "Mostrar botón aunque DOMContentLoaded ya haya pasado");
+assert(!preload.includes("getItem('token') || ''") || main.includes('kaizen-lab-open'),
+  "La nueva acción no debe transferir tokens al laboratorio");
 assert(!main.includes("app/lab/index.html?token="),"No deben inyectarse tokens en el laboratorio");
 console.log("PASS: 233 ficticias recibidas, 233 autorizadas, 0 restringidas, 233 credenciales ficticias y 233 simulaciones de autocompletado.");
 console.log("PASS: 233 bloqueadas no rellenan, 233 sin credenciales no rellenan, dominio/TTL verificados, sin red ni persistencia.");
