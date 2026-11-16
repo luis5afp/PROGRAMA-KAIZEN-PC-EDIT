@@ -67,11 +67,12 @@ ipcMain.handle("kaizen-original-extensions-import",async(event)=>{
 
 const {app,BrowserWindow,Menu,MenuItem}=require("electron");
 const path=require("node:path");
+const KAIZEN_VERSION=require("./package.json").version;
 let diagWindow=null;
 function openDiagnosticsWindow(){
   if(diagWindow&&!diagWindow.isDestroyed()){diagWindow.show();diagWindow.focus();return;}
   diagWindow=new BrowserWindow({
-    width:1020,height:820,minWidth:760,minHeight:550,title:"KAIZEN PC 1.5.39 · Diagnóstico integral",
+    width:1020,height:820,minWidth:760,minHeight:550,title:"KAIZEN PC "+KAIZEN_VERSION+" · Diagnóstico integral",
     autoHideMenuBar:true,webPreferences:{
       preload:path.join(__dirname,"kaizen-diagnostics-preload-1.5.24.js"),
       contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true
@@ -105,8 +106,8 @@ ipcMain.handle("kaizen-1524-window-probe",async event=>{
 });
 function installDiagnosticMenu(){
   const menu=Menu.getApplicationMenu()||Menu.buildFromTemplate([]);
-  if(!menu.items.some(item=>item.label==="KAIZEN 1.5.39")){
-    menu.append(new MenuItem({label:"KAIZEN 1.5.39",submenu:[
+  if(!menu.items.some(item=>item.label==="KAIZEN "+KAIZEN_VERSION)){
+    menu.append(new MenuItem({label:"KAIZEN "+KAIZEN_VERSION,submenu:[
       {label:"Diagnóstico integral",accelerator:"CmdOrCtrl+Shift+D",click:openDiagnosticsWindow},
       {label:"Abrir lista de perfiles",click:()=>{
         const w=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&
