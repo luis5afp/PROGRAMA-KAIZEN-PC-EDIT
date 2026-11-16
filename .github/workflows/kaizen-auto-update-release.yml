@@ -110,8 +110,9 @@ jobs:
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
           $tag=$env:GITHUB_REF_NAME
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if($LASTEXITCODE -eq 0) { throw "El Release $tag ya existe, no sobrescribir" }
+          # gh release create already rejects duplicate releases. Avoid
+          # gh release view here: a 404 and PowerShell native command
+          # error handling would incorrectly abort a NEW release.
           $setup=@(Get-ChildItem dist/installer -Filter '*.exe' -File)
           $latest='dist/installer/latest.yml'
           if($setup.Count -ne 1 -or !(Test-Path $latest)) { throw 'Faltan los archivos del canal estable' }
