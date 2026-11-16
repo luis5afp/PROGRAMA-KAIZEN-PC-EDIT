@@ -79,15 +79,31 @@ async function checkDownloadAndRestart(updater,options={}){
   }
 }
 
+function hasVerifiedPublisherConfig(feedText){
+  if(typeof feedText!=="string")return false;
+  const publisher=feedText.match(/^publisherName:\s*['"]?(CN=[^\r\n'"]+)['"]?\s*$/mi);
+  return !!publisher && publisher[1].trim().length>3 &&
+    /^provider:\s*github\s*$/mi.test(feedText) &&
+    /^owner:\s*luis5afp\s*$/mi.test(feedText) &&
+    /^repo:\s*PROGRAMA-KAIZEN-PC-EDIT\s*$/mi.test(feedText) &&
+    !/^private:\s*true\s*$/mi.test(feedText);
+}
+
 function startStartupUpdate(app,updater,options={}){
   if(started)return startupDecision;
   started=true;
   if(!app.isPackaged||(options.platform||process.platform)!=="win32")return startupDecision;
-  // Do not let portable previews or half-installed packages silently
-  // consume the public stable channel. NSIS installs include this file.
-  if(options.requireConfig!==false &&
-      !fs.existsSync(path.join(process.resourcesPath||"","app-update.yml")))
-    return startupDecision;
+  // Only builds anchored to an identified code-signing publisher may
+  // silently install future releases. Unsigned/manual test installers have
+  // a GitHub feed but no publisherName; do not let them auto-update.
+  // This check is only a gate; electron-updater must still verify the
+  // downloaded binary's signature and hash when updates are enabled.
+  if(options.requireConfig!==false){
+    const feedPath=path.join(options.resourcesPath||process.resourcesPath||"","app-update.yml");
+    let feedText="";
+    try{feedText=fs.readFileSync(feedPath,"utf8");}catch{}
+    if(!hasVerifiedPublisherConfig(feedText))return startupDecision;
+  }
   startupDecision=Promise.resolve()
     .then(()=>app.whenReady())
     .then(()=>checkDownloadAndRestart(updater,options))
@@ -97,4 +113,4 @@ function startStartupUpdate(app,updater,options={}){
 
 function waitForStartupUpdate(){return startupDecision;}
 
-module.exports={startStartupUpdate,waitForStartupUpdate,checkDownloadAndRestart,FEED};
+module.exports={startStartupUpdate,waitForStartupUpdate,checkDownloadAndRestart,hasVerifiedPublisherConfig,FEED};
