@@ -59,3 +59,58 @@ de prueba de extremo a extremo.
 No distribuir ni interpretar esta simulación como un desbloqueo real del
 servidor. No hay ninguna operación de suplantación de rol, omisión de permisos
 ni extracción de contraseñas.
+
+
+## KAIZEN 1.5.42 — prueba de integración con API real y extensiones
+
+La versión 1.5.42 mantiene intacta la simulación de 233 tarjetas, e introduce
+una segunda sección, **Diagnóstico de integración real**, debajo del catálogo.
+
+### 1. Consulta API del escritorio (voluntaria)
+1. Iniciar sesión en la **ventana principal de KAIZEN PC**.
+2. Abrir **🧪 Laboratorio 233** desde el botón visible.
+3. Desplazarse hasta **Conexión API del servidor · Solo lectura**.
+4. Pulsar **Comprobar APIs del escritorio**. Esta operación consulta cinco
+   rutas existentes: `/api/verify-token`, `/api/browser/get`,
+   `/api/browser/group/get`, `/api/browser/variant-profiles` y
+   `/api/products/getmostusedtool`, usando la sesión existente de KAIZEN PC.
+5. Interpretar HTTP 200 como conectividad; no supone autorización para
+   autocompletar tarjetas de las extensiones.
+
+Solo se devuelven estados HTTP, conteos de colecciones y roles del conjunto
+permitido, sin texto de productos, cookies, claves ni token. La consulta es
+manual y tiene un límite de frecuencia; no se realiza en segundo plano.
+
+### 2. Diagnósticos de Principal, Google y Custom (reales)
+1. Abrir cada extensión original usando los perfiles de KAIZEN.
+2. En la extensión pulsar **Diagnóstico → Copiar informe** (informe sanitizado).
+3. Regresar al Laboratorio, seleccionar el perfil correspondiente y pegar el
+   informe de ese perfil. No pegar respuestas API, cookies ni credenciales.
+4. Pulsar **Analizar informe**. Repetir para los otros dos perfiles.
+5. Comparar HTTP, tarjetas descifradas, autorizadas/restringidas,
+   presencia de campos `e/k` y etapas ventana/pestaña/sesión/formulario.
+
+El analizador acepta únicamente el **resumen** de los informes originales;
+elimina el texto pegado inmediatamente después de analizarlo. Los campos
+concretos nunca se muestran ni se guardan. Si detecta que el informe pertenece
+a otro perfil, lo rechaza.
+
+**Limitación:** los resultados proceden de los informes reales aportados por
+el usuario, no de un acceso silencioso a la sesión de cada extensión. KAIZEN
+no puede conocer automáticamente los permisos de las tres extensiones a
+través de la sesión del escritorio, pues las identidades podrían diferir.
+
+### 3. Autocompletado end-to-end controlado
+El simulador permite volver a comprobar formularios con dominios
+`.invalid` y credenciales `@kaizen.invalid`. No inicia sesión en servicios,
+ni envía formularios, ni otorga privilegios que el backend no autorizó.
+
+**Pruebas:**
+```bash
+node app/tests/lab-1542-integration-scenarios.js
+node app/tests/lab-233-cards-scenarios.js
+```
+
+La prueba de Chromium real también verifica la interfaz del comparador.
+El instalador preliminar no se firma y se instala manualmente; no habilita
+actualizaciones automáticas.
