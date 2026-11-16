@@ -8,6 +8,7 @@ const path=require("node:path");
 const crypto=require("node:crypto");
 const {spawn}=require("node:child_process");
 const {app}=require("electron");
+const {bundledChromiumExecutable}=require("./kaizen-chromium-path");
 
 const DESCRIPTORS=Object.freeze({
   main:{dir:"KAIZZEN_MAIN",name:"KAIZZEN-MAIN",title:"Principal",version:"2.5.11"},
@@ -48,7 +49,7 @@ function browserExecutable() {
   // ignore the previous chrome-win64 Chrome for Testing directory, so a
   // partial upgrade cannot silently restore the testing-browser banner.
   // Google Chrome and Microsoft Edge do not reliably allow --load-extension.
-  const chromium=path.join(appDirectory(),"KAIZEN_CHROMIUM","chrome-win","chrome.exe");
+  const chromium=bundledChromiumExecutable(app.isPackaged);
   return fs.existsSync(chromium)?chromium:"";
 }
 function chromeExtensionId(folder) {
