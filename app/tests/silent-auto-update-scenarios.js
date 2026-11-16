@@ -79,6 +79,7 @@ class FakeUpdater extends EventEmitter {
   assert.match(settings,/perMachine: false/);
   assert.match(settings,/allowElevation: false/);
   assert.equal(pkg.version,"1.5.40");
+  assert.equal(pkg.productName,"KAIZEN PC","conservar nombre de datos de usuario anterior");
   assert(build.includes("latest.yml"));
   assert(build.includes("app-update.yml"));
   console.log("PASS: comprobacion inicial, descarga e instalacion silenciosa y fallback offline");
