@@ -26,8 +26,8 @@ jobs:
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
-          run_id="43838748160"
-          commit="df2723eaec3497ce336c4eb596d5062d6c335bef"
+          run_id="43839734786"
+          commit="b65ceeaea1f960abeeeb4d3d54a770550b375074"
           conclusion="$(gh api "repos/$repo/actions/runs/$run_id" --jq .conclusion)"
           test "$conclusion" = "success" || { echo "CI Windows incompleta o fallida" >&2; exit 1; }
           source_sha="$(gh api "repos/$repo/actions/runs/$run_id" --jq .head_sha)"
@@ -40,7 +40,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run download 43838748160 \
+          gh run download 43839734786 \
             --repo "$GITHUB_REPOSITORY" \
             --name KAIZEN-PC-Windows-x64-PRUEBA-SIN-FIRMA \
             --dir dist-preview
@@ -79,7 +79,7 @@ jobs:
           Guarda una copia de perfiles locales antes de instalar.
           La firma Authenticode y una prueba live con autorizaciones del
           servidor siguen pendientes para una versión estable.
-          Compilación Windows verificada: https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43838748160
+          Compilación Windows verificada: https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43839734786
           EOF
 
       - name: Publicar solo como prerelease sin auto-update
@@ -94,7 +94,7 @@ jobs:
             dist-preview/LEER-ANTES-DE-INSTALAR.txt \
             dist-preview/LEER-PRIMERO-PREVIEW-1542.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --target "df2723eaec3497ce336c4eb596d5062d6c335bef" \
+            --target "b65ceeaea1f960abeeeb4d3d54a770550b375074" \
             --title "KAIZEN PC 1.5.42 - Diagnostico API con auto deteccion de perfiles (preview.2)" \
-            --notes "Preview manual para Windows x64. Abre Laboratorio 233 y su nueva sección Diagnóstico de integración real. Permite comprobar metadatos HTTP de cinco APIs y comparar los informes sanitizados de MAIN, GOOGLE y CUSTOM, sin cambiar permisos ni obtener credenciales. El comparador ya detecta automáticamente el perfil de cada informe y muestra errores específicos; las sesiones del escritorio y las extensiones son independientes. La simulación de 233 tarjetas permanece ficticia. Validado con NSIS y Chromium real en Actions #43838748160. No incluye auto-update por falta de certificado Authenticode." \
+            --notes "Preview manual para Windows x64. Abre Laboratorio 233 y su nueva sección Diagnóstico de integración real. Permite comprobar metadatos HTTP de cinco APIs y comparar los informes sanitizados de MAIN, GOOGLE y CUSTOM, sin cambiar permisos ni obtener credenciales. El comparador ya detecta automáticamente el perfil de cada informe y muestra errores específicos; las sesiones del escritorio y las extensiones son independientes. La simulación de 233 tarjetas permanece ficticia. Validado con NSIS y Chromium real en Actions #43839734786. No incluye auto-update por falta de certificado Authenticode." \
             --prerelease
