@@ -1,0 +1,100 @@
+name: KAIZEN 1.5.42 - Publicar preview.2 con detector de perfiles
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/kaizen-1542-preview2-release.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: kaizen-preview-1542-auto-detect
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'luis5afp/PROGRAMA-KAIZEN-PC-EDIT'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar procedencia del instalador y pruebas Windows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          run_id="43839734786"
+          commit="b65ceeaea1f960abeeeb4d3d54a770550b375074"
+          conclusion="$(gh api "repos/$repo/actions/runs/$run_id" --jq .conclusion)"
+          test "$conclusion" = "success" || { echo "CI Windows incompleta o fallida" >&2; exit 1; }
+          source_sha="$(gh api "repos/$repo/actions/runs/$run_id" --jq .head_sha)"
+          test "$source_sha" = "$commit" || { echo "No corresponde a la revisión probada" >&2; exit 1; }
+          echo "PASS: instalador construido y validado por CI Windows #$run_id"
+
+      - name: Obtener el Setup completo ya instalado y probado en Windows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 43839734786 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name KAIZEN-PC-Windows-x64-PRUEBA-SIN-FIRMA \
+            --dir dist-preview
+          cd dist-preview
+          test -s KAIZEN-PC-v1.5.42-Setup-x64.exe
+          test -s KAIZEN-PC-v1.5.42-Setup-x64.exe.sha256
+          test -s LEER-ANTES-DE-INSTALAR.txt
+          sha256sum --check KAIZEN-PC-v1.5.42-Setup-x64.exe.sha256
+          bytes="$(stat -c%s KAIZEN-PC-v1.5.42-Setup-x64.exe)"
+          if ((bytes < 100000000));then
+            echo "Setup incompleto: $bytes bytes" >&2
+            exit 1
+          fi
+          echo "PASS: Setup real $bytes bytes y SHA-256 comprobado."
+
+      - name: Documentar el alcance de la version experimental
+        shell: bash
+        run: |
+          cat > dist-preview/LEER-PRIMERO-PREVIEW-1542.txt <<'EOF'
+          KAIZEN 1.5.42 - PREVIEW DE INTEGRACION, SIN FIRMA
+          ---------------------------------------------------
+          El instalador incluye el laboratorio LOCAL de 233 tarjetas FICTICIAS.
+          Nueva sección: DIAGNOSTICO DE INTEGRACION REAL.
+          Ahora incluye boton visible 'Laboratorio 233' en KAIZEN PC,
+          sin depender de menu oculto o atajos de teclado.
+          Menu de KAIZEN: Laboratorio 233 tarjetas · SOLO PRUEBAS
+          Atajo: Ctrl+Shift+L
+          La prueba usa dominios .invalid y credenciales sin valor real.
+          La cuenta real y sus tarjetas NO se desbloquean con esta preview.
+          Se pueden comprobar (a petición) cinco APIs con la sesion escritorio.
+          Se detecta automaticamente el perfil del informe (MAIN, GOOGLE, CUSTOM).
+          Los errores muestran causa exacta sin mostrar secretos del informe.
+          No exporta tokens, cookies, contraseñas ni respuestas API crudas.
+          No se modifica el servidor, ni las extensiones originales, ni isLock.
+          El Setup no firmado se instala manualmente y no ofrece auto-update.
+          Guarda una copia de perfiles locales antes de instalar.
+          La firma Authenticode y una prueba live con autorizaciones del
+          servidor siguen pendientes para una versión estable.
+          Compilación Windows verificada: https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43839734786
+          EOF
+
+      - name: Publicar solo como prerelease sin auto-update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create v1.5.42-preview.2 \
+            dist-preview/KAIZEN-PC-v1.5.42-Setup-x64.exe \
+            dist-preview/KAIZEN-PC-v1.5.42-Setup-x64.exe.sha256 \
+            dist-preview/LEER-ANTES-DE-INSTALAR.txt \
+            dist-preview/LEER-PRIMERO-PREVIEW-1542.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "b65ceeaea1f960abeeeb4d3d54a770550b375074" \
+            --title "KAIZEN PC 1.5.42 - Diagnostico API con auto deteccion de perfiles (preview.2)" \
+            --notes "Preview manual para Windows x64. Abre Laboratorio 233 y su nueva sección Diagnóstico de integración real. Permite comprobar metadatos HTTP de cinco APIs y comparar los informes sanitizados de MAIN, GOOGLE y CUSTOM, sin cambiar permisos ni obtener credenciales. El comparador ya detecta automáticamente el perfil de cada informe y muestra errores específicos; las sesiones del escritorio y las extensiones son independientes. La simulación de 233 tarjetas permanece ficticia. Validado con NSIS y Chromium real en Actions #43839734786. No incluye auto-update por falta de certificado Authenticode." \
+            --prerelease
