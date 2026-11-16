@@ -100,7 +100,7 @@
   <section id="integration" class="integration-grid" aria-label="Diagnóstico de integración real">
     <div class="panel">
       <h2>Conexión API del servidor · Solo lectura</h2>
-      <p>Consulta voluntaria de estado HTTP y cantidades, utilizando exclusivamente la sesión iniciada en KAIZEN PC. <strong>No</strong> descifra credenciales ni cambia productos.</p>
+      <p>Consulta voluntaria de estado HTTP y cantidades. Requiere una sesión iniciada en la <strong>ventana principal de KAIZEN PC</strong>; la sesión de una extensión es independiente. Puedes comparar informes de extensiones sin iniciar sesión en el escritorio. <strong>No</strong> descifra credenciales ni cambia productos.</p>
       <button type="button" id="live-api-probe" class="primary">Comprobar APIs del escritorio</button>
       <p id="live-api-status" role="status">Sin consultar. La sesión de cada extensión puede tener permisos distintos.</p>
       <div id="live-api-results" aria-label="Estados HTTP de las rutas"></div>
@@ -108,9 +108,10 @@
     </div>
     <div class="panel">
       <h2>Comparar Principal, Google y Custom</h2>
-      <p>En cada extensión abre <strong>Diagnóstico → Copiar informe</strong>. Pega aquí el informe sanitizado de esa extensión y selecciona su perfil. Solo se conservarán conteos y estados en memoria; el texto pegado se borra al analizar.</p>
+      <p>En cada extensión abre <strong>Diagnóstico → Copiar informe</strong> y pega el informe. KAIZEN detectará automáticamente si procede de Principal, Google o Custom. Solo se conservarán conteos y estados en memoria; el texto pegado se borra al analizar.</p>
       <label for="integration-profile">Perfil observado
         <select id="integration-profile">
+          <option value="auto" selected>Detectar perfil automáticamente (recomendado)</option>
           <option value="main">Principal · KAIZZEN-MAIN</option>
           <option value="google">Google · KAIZZEN-GOOGLE</option>
           <option value="custom">Custom · KAIZZEN-CUSTOM</option>
