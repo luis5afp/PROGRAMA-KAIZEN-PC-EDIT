@@ -57,7 +57,7 @@ class FakeUpdater extends EventEmitter {
 
   const bootstrap=new FakeUpdater("available");
   const app={isPackaged:true,whenReady:async()=>{}};
-  assert.equal(await startStartupUpdate(app,bootstrap,{platform:"win32"}),false);
+  assert.equal(await startStartupUpdate(app,bootstrap,{platform:"win32",requireConfig:false}),false);
   assert.deepEqual(bootstrap.installs,[[true,true]]);
 
   const root=path.join(__dirname,"..");
