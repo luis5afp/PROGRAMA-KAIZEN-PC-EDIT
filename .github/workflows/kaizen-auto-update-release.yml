@@ -1,8 +1,15 @@
 name: KAIZEN Windows - Release versionado con actualizador
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+    paths:
+      - 'app/package.json'
+      - 'app/kaizen-silent-updater.js'
+      - 'app/electron-builder.yml'
+      - 'scripts/build-windows-integrated.ps1'
+      - '.github/workflows/kaizen-auto-update-release.yml'
+  workflow_dispatch:
 permissions:
   contents: write
 concurrency:
@@ -30,8 +37,10 @@ jobs:
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
           $version=[string](Get-Content app/package.json -Raw | ConvertFrom-Json).version
-          $tag=$env:GITHUB_REF_NAME
-          if($tag -ne "v$version") { throw "El tag $tag no coincide con package.json v$version" }
+          # Publication on main creates a release + matching tag after checks.
+          # The older workflow awaited a tag that no connector could create.
+          if($env:GITHUB_REF_NAME -ne 'main') { throw 'Solo se publica desde main' }
+          $tag="v$version"
           if($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version SemVer no valida" }
           if(!$env:CSC_LINK -or !$env:CSC_KEY_PASSWORD -or !$env:KAIZEN_PUBLISHER_NAME) {
             throw 'Configura los secretos de firma KAIZEN_CSC_LINK, KAIZEN_CSC_PASSWORD y KAIZEN_PUBLISHER_NAME antes de publicar.'
@@ -109,7 +118,8 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $PSNativeCommandUseErrorActionPreference=$true
-          $tag=$env:GITHUB_REF_NAME
+          $version=[string](Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          $tag="v$version"
           # gh release create already rejects duplicate releases. Avoid
           # gh release view here: a 404 and PowerShell native command
           # error handling would incorrectly abort a NEW release.
@@ -122,5 +132,5 @@ jobs:
           $version=[string](Get-Content app/package.json -Raw | ConvertFrom-Json).version
           $notes="docs/RELEASE-NOTES-v$version.md"
           if(!(Test-Path $notes)) { throw "Faltan notas $notes" }
-          & gh release create $tag @artifacts --repo "$env:GITHUB_REPOSITORY" --title "KAIZEN PC $version" --notes-file $notes --latest
+          & gh release create $tag @artifacts --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "KAIZEN PC $version" --notes-file $notes --latest
           if($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la version firmada' }
