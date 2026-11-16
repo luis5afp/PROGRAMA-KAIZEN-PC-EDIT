@@ -87,14 +87,25 @@ const puppeteer=require("puppeteer-core");
       token:"NEVER_DISPLAY_SECRET"
     };
     await page.$eval("#integration-report",(el,value)=>{el.value=value;},JSON.stringify(safeReport));
-    await page.select("#integration-profile","main");
+    assert.equal(await page.$eval("#integration-profile",el=>el.value),"auto",
+      "La importación debe sugerir detección automática");
     await page.click("#integration-analyze");
+    assert.equal(await page.$eval("#integration-profile",el=>el.value),"main",
+      "El informe debe identificar el perfil Principal");
     const compareText=await page.$eval("#integration-summary",el=>el.textContent);
     assert.match(compareText,/MAIN/);
     assert.match(compareText,/233/);
     assert.match(compareText,/restringidas 233/);
     assert(!compareText.includes("NEVER_DISPLAY_SECRET"));
     assert.equal(await page.$eval("#integration-report",el=>el.value),"");
+    await page.select("#integration-profile","custom");
+    await page.$eval("#integration-report",(el,value)=>{el.value=value;},JSON.stringify(safeReport));
+    await page.click("#integration-analyze");
+    const mismatch=await page.$eval("#integration-status",el=>el.textContent);
+    assert.match(mismatch,/Selecciona KAIZZEN-MAIN o detección automática/);
+    assert(!mismatch.includes("NEVER_DISPLAY_SECRET"));
+    assert.equal(await page.$eval("#integration-report",el=>el.value),"",
+      "Un informe erróneo tampoco debe conservarse en el laboratorio");
     await page.click("#live-api-probe");
     const apiText=await page.$eval("#live-api-status",el=>el.textContent);
     assert.match(apiText,/solo dentro de KAIZEN PC/);
