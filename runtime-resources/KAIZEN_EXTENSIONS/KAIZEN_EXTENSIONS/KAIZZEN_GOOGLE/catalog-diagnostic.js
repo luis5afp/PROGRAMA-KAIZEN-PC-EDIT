@@ -9,7 +9,7 @@
   const TRACE = "kzDiagnosticPendingOpenV2";
   const MAX = 160;
   const SAFE_KEYS = new Set([
-    "flujo","transporte","metodo","http","duracionMs","normal","premium",
+    "flujo","transporte","metodo","http","duracionMs","intentos","normal","premium",
     "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas","habilitadas","sinParAcceso","bloqueoExplicito","bloqueoPremium","perfil","cliente",
     "estructura","medio","resultado","ventana","pestana","url","correo","clave","claveCifrada",
     "identificador","motivo","tipo","marco","dominioCoincide",
@@ -231,6 +231,12 @@
       ...context
     });
   }
+  // La recuperación de GET no altera la API ni almacena datos sensibles.
+  globalThis.__kzDiagnosticCatalogRetry=info=>event("productos-reintento",{
+    intentos:Number(info?.intentos)||0,
+    http:Number(info?.http)||0,
+    motivo:"transitorio"
+  });
   const MESSAGE_ROUTES=new Set([
     "set_proxy","reset_proxy","wipe_site_session","track_tool_domain",
     "import_cookies","clear_google_cookies","clear_google_session",
@@ -571,6 +577,19 @@
     const categories=recent("catalogo-respuesta");
     const client=recent("diagnostico-cliente");
     const fetched=recent("productos-respuesta");
+    const retry=recent("productos-reintento");
+    const lastProductHttp=e.find(x=>x.ruta==="productos" &&
+      ["comunicacion-http-respuesta","comunicacion-http-error",
+       "comunicacion-red-respuesta","comunicacion-red-error"].includes(x.stage));
+    const status=Number(lastProductHttp?.http||0);
+    const apiHint=!lastProductHttp?"sin datos recientes":
+      status===200?"HTTP 200: el servidor respondió; las tarjetas pueden seguir restringidas":
+      status===401?"HTTP 401: sesión vencida o token rechazado; iniciar sesión de nuevo":
+      status===403?"HTTP 403: acceso denegado por el servidor, verificar permisos de la cuenta":
+      status===429?"HTTP 429: demasiadas solicitudes, reintentar más tarde":
+      status>=500?"HTTP "+status+": error del servidor, reintento transitorio si corresponde":
+      status===0?"sin respuesta HTTP: revisar conexión, DNS, proxy o bloqueos de red":
+      "HTTP "+status+": revisar la respuesta del backend";
     const decoded=recent("productos-descifrados");
     const origin=decoded?e.find(x=>x.stage==="origen-tras-descifrado"&&x.lote===decoded.lote):recent("origen-tras-descifrado");
     const selected=source==="tarjeta"?tracked("tarjeta-campos-al-clic"):null;
@@ -594,6 +613,10 @@
       "Categorías: "+(categories?"HTTP "+categories.http+" · normal "+
         categories.normal+" · premium "+categories.premium+
         " (no representan tarjetas)":"sin respuesta observada"),
+      "Conexión API (productos): "+apiHint,
+      "Reintentos de lectura: "+(retry?
+        "último intento "+retry.intentos+" (HTTP "+retry.http+"), sólo ante fallos transitorios":
+        "no se observaron reintentos"),
       "Productos (servidor): "+(fetched?"HTTP "+fetched.http+
         " · bloque cifrado "+bool(fetched.cifrado):
         "sin respuesta observada de /api/products/getmostusedtool"),
