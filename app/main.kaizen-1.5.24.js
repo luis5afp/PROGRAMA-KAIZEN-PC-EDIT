@@ -117,6 +117,13 @@ function openLaboratoryWindow(){
   });
   labWindow.on("closed",()=>{labWindow=null;});
 }
+// The main KAIZEN window is frameless and auto-hides its native menu.
+// Give the renderer a narrowly scoped way to open ONLY the synthetic lab.
+ipcMain.handle("kaizen-lab-open",async event=>{
+  if(!authorize(event))return {ok:false,message:"Origen no autorizado"};
+  openLaboratoryWindow();
+  return {ok:true};
+});
 function authorizedDiagnosticsWindow(event){
   return diagWindow&&!diagWindow.isDestroyed()&&event.sender===diagWindow.webContents;
 }
