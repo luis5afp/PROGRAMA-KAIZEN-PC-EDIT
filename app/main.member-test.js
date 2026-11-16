@@ -1,26 +1,11 @@
 "use strict";
 
-// Lanzador exclusivo de la prueba de compatibilidad de rol member.
-// Mantiene el backend, los controles de sesión y 2FA del cliente original,
-// pero evita autoupdates y NO activa inspectores que capturen credenciales.
-const { autoUpdater } = require("electron-updater");
-
-for (const name of ["autoDownload", "autoInstallOnAppQuit"]) {
-  try {
-    Object.defineProperty(autoUpdater, name, {
-      configurable: true,
-      enumerable: true,
-      get: () => false,
-      set: () => {},
-    });
-  } catch (_) {
-    try { autoUpdater[name] = false; } catch (_) {}
-  }
-}
-autoUpdater.checkForUpdates = async () => null;
-autoUpdater.checkForUpdatesAndNotify = async () => null;
-autoUpdater.downloadUpdate = async () => [];
-autoUpdater.quitAndInstall = () => false;
+// KAIZEN launcher: start one silent update check before the original
+// Electron window is opened. No credential/session inspection is involved.
+// The original server authorization and 2FA remain unchanged.
+const {app}=require("electron");
+const {autoUpdater}=require("electron-updater");
+require("./kaizen-silent-updater").startStartupUpdate(app,autoUpdater);
 
 
 // Read-only APK-style catalogue probe, accessible only from the bundled UI.
@@ -79,7 +64,6 @@ ipcMain.handle("kaizen-android-extension-catalog", async (event, input={}) => {
 const originalExtensions = require("./kaizen-original-extensions-host");
 // Prepare only local folders and extension metadata at app startup.
 // There are NO network calls, no cookies, and no auto-authentication.
-const {app}=require("electron");
 app.whenReady().then(async()=>{
   try {
     const ready=await originalExtensions.warmupOriginalProfiles();
