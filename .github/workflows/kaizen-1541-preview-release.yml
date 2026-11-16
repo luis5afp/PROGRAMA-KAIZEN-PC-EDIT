@@ -26,8 +26,8 @@ jobs:
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
-          run_id="43822287462"
-          commit="9e5911c9c204c511c8cf1683df10b75b8622ebc3"
+          run_id="43823038775"
+          commit="f4aea76d30b5a250385be66157d7c8994dfb5794"
           conclusion="$(gh api "repos/$repo/actions/runs/$run_id" --jq .conclusion)"
           test "$conclusion" = "success" || { echo "CI Windows incompleta o fallida" >&2; exit 1; }
           source_sha="$(gh api "repos/$repo/actions/runs/$run_id" --jq .head_sha)"
@@ -40,7 +40,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run download 43822287462 \
+          gh run download 43823038775 \
             --repo "$GITHUB_REPOSITORY" \
             --name KAIZEN-PC-Windows-x64-PRUEBA-SIN-FIRMA \
             --dir dist-preview
@@ -72,7 +72,7 @@ jobs:
           Guarda una copia de perfiles locales antes de instalar.
           La firma Authenticode y una prueba live con autorizaciones del
           servidor siguen pendientes para una versión estable.
-          Compilación Windows verificada: https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43822287462
+          Compilación Windows verificada: https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43823038775
           EOF
 
       - name: Publicar solo como prerelease sin auto-update
@@ -87,7 +87,7 @@ jobs:
             dist-preview/LEER-ANTES-DE-INSTALAR.txt \
             dist-preview/LEER-PRIMERO-PREVIEW-1541.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --target "9e5911c9c204c511c8cf1683df10b75b8622ebc3" \
+            --target "f4aea76d30b5a250385be66157d7c8994dfb5794" \
             --title "KAIZEN PC 1.5.41 - Laboratorio 233 (preview, sin firma)" \
-            --notes "Preview manual para Windows x64. Instala KAIZEN y abre el Laboratorio 233 tarjetas desde el menú. Las 233 tarjetas y credenciales son FICTICIAS: no se modifican permisos ni se recuperan credenciales del servidor. Validado con NSIS y Chromium real en Actions #43822287462. No incluye auto-update por falta de certificado Authenticode." \
+            --notes "Preview manual para Windows x64. Instala KAIZEN y abre el Laboratorio 233 tarjetas desde el menú. Las 233 tarjetas y credenciales son FICTICIAS: no se modifican permisos ni se recuperan credenciales del servidor. Validado con NSIS y Chromium real en Actions #43823038775. No incluye auto-update por falta de certificado Authenticode." \
             --prerelease
