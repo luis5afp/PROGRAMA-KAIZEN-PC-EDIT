@@ -75,7 +75,7 @@ assert(html.includes("KAIZEN PC · LABORATORIO + DIAGNÓSTICO REAL · 1.5.42"));
 assert(html.includes('id="integration-report"'));
 assert(html.includes('<option value="auto" selected>Detectar perfil automáticamente'));
 assert(ui.includes('reports[outcome.profile]=outcome'),"El informe se guarda según su perfil detectado");
-assert(ui.includes('$("integration-profile").value=outcome.profile'),"Interfaz indica el perfil detectado");
+assert(!ui.includes('$("integration-profile").value=outcome.profile'),"La detección automática debe mantenerse entre distintos informes");
 assert(ui.includes('error?.message'),"Errores de entrada deben mostrar el motivo seguro");
 assert(electron.includes('El acceso a KAIZZEN-GOOGLE es independiente'),"La sesión de extensión se diferencia del escritorio");
 assert(html.includes('id="live-api-probe"'));
