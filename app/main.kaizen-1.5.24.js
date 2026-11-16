@@ -83,7 +83,7 @@ function openDiagnosticsWindow(){
   diagWindow.loadFile(path.join(__dirname,"kaizen-diagnostics-1.5.24.html"));
   diagWindow.on("closed",()=>diagWindow=null);
 }
-// 1.5.41 experimental laboratory: synthetic cards only, separate in-memory
+// 1.5.42 laboratory and opt-in metadata diagnostics, separate in-memory
 // Electron session. No preload bridge, IPC, real catalogue or credentials.
 // The HTML CSP additionally blocks network connections and form submission.
 function openLaboratoryWindow(){
@@ -96,10 +96,11 @@ function openLaboratoryWindow(){
   const allowedUrl=require("node:url").pathToFileURL(labFile).href;
   labWindow=new BrowserWindow({
     width:1140,height:880,minWidth:760,minHeight:620,
-    title:"KAIZEN PC "+KAIZEN_VERSION+" · Laboratorio 233 tarjetas (simulación)",
+    title:"KAIZEN PC "+KAIZEN_VERSION+" · Laboratorio + Diagnóstico real",
     autoHideMenuBar:true,
     webPreferences:{
-      partition:"kaizen-1541-lab-memory-only",
+      partition:"kaizen-1542-lab-memory-only",
+      preload:path.join(__dirname,"lab","kaizen-1542-preload.js"),
       contextIsolation:true,
       nodeIntegration:false,
       sandbox:true,
@@ -123,6 +124,37 @@ ipcMain.handle("kaizen-lab-open",async event=>{
   if(!authorize(event))return {ok:false,message:"Origen no autorizado"};
   openLaboratoryWindow();
   return {ok:true};
+});
+// Only the lab's top-level window can ask for an explicit read-only probe.
+// The API token stays in the main process; no credentials or raw JSON are sent
+// to the laboratory. This checks desktop-session APIs, NOT extension roles.
+let lastLabApiProbe=0;
+let labApiProbeRunning=false;
+ipcMain.handle("kaizen-lab-live-probe",async event=>{
+  if(!labWindow||labWindow.isDestroyed()||
+      event.sender!==labWindow.webContents||
+      event.senderFrame!==labWindow.webContents.mainFrame)
+    return {ok:false,message:"Ventana no autorizada"};
+  const now=Date.now();
+  if(labApiProbeRunning||now-lastLabApiProbe<15000)
+    return {ok:false,message:"Una consulta está en curso o se realizó hace pocos segundos."};
+  lastLabApiProbe=now;
+  labApiProbeRunning=true;
+  let token="";
+  try{
+    const win=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&
+      String(w.webContents.getURL()||"").replace(/\\/g,"/").includes("/app_view/dist/index.html"));
+    if(!win)return {ok:false,message:"Abre e inicia sesión en la ventana principal de KAIZEN PC."};
+    token=await win.webContents.executeJavaScript("window.localStorage.getItem('token') || ''",true);
+    if(typeof token!=="string"||!token||token.length>8192)
+      return {ok:false,message:"Inicia sesión en KAIZEN PC antes de comprobar las APIs."};
+    return await diagnostics.remoteChecks(token);
+  }catch(_){
+    return {ok:false,message:"No se pudo obtener una respuesta de la sesión del escritorio."};
+  }finally{
+    token="";
+    labApiProbeRunning=false;
+  }
 });
 function authorizedDiagnosticsWindow(event){
   return diagWindow&&!diagWindow.isDestroyed()&&event.sender===diagWindow.webContents;
