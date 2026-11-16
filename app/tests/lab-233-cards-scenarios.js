@@ -80,11 +80,11 @@ for(const [profile,asset] of [
 }
 const main=fs.readFileSync(path.join(__dirname,"..","main.kaizen-1.5.24.js"),"utf8");
 const pkg=JSON.parse(fs.readFileSync(path.join(__dirname,"..","package.json"),"utf8"));
-assert.equal(pkg.version,"1.5.41");
+assert.equal(pkg.version,"1.5.42");
 for(const marker of [
   "openLaboratoryWindow",
   "Laboratorio 233 tarjetas · SOLO PRUEBAS",
-  'partition:"kaizen-1541-lab-memory-only"',
+  'partition:"kaizen-1542-lab-memory-only"',
   "nodeIntegration:false",
   "contextIsolation:true",
   "sandbox:true",
