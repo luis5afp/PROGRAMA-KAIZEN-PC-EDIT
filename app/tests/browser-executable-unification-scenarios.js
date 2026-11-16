@@ -55,7 +55,7 @@ assert(legacy.includes("_0x24524b[_0x4de0c3(0x278)]&&_0x386b41"),
   "La ruta heredada debe solicitar sus extensiones también en Chromium oficial");
 assert(legacy.includes("guest-open-profile")&&legacy.includes("openBrowserGuarded"),
   "El botón Invitado conserva su catálogo local y su flujo de apertura");
-assert(readme.includes("Las actualizaciones automáticas están desactivadas"),
-  "La distribución debe actualizarse con un nuevo instalador");
+assert(readme.includes("El paquete NSIS incluye"),
+  "Las actualizaciones deben usar un instalador completo con metadatos");
 
 console.log("PASS: Invitado y Perfiles Chromium comparten Chromium oficial sin mezclar perfiles.");
