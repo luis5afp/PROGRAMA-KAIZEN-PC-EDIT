@@ -10,6 +10,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 $repo = Split-Path -Parent $PSScriptRoot
+$package = Get-Content -LiteralPath (Join-Path $repo 'app/package.json') -Raw | ConvertFrom-Json
+$version = [string]$package.version
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Version SemVer invalida en package.json' }
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("kaizen-private-build-" + [guid]::NewGuid().ToString('N'))
 Push-Location $repo
 try {
@@ -65,9 +68,9 @@ try {
     Pop-Location
   }
 
-  $out = Join-Path $repo 'dist/KAIZEN-PC-v1.5.39-win32-x64'
-  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC-v1.5.39 --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-  if (!(Test-Path "$out/KAIZEN-PC-v1.5.39.exe")) { throw "Fallo la compilacion del ejecutable." }
+  $out = Join-Path $repo 'dist/KAIZEN-PC-win32-x64'
+  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+  if (!(Test-Path "$out/KAIZEN-PC.exe")) { throw "Fallo la compilacion del ejecutable." }
   $resources = Join-Path $out 'resources'
   foreach ($folder in @('browserProfilesData','extensionsData','syncPath','extensionForSecurity')) {
     $source = Join-Path $repo "runtime-resources/$folder"
@@ -148,7 +151,24 @@ try {
   npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $out --win nsis --x64 --publish never
   $installer = @(Get-ChildItem -LiteralPath $installerFolder -Filter '*.exe' -File)
   if ($installer.Count -ne 1) { throw "No se genero un unico instalador Windows." }
-  Write-Host "Instalador completo creado en: $($installer[0].FullName)"
+  # Metadatos SHA512 del mismo binario para el sistema de actualizaciones.
+  $latest = Join-Path $installerFolder 'latest.yml'
+  if (!(Test-Path -LiteralPath $latest -PathType Leaf)) {
+    throw 'Falta latest.yml: el instalador no se puede actualizar automaticamente.'
+  }
+  $manifestText = Get-Content -LiteralPath $latest -Raw
+  if ($manifestText -notmatch 'sha512:' -or $manifestText -notmatch [regex]::Escape($installer[0].Name)) {
+    throw 'latest.yml no coincide con el Setup o no incluye SHA512.'
+  }
+  $feedFile = Join-Path $out 'resources/app-update.yml'
+  if (!(Test-Path -LiteralPath $feedFile -PathType Leaf)) {
+    throw 'Falta resources/app-update.yml dentro del paquete.'
+  }
+  $feedText = Get-Content -LiteralPath $feedFile -Raw
+  if ($feedText -notmatch 'PROGRAMA-KAIZEN-PC-EDIT' -or $feedText -match 'private:\s*true') {
+    throw 'Feed de actualizacion no autorizado o privado.'
+  }
+  Write-Host "Instalador creado: $($installer[0].FullName) v$version, latest.yml verificado."
   Write-Host "Principal, Google y Custom quedan dentro de resources/KAIZEN_EXTENSIONS."
   Write-Host "No hay importacion ni ZIP que el usuario deba seleccionar."
   Write-Warning "Instalador sin firma; revisar permisos, red y secretos de las extensiones antes de distribuir."
