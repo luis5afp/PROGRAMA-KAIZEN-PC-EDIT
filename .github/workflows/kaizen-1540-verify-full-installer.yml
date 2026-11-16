@@ -1,4 +1,4 @@
-name: KAIZEN 1.5.40 - Verificar instalador completo sin publicarlo
+name: KAIZEN Windows - Verificar instalador completo sin publicarlo
 on:
   pull_request:
     paths:
@@ -31,7 +31,120 @@ jobs:
             if($parseErrors.Count -gt 0) { throw "Sintaxis invalida en $script : $($parseErrors -join '; ')" }
           }
           $version=(Get-Content app/package.json -Raw | ConvertFrom-Json).version
-          if($version -ne '1.5.40') { throw "Se esperaba 1.5.40, encontrado $version" }
+          if($version -notmatch '^\d+\.\d+\.\d+
+          node app/tests/silent-auto-update-scenarios.js
+          node app/tests/lab-233-cards-scenarios.js
+          node app/tests/browser-executable-unification-scenarios.js
+          node app/tests/embedded-extension-integration-scenarios.js
+          node app/tests/original-extension-integration-scenarios.js
+          node app/scripts/verify-uploaded-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS
+          node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
+
+      - name: Compilar Setup NSIS real con Chromium y cinco extensiones
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          ./scripts/build-windows-integrated.ps1 -ExtensionsSource 'runtime-resources/KAIZEN_EXTENSIONS'
+
+      - name: Verificar artefactos, latest.yml y SHA512 real
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $setup=@(Get-ChildItem -LiteralPath 'dist/installer' -Filter '*.exe' -File)
+          if($setup.Count -ne 1 -or $setup[0].Length -lt 100MB) { throw 'Setup NSIS incompleto' }
+          $latest=Get-Content 'dist/installer/latest.yml' -Raw
+          $version=(Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          if($latest -notmatch "(?m)^version:\s*$([regex]::Escape($version))\s*$") { throw 'latest.yml no coincide con version' }
+          if($latest -notmatch "(?m)^\s*sha512:\s*([A-Za-z0-9+/=]+)\s*$") { throw 'latest.yml no contiene SHA512 base64' }
+          $expected=$Matches[1].Trim()
+          $stream=[IO.File]::OpenRead($setup[0].FullName)
+          $hash=[Security.Cryptography.SHA512]::Create()
+          try { $actual=[Convert]::ToBase64String($hash.ComputeHash($stream)) }
+          finally { $stream.Dispose(); $hash.Dispose() }
+          if($actual -cne $expected) { throw 'latest.yml SHA512 distinto al binario real' }
+          if(!$latest.Contains($setup[0].Name)) { throw 'latest.yml referencia otro instalador' }
+          $staged='dist/KAIZEN-PC-win32-x64'
+          & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder $staged
+          if($LASTEXITCODE -ne 0) { throw 'Diagnostico del paquete preempaquetado fallo' }
+          $feed=Get-Content (Join-Path $staged 'resources/app-update.yml') -Raw
+          if($feed -notmatch 'PROGRAMA-KAIZEN-PC-EDIT' -or $feed -match 'private:\s*true') {
+            throw 'Proveedor de actualizacion incorrecto'
+          }
+          Write-Host "PASS: manifest SHA512 y recursos completos; v$version"
+          Write-Warning 'Este build de pull request NO valida firma Authenticode ni la actualizacion entre dos versiones.'
+
+      - name: Instalar silenciosamente y comprobar archivos en Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $setup=@(Get-ChildItem dist/installer -Filter '*.exe' -File)
+          $proc=Start-Process -FilePath $setup[0].FullName -ArgumentList '/S' -Wait -PassThru
+          if($proc.ExitCode -ne 0) { throw "NSIS /S falló con $($proc.ExitCode)" }
+          $programs=Join-Path $env:LOCALAPPDATA 'Programs'
+          $installed=@(Get-ChildItem $programs -Recurse -Filter 'KAIZEN-PC.exe' -File -ErrorAction SilentlyContinue)
+          if($installed.Count -ne 1) { throw 'Instalación no creó un único KAIZEN-PC.exe' }
+          $folder=Split-Path -Parent $installed[0].FullName
+          & './scripts/diagnose-installed-kaizen.ps1' -ProgramFolder $folder
+          if($LASTEXITCODE -ne 0) { throw 'Paquete instalado incompleto o alterado' }
+          node app/scripts/verify-uploaded-original-extensions.js (Join-Path $folder 'resources/KAIZEN_EXTENSIONS')
+          node app/scripts/verify-security-extensions.js (Join-Path $folder 'resources/extensionForSecurity')
+          node app/scripts/verify-legacy-core-resources.js (Join-Path $folder 'resources/extensionForSecurity')
+          $config=Join-Path $folder 'resources/app-update.yml'
+          if(!(Test-Path $config)) { throw 'Setup instalado no incluye app-update.yml' }
+          $browser=Join-Path $folder 'KAIZEN_CHROMIUM/chrome-win/chrome.exe'
+          $versionOutput=(& $browser --version 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $versionOutput -notmatch 'Chromium' -or $versionOutput -match 'Chrome for Testing') {
+            throw "Navegador instalado incorrecto: $versionOutput"
+          }
+          $testProfile=Join-Path $env:TEMP ('kaizen-smoke-'+[guid]::NewGuid().ToString('N'))
+          try {
+            & $browser '--headless=new' '--disable-gpu' '--no-first-run' "--user-data-dir=$testProfile" '--dump-dom' 'about:blank' | Out-Null
+            if($LASTEXITCODE -ne 0) { throw 'Chromium no pudo iniciar headless' }
+          } finally {
+            if(Test-Path $testProfile) { Remove-Item $testProfile -Recurse -Force }
+          }
+          Write-Host 'PASS: instalacion NSIS y Chromium real, cinco extensiones, configuración y perfiles.'
+
+      - name: Preparar instalador de prueba descargable (sin firma)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $version=[string](Get-Content 'app/package.json' -Raw | ConvertFrom-Json).version
+          $setup=@(Get-ChildItem -LiteralPath 'dist/installer' -Filter "KAIZEN-PC-v$version-Setup-x64.exe" -File)
+          if($setup.Count -ne 1) { throw "No se encontró el Setup completo v$version" }
+          $hash=(Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$($setup[0].Name)" | Set-Content -LiteralPath ($setup[0].FullName+'.sha256') -Encoding ascii
+          @(
+            "KAIZEN PC $version - INSTALADOR DE PRUEBA SIN FIRMA"
+            'Compilacion completa con Chromium y extensiones verificadas en CI.'
+            'Uso personal/manual exclusivamente. No es una version publicada.'
+            'Windows SmartScreen puede mostrar advertencias porque no tiene certificado.'
+            'Esta compilacion sin editor verificado NO instala actualizaciones automaticas.'
+            'Laboratorio 233 tarjetas: datos ficticios, sin red ni acceso a cuentas reales.'
+            'Cierra KAIZEN y guarda una copia de tus perfiles antes de instalar.'
+            "Ejecuta $($setup[0].Name) para instalar."
+            'SHA256 incluido para verificar integridad del archivo.'
+          ) | Set-Content -LiteralPath 'dist/installer/LEER-ANTES-DE-INSTALAR.txt' -Encoding UTF8
+          Write-Host 'PASS: Setup manual preparado, SHA256 generado.'
+
+      - name: Guardar instalador validado como descarga de GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAIZEN-PC-Windows-x64-PRUEBA-SIN-FIRMA
+          path: |
+            dist/installer/KAIZEN-PC-v*-Setup-x64.exe
+            dist/installer/KAIZEN-PC-v*-Setup-x64.exe.sha256
+            dist/installer/LEER-ANTES-DE-INSTALAR.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      # Artifacto temporal de Actions, no Release y no auto-update.
+) { throw "Version invalida: $version" }
           node app/tests/silent-auto-update-scenarios.js
           node app/tests/browser-executable-unification-scenarios.js
           node app/tests/embedded-extension-integration-scenarios.js
@@ -133,8 +246,8 @@ jobs:
         with:
           name: KAIZEN-PC-v1.5.40-Setup-x64-PRUEBA-SIN-FIRMA
           path: |
-            dist/installer/KAIZEN-PC-v1.5.40-Setup-x64.exe
-            dist/installer/KAIZEN-PC-v1.5.40-Setup-x64.exe.sha256
+            dist/installer/KAIZEN-PC-v*-Setup-x64.exe
+            dist/installer/KAIZEN-PC-v*-Setup-x64.exe.sha256
             dist/installer/LEER-ANTES-DE-INSTALAR.txt
           if-no-files-found: error
           compression-level: 0
