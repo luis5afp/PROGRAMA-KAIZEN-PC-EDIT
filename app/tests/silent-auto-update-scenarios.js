@@ -82,5 +82,11 @@ class FakeUpdater extends EventEmitter {
   assert.equal(pkg.productName,"KAIZEN PC","conservar nombre de datos de usuario anterior");
   assert(build.includes("latest.yml"));
   assert(build.includes("app-update.yml"));
+  assert(build.includes("KAIZEN_PUBLISHER_NAME"),"el Setup firmado debe fijar el editor autorizado");
+  assert(build.includes("Get-AuthenticodeSignature"),"la firma del instalador debe verificarse");
+  const release=fs.readFileSync(path.join(root,"..",".github","workflows","kaizen-auto-update-release.yml"),"utf8");
+  assert(release.includes("secrets.KAIZEN_PUBLISHER_NAME"),"CI requiere el subject real del certificado");
+  assert(release.includes("SignerCertificate.Subject -cne"),"CI debe rechazar firma de otro editor");
+  assert(release.includes("gh release create"),"los artefactos se publican después de las pruebas");
   console.log("PASS: comprobacion inicial, descarga e instalacion silenciosa y fallback offline");
 })().catch(e=>{console.error(e);process.exitCode=1;});
