@@ -1,17 +1,22 @@
 appId: org.kaizzen.kaizenpc
-productName: KAIZEN-PC-v1.5.39
+productName: KAIZEN-PC
 electronVersion: 36.0.0
 directories:
   output: ../dist/installer
+publish:
+  provider: github
+  owner: luis5afp
+  repo: PROGRAMA-KAIZEN-PC-EDIT
+  private: false
 win:
   icon: assets/app.ico
   target:
     - nsis
-  signAndEditExecutable: false
 nsis:
-  artifactName: KAIZEN-PC-v1.5.39-Setup-${arch}.${ext}
+  artifactName: KAIZEN-PC-v${version}-Setup-${arch}.${ext}
   oneClick: true
   perMachine: false
-  allowElevation: true
+  allowElevation: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false

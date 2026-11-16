@@ -1,0 +1,136 @@
+name: KAIZEN Windows - Release versionado con actualizador
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/package.json'
+      - 'app/kaizen-silent-updater.js'
+      - 'app/electron-builder.yml'
+      - 'scripts/build-windows-integrated.ps1'
+      - '.github/workflows/kaizen-auto-update-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: kaizen-windows-auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'luis5afp/PROGRAMA-KAIZEN-PC-EDIT'
+    runs-on: windows-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validar version, pruebas y politica de firma
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.KAIZEN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.KAIZEN_CSC_PASSWORD }}
+          KAIZEN_PUBLISHER_NAME: ${{ secrets.KAIZEN_PUBLISHER_NAME }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $version=[string](Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          # Publication on main creates a release + matching tag after checks.
+          # The older workflow awaited a tag that no connector could create.
+          if($env:GITHUB_REF_NAME -ne 'main') { throw 'Solo se publica desde main' }
+          $tag="v$version"
+          if($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version SemVer no valida" }
+          if(!$env:CSC_LINK -or !$env:CSC_KEY_PASSWORD -or !$env:KAIZEN_PUBLISHER_NAME) {
+            throw 'Configura los secretos de firma KAIZEN_CSC_LINK, KAIZEN_CSC_PASSWORD y KAIZEN_PUBLISHER_NAME antes de publicar.'
+          }
+          if($env:KAIZEN_PUBLISHER_NAME -notmatch '^CN=.+$' -or $env:KAIZEN_PUBLISHER_NAME -match '[\r\n]') {
+            throw 'KAIZEN_PUBLISHER_NAME debe coincidir con el Subject completo del certificado Windows.'
+          }
+          node app/tests/silent-auto-update-scenarios.js
+          node app/tests/embedded-extension-integration-scenarios.js
+          node app/tests/browser-executable-unification-scenarios.js
+          node app/tests/original-extension-integration-scenarios.js
+          node app/scripts/verify-uploaded-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS
+          node app/scripts/verify-security-extensions.js runtime-resources/extensionForSecurity
+          node app/scripts/verify-legacy-core-resources.js runtime-resources/extensionForSecurity
+
+      - name: Compilar Setup completo firmando Windows
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.KAIZEN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.KAIZEN_CSC_PASSWORD }}
+          KAIZEN_PUBLISHER_NAME: ${{ secrets.KAIZEN_PUBLISHER_NAME }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          ./scripts/build-windows-integrated.ps1 -ExtensionsSource 'runtime-resources/KAIZEN_EXTENSIONS'
+
+      - name: Instalar, comprobar actualizador y firma
+        shell: pwsh
+        env:
+          KAIZEN_PUBLISHER_NAME: ${{ secrets.KAIZEN_PUBLISHER_NAME }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $installer=@(Get-ChildItem dist/installer -Filter '*.exe' -File)
+          if($installer.Count -ne 1 -or $installer[0].Length -lt 100MB) { throw 'Setup incompleto' }
+          $signature=Get-AuthenticodeSignature -LiteralPath $installer[0].FullName
+          if($signature.Status -ne 'Valid') { throw "Instalador sin firma valida: $($signature.Status)" }
+          if(!$signature.SignerCertificate -or
+             $signature.SignerCertificate.Subject -cne $env:KAIZEN_PUBLISHER_NAME) {
+            throw 'Editor del Setup no coincide con KAIZEN_PUBLISHER_NAME.'
+          }
+          $proc=Start-Process -FilePath $installer[0].FullName -ArgumentList '/S' -Wait -PassThru
+          if($proc.ExitCode -ne 0) { throw "Instalacion NSIS fallo: $($proc.ExitCode)" }
+          $programs=Join-Path $env:LOCALAPPDATA 'Programs'
+          $installed=@(Get-ChildItem -LiteralPath $programs -Recurse -Filter 'KAIZEN-PC.exe' -File -ErrorAction SilentlyContinue)
+          if($installed.Count -lt 1) { throw 'No se encontro el EXE instalado' }
+          $folder=Split-Path -Parent $installed[0].FullName
+          ./scripts/diagnose-installed-kaizen.ps1 -ProgramFolder $folder
+          if($LASTEXITCODE -ne 0) { throw 'La instalacion no supera diagnostico' }
+          $config=Join-Path $folder 'resources/app-update.yml'
+          if(!(Test-Path -LiteralPath $config)) { throw 'No se instalo app-update.yml' }
+          $feed=Get-Content $config -Raw
+          if($feed -notmatch 'PROGRAMA-KAIZEN-PC-EDIT' -or $feed -match 'private:\s*true') {
+            throw 'Se instaló un proveedor de actualización incorrecto'
+          }
+          # Un EXE firmado no basta: el actualizador también debe reconocer
+          # al editor que firmó el instalador antes de aplicarlo.
+          if($feed -notmatch '(?m)^\s*publisherName\s*:') {
+            throw 'app-update.yml no contiene publisherName de firma: no es seguro activar instalaciones automáticas'
+          }
+          $expected = "publisherName: '" + $env:KAIZEN_PUBLISHER_NAME.Replace("'", "''") + "'"
+          if(!$feed.Contains($expected)) {
+            throw 'El actualizador no está anclado a la identidad del certificado del Setup.'
+          }
+          $signatureExe=Get-AuthenticodeSignature -LiteralPath $installed[0].FullName
+          if($signatureExe.Status -ne 'Valid') { throw 'El ejecutable instalado no esta firmado correctamente' }
+          $setup=$installer[0]
+          $hash=(Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$($setup.Name)" | Set-Content -LiteralPath ($setup.FullName+'.sha256') -Encoding ascii
+
+      - name: Publicar artefactos y latest.yml del mismo build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $PSNativeCommandUseErrorActionPreference=$true
+          $version=[string](Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          $tag="v$version"
+          # gh release create already rejects duplicate releases. Avoid
+          # gh release view here: a 404 and PowerShell native command
+          # error handling would incorrectly abort a NEW release.
+          $setup=@(Get-ChildItem dist/installer -Filter '*.exe' -File)
+          $latest='dist/installer/latest.yml'
+          if($setup.Count -ne 1 -or !(Test-Path $latest)) { throw 'Faltan los archivos del canal estable' }
+          $artifacts=@($setup[0].FullName,$setup[0].FullName+'.sha256',$latest)
+          $blockmap=$setup[0].FullName+'.blockmap'
+          if(Test-Path $blockmap) { $artifacts+= $blockmap }
+          $version=[string](Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          $notes="docs/RELEASE-NOTES-v$version.md"
+          if(!(Test-Path $notes)) { throw "Faltan notas $notes" }
+          & gh release create $tag @artifacts --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "KAIZEN PC $version" --notes-file $notes --latest
+          if($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la version firmada' }

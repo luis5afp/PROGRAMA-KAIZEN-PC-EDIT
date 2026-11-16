@@ -11,7 +11,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-assert(pkg.version === '1.5.39', 'expected KAIZEN 1.5.39')
+assert(pkg.version === '1.5.40', 'expected KAIZEN 1.5.40')
 assert(main.includes("ensurePersistentKaizenStorage"), 'persistent storage bootstrap missing')
 assert(main.includes("KAIZEN-Logistica"), 'persistent logistics root missing')
 assert(main.includes("guestRecoverAccidentalResourcesProfile"), 'resources recovery missing')
@@ -34,7 +34,10 @@ assert(preload.includes("guest-local-import-folder"), 'folder import UI bridge m
 assert(preload.includes("📂 Importar carpeta"), 'folder import button missing')
 assert(preload.includes("📦 Importar resources.zip"), 'resources.zip button missing')
 assert(preload.includes("🔄 Actualizar todo"), 'bulk update button missing')
-assert(noUpdates.includes("autoUpdater.checkForUpdates = async () => null"), 'application updater must remain disabled')
-assert(noUpdates.includes("autoUpdater.downloadUpdate = async () => []"), 'application updater download must remain disabled')
+const member = fs.readFileSync(path.join(root,'main.member-test.js'),'utf8')
+const updater = fs.readFileSync(path.join(root,'kaizen-silent-updater.js'),'utf8')
+assert(member.includes('startStartupUpdate(app,autoUpdater)'), 'production startup must enable silent updater')
+assert(updater.includes('updater.quitAndInstall(true,true)'), 'downloaded updates must install and relaunch silently')
+assert(noUpdates.includes('startFullConnectionCapture()'), 'legacy diagnostic launcher remains separate')
 
 console.log('guest-local-update-scenarios: OK')

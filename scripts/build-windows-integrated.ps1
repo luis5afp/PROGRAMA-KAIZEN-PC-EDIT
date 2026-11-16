@@ -10,6 +10,22 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 $repo = Split-Path -Parent $PSScriptRoot
+$package = Get-Content -LiteralPath (Join-Path $repo 'app/package.json') -Raw | ConvertFrom-Json
+$version = [string]$package.version
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Version SemVer invalida en package.json' }
+# The publisher subject is public identity metadata, NOT a credential. It must
+# be identical to the Subject of the certificate signing the NSIS installer.
+$publisher = [string]$env:KAIZEN_PUBLISHER_NAME
+$hasSigningCertificate = (![string]::IsNullOrWhiteSpace($env:CSC_LINK)) -and (![string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD))
+if ($hasSigningCertificate -and [string]::IsNullOrWhiteSpace($publisher)) {
+  throw 'Falta KAIZEN_PUBLISHER_NAME: no se puede crear un auto-updater firmado sin identidad verificable.'
+}
+if (![string]::IsNullOrWhiteSpace($publisher)) {
+  if (!$hasSigningCertificate) { throw 'KAIZEN_PUBLISHER_NAME exige certificado y contraseña de firma.' }
+  if ($publisher -notmatch '^CN=.+$' -or $publisher -match '[\r\n]') {
+    throw 'KAIZEN_PUBLISHER_NAME debe contener un subject de certificado Windows valido (CN=..., O=..., C=...).'
+  }
+}
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("kaizen-private-build-" + [guid]::NewGuid().ToString('N'))
 Push-Location $repo
 try {
@@ -65,15 +81,24 @@ try {
     Pop-Location
   }
 
-  $out = Join-Path $repo 'dist/KAIZEN-PC-v1.5.39-win32-x64'
-  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC-v1.5.39 --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
-  if (!(Test-Path "$out/KAIZEN-PC-v1.5.39.exe")) { throw "Fallo la compilacion del ejecutable." }
+  $out = Join-Path $repo 'dist/KAIZEN-PC-win32-x64'
+  npx --yes @electron/packager@18.3.6 ./app KAIZEN-PC --platform=win32 --arch=x64 --electron-version=36.0.0 --out=dist --overwrite --icon=app/assets/app.ico --asar
+  if (!(Test-Path "$out/KAIZEN-PC.exe")) { throw "Fallo la compilacion del ejecutable." }
   $resources = Join-Path $out 'resources'
   foreach ($folder in @('browserProfilesData','extensionsData','syncPath','extensionForSecurity')) {
     $source = Join-Path $repo "runtime-resources/$folder"
     if (Test-Path $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $resources $folder) -Recurse -Force }
   }
   node app/scripts/verify-legacy-core-resources.js "$resources/extensionForSecurity"
+  # Incluye el feed en el programa ANTES de empacar el instalador NSIS.
+  $feedFile = Join-Path $resources 'app-update.yml'
+  Copy-Item -LiteralPath (Join-Path $repo 'runtime-resources/app-update.yml') -Destination $feedFile -Force
+  if (![string]::IsNullOrWhiteSpace($publisher)) {
+    # Escape single quotes for YAML. Keep the signer identity in the installer
+    # so electron-updater checks the downloaded setup's Authenticode signature.
+    $escapedSubject = $publisher.Replace("'", "''")
+    Add-Content -LiteralPath $feedFile -Value ("publisherName: '" + $escapedSubject + "'") -Encoding UTF8
+  }
 
   $target = Join-Path $resources 'KAIZEN_EXTENSIONS'
   if (Test-Path $target) { Remove-Item -LiteralPath $target -Force -Recurse }
@@ -148,7 +173,58 @@ try {
   npx --yes electron-builder@26.0.12 --projectDir app --prepackaged $out --win nsis --x64 --publish never
   $installer = @(Get-ChildItem -LiteralPath $installerFolder -Filter '*.exe' -File)
   if ($installer.Count -ne 1) { throw "No se genero un unico instalador Windows." }
-  Write-Host "Instalador completo creado en: $($installer[0].FullName)"
+  # Metadatos SHA512 del mismo binario para el sistema de actualizaciones.
+  $latest = Join-Path $installerFolder 'latest.yml'
+  if (!(Test-Path -LiteralPath $latest -PathType Leaf)) {
+    # electron-builder --publish never puede omitir el canal. Crear
+    # metadata desde ESTE instalador sin publicar ninguna build sin validar.
+    $stream = [IO.File]::OpenRead($installer[0].FullName)
+    $algo = [Security.Cryptography.SHA512]::Create()
+    try {
+      $digest = [Convert]::ToBase64String($algo.ComputeHash($stream))
+    } finally {
+      $stream.Dispose()
+      $algo.Dispose()
+    }
+    $bytes = $installer[0].Length
+    $filename = $installer[0].Name
+    @(
+      "version: $version"
+      "files:"
+      "  - url: $filename"
+      "    sha512: $digest"
+      "    size: $bytes"
+      "path: $filename"
+      "sha512: $digest"
+      ("releaseDate: " + [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
+    ) | Set-Content -LiteralPath $latest -Encoding utf8
+  }
+  $manifestText = Get-Content -LiteralPath $latest -Raw
+  if ($manifestText -notmatch 'sha512:' -or $manifestText -notmatch [regex]::Escape($installer[0].Name)) {
+    throw 'latest.yml no coincide con el Setup o no incluye SHA512.'
+  }
+  $feedFile = Join-Path $out 'resources/app-update.yml'
+  if (!(Test-Path -LiteralPath $feedFile -PathType Leaf)) {
+    throw 'Falta resources/app-update.yml dentro del paquete.'
+  }
+  $feedText = Get-Content -LiteralPath $feedFile -Raw
+  if ($feedText -notmatch 'PROGRAMA-KAIZEN-PC-EDIT' -or $feedText -match 'private:\s*true') {
+    throw 'Feed de actualizacion no autorizado o privado.'
+  }
+  if ($hasSigningCertificate) {
+    $signature = Get-AuthenticodeSignature -LiteralPath $installer[0].FullName
+    if ($signature.Status -ne 'Valid' -or !$signature.SignerCertificate) {
+      throw "La versión firmada no tiene una firma Authenticode válida: $($signature.Status)"
+    }
+    if ($signature.SignerCertificate.Subject -cne $publisher) {
+      throw 'La identidad de firma del Setup no coincide exactamente con KAIZEN_PUBLISHER_NAME.'
+    }
+    $expectedYaml = "publisherName: '" + $publisher.Replace("'", "''") + "'"
+    if (!$feedText.Contains($expectedYaml)) {
+      throw 'El Setup no incluye publisherName esperado en resources/app-update.yml.'
+    }
+  }
+  Write-Host "Instalador creado: $($installer[0].FullName) v$version, latest.yml verificado."
   Write-Host "Principal, Google y Custom quedan dentro de resources/KAIZEN_EXTENSIONS."
   Write-Host "No hay importacion ni ZIP que el usuario deba seleccionar."
   Write-Warning "Instalador sin firma; revisar permisos, red y secretos de las extensiones antes de distribuir."

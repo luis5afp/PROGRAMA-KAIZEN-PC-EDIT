@@ -33,6 +33,7 @@ const sandbox={module:{exports:{}},exports:{},Buffer,console,process,Date,URL,re
  if(name==="electron")return {app:fakeApp};
  if(name==="./axiosConfig")return http;
  if(name==="./config")return {BACKEND_URL:"https://example.org/v/abc"};
+ if(name==="./package.json")return require("../package.json");
  if(name==="./kaizen-original-extensions-host")return fakeLocal;
  if(name==="./scripts/verify-legacy-core-resources")
    return require("../scripts/verify-legacy-core-resources");
@@ -42,7 +43,7 @@ vm.runInNewContext(src,sandbox,{filename:"diagnostics.js"});
 const {record,overview,remoteChecks}=sandbox.module.exports;
 (async()=>{
  const local=await overview();
- assert.equal(local.version,"1.5.39");
+ assert.equal(local.version,"1.5.40");
  assert.equal(local.prepared,3);
  assert.equal(local.profiles.length,3);
  assert.equal(local.security.length,2);
@@ -103,7 +104,7 @@ const {record,overview,remoteChecks}=sandbox.module.exports;
  assert(panel.includes("summary.features"));
  assert(preload.includes('require("./kaizen-diagnostics-ui-1.5.24")'));
  const pkg=JSON.parse(fs.readFileSync(path.join(__dirname,"..","package.json"),"utf8"));
- assert.equal(pkg.version,"1.5.39");
+ assert.equal(pkg.version,"1.5.40");
  assert.equal(pkg.main,"main.kaizen-1.5.24.js");
  console.log("KAIZEN 1.5.24 diagnostics and release metadata: PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});
