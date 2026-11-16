@@ -24,6 +24,7 @@ jobs:
           node --check app/kaizen-diagnostics-preload-1.5.24.js
           node --check app/kaizen-diagnostics-renderer-1.5.24.js
           node --check app/main.min.js
+          node --check app/kaizen-chromium-path.js
           node --check app/preload.min.js
           node --check app/util.min.js
           node --check app/proxyServer.js
@@ -43,6 +44,7 @@ jobs:
           node app/tests/guest-local-update-scenarios.js
           node app/tests/release-1.5.24-diagnostics.js
           node app/tests/embedded-extension-integration-scenarios.js
+          node app/tests/browser-executable-unification-scenarios.js
           node app/tests/r3-catalog-open-scenarios.js
           node app/tests/catalog-autofill-diagnostic-scenarios.js
           node app/tests/catalog-diagnostic-v2-runtime.js

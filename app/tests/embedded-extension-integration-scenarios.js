@@ -48,6 +48,7 @@ try{
     module:{exports:{}},exports:{},Buffer,process:{execPath:path.join(root,"KAIZEN.exe")},
     console,require:mod=>{
       if(mod==="electron")return {app:{isPackaged:true,getPath:()=>userData}};
+      if(mod==="./kaizen-chromium-path")return {bundledChromiumExecutable:()=>chrome};
       if(mod==="node:child_process")return {spawn:(bin,args,opts)=>{
         const child=new EventEmitter();
         child.exitCode=null;child.killed=false;

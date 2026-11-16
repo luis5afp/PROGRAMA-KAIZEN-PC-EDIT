@@ -42,11 +42,13 @@ const memberMain=fs.readFileSync(path.join(__dirname,"..","main.member-test.js")
 const openHandler='ipcMain.handle("kaizen-original-extension-open"';
 assert.equal(productionMain.split(openHandler).length-1,1);
 assert.equal(memberMain.split(openHandler).length-1,0);
-assert(source.includes('path.join(appDirectory(),"KAIZEN_CHROMIUM","chrome-win","chrome.exe")'));
+assert(source.includes('require("./kaizen-chromium-path")'));
+assert(source.includes("bundledChromiumExecutable(app.isPackaged)"));
 const sandbox={module:{exports:{}},exports:{},Buffer,process:{
   execPath:path.join(root,"KAIZEN.exe")
 },console,require:mod=>{
   if(mod==="electron")return {app:{isPackaged:true,getPath:()=>userData}};
+  if(mod==="./kaizen-chromium-path")return {bundledChromiumExecutable:()=>chromiumExe};
   if(mod==="node:child_process")return {spawn:spawnMock};
   if(mod==="./scripts/verify-security-extensions")return {validate:()=>true};
   if(mod==="./scripts/verify-legacy-core-resources")return {verify:()=>true};
