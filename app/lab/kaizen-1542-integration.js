@@ -34,13 +34,16 @@
     // Plain text is supported only for the copied, sanitized summary.
     return input.slice(0,16000);
   }
-  function analyze(report,selection){
-    if(!PROFILES.includes(selection))throw Error("Perfil no reconocido");
+  function analyze(report,selection="auto"){
+    if(selection!=="auto"&&!PROFILES.includes(selection))throw Error("Perfil no reconocido");
     const text=lineSummary(report);
     const found=text.match(/perfil\s+(KAIZZEN-(?:MAIN|GOOGLE|CUSTOM))/i);
     if(!found)throw Error("El informe no identifica el perfil de la extensión");
     const profile=found[1].toUpperCase();
-    if(profile!==expected[selection])throw Error("El informe pertenece a "+profile+", no al perfil seleccionado");
+    const detected=PROFILES.find(name=>expected[name]===profile);
+    if(!detected)throw Error("El perfil del informe no es reconocido");
+    if(selection!=="auto"&&selection!==detected)
+      throw Error("El informe es "+profile+". Selecciona "+profile+" o detección automática.");
 
     const http=countMatch(text,/Productos \(servidor\): HTTP\s+(\d{3})/i);
     const decoded=countMatch(text,/Productos \(tras descifrar\):\s*(\d+)/i);
@@ -99,7 +102,7 @@
     else if(http>=500)diagnosis="Posible falla temporal del servidor.";
 
     return Object.freeze({
-      profile:selection,source:"diagnóstico original de extensión",http,
+      profile:detected,source:"diagnóstico original de extensión",http,
       received:decoded,authorized,restricted,emailValues,passwordValues,
       explicitLocked,session,form,tab,window:windowState,diagnosis
     });
