@@ -33,6 +33,14 @@ jobs:
           node --check app/inspector/profileChromeCapture.js
           node --check app/inspector/extensionSnapshot.js
           Get-Content app/app_view/dist/assets/index-DAX2BPbP.js -Raw | node --input-type=module --check
+          foreach ($folder in @('KAIZZEN_MAIN','KAIZZEN_GOOGLE','KAIZZEN_CUSTOM')) {
+            $dir = "runtime-resources/KAIZEN_EXTENSIONS/KAIZEN_EXTENSIONS/$folder"
+            node --check "$dir/catalog-api-retry.js"
+            $asset = @(Get-ChildItem "$dir/assets" -Filter 'index-*.js' -File)
+            if ($asset.Count -ne 1) { throw "Bundle de catálogo no encontrado para $folder" }
+            Get-Content -LiteralPath $asset[0].FullName -Raw | node --input-type=module --check
+            if ($LASTEXITCODE -ne 0) { throw "Bundle inválido: $folder" }
+          }
 
       - name: Run KAIZEN regression scenarios
         shell: pwsh
