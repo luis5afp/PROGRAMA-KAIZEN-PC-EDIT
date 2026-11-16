@@ -1,0 +1,93 @@
+name: KAIZEN 1.5.41 - Publicar preview verificada en Releases
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/kaizen-1541-preview-release.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: kaizen-preview-1541
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'luis5afp/PROGRAMA-KAIZEN-PC-EDIT'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar procedencia del instalador y pruebas Windows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          run_id="43822287462"
+          commit="9e5911c9c204c511c8cf1683df10b75b8622ebc3"
+          conclusion="$(gh api "repos/$repo/actions/runs/$run_id" --jq .conclusion)"
+          test "$conclusion" = "success" || { echo "CI Windows incompleta o fallida" >&2; exit 1; }
+          source_sha="$(gh api "repos/$repo/actions/runs/$run_id" --jq .head_sha)"
+          test "$source_sha" = "$commit" || { echo "No corresponde a la revisión probada" >&2; exit 1; }
+          echo "PASS: instalador construido y validado por CI Windows #$run_id"
+
+      - name: Obtener el Setup completo ya instalado y probado en Windows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 43822287462 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name KAIZEN-PC-Windows-x64-PRUEBA-SIN-FIRMA \
+            --dir dist-preview
+          cd dist-preview
+          test -s KAIZEN-PC-v1.5.41-Setup-x64.exe
+          test -s KAIZEN-PC-v1.5.41-Setup-x64.exe.sha256
+          test -s LEER-ANTES-DE-INSTALAR.txt
+          sha256sum --check KAIZEN-PC-v1.5.41-Setup-x64.exe.sha256
+          bytes="$(stat -c%s KAIZEN-PC-v1.5.41-Setup-x64.exe)"
+          if ((bytes < 100000000));then
+            echo "Setup incompleto: $bytes bytes" >&2
+            exit 1
+          fi
+          echo "PASS: Setup real $bytes bytes y SHA-256 comprobado."
+
+      - name: Documentar el alcance de la version experimental
+        shell: bash
+        run: |
+          cat > dist-preview/LEER-PRIMERO-PREVIEW-1541.txt <<'EOF'
+          KAIZEN 1.5.41 - PREVIEW DE LABORATORIO, SIN FIRMA
+          ---------------------------------------------------
+          El instalador abre un laboratorio LOCAL de 233 tarjetas FICTICIAS.
+          Menu de KAIZEN: Laboratorio 233 tarjetas · SOLO PRUEBAS
+          Atajo: Ctrl+Shift+L
+          La prueba usa dominios .invalid y credenciales sin valor real.
+          La cuenta real y sus 233 tarjetas NO se desbloquean con esta preview.
+          No se modifica el servidor, ni las extensiones originales, ni isLock.
+          El Setup no firmado se instala manualmente y no ofrece auto-update.
+          Guarda una copia de perfiles locales antes de instalar.
+          La firma Authenticode y una prueba live con autorizaciones del
+          servidor siguen pendientes para una versión estable.
+          Compilación Windows verificada: https://github.com/luis5afp/PROGRAMA-KAIZEN-PC-EDIT/actions/runs/43822287462
+          EOF
+
+      - name: Publicar solo como prerelease sin auto-update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create v1.5.41-preview.1 \
+            dist-preview/KAIZEN-PC-v1.5.41-Setup-x64.exe \
+            dist-preview/KAIZEN-PC-v1.5.41-Setup-x64.exe.sha256 \
+            dist-preview/LEER-ANTES-DE-INSTALAR.txt \
+            dist-preview/LEER-PRIMERO-PREVIEW-1541.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "9e5911c9c204c511c8cf1683df10b75b8622ebc3" \
+            --title "KAIZEN PC 1.5.41 - Laboratorio 233 (preview, sin firma)" \
+            --notes "Preview manual para Windows x64. Instala KAIZEN y abre el Laboratorio 233 tarjetas desde el menú. Las 233 tarjetas y credenciales son FICTICIAS: no se modifican permisos ni se recuperan credenciales del servidor. Validado con NSIS y Chromium real en Actions #43822287462. No incluye auto-update por falta de certificado Authenticode." \
+            --prerelease
