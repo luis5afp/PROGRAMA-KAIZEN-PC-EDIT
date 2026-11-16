@@ -50,7 +50,7 @@
     try {
       const outcome=parser.analyze(reportBox.value,profile);
       reports[outcome.profile]=outcome;
-      $("integration-profile").value=outcome.profile;
+      // Keep "auto" selected so the next MAIN/GOOGLE/CUSTOM report is also detected.
       status.textContent="Informe sanitizado analizado: "+names[outcome.profile]+
         " · HTTP "+(outcome.http??"sin datos")+
         " · autorizadas "+outcome.authorized+"/"+outcome.received;
