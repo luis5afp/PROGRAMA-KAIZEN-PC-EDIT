@@ -77,6 +77,8 @@ try {
     if (Test-Path $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $resources $folder) -Recurse -Force }
   }
   node app/scripts/verify-legacy-core-resources.js "$resources/extensionForSecurity"
+  # Incluye el feed en el programa ANTES de empacar el instalador NSIS.
+  Copy-Item -LiteralPath (Join-Path $repo 'runtime-resources/app-update.yml') -Destination (Join-Path $resources 'app-update.yml') -Force
 
   $target = Join-Path $resources 'KAIZEN_EXTENSIONS'
   if (Test-Path $target) { Remove-Item -LiteralPath $target -Force -Recurse }
@@ -154,7 +156,28 @@ try {
   # Metadatos SHA512 del mismo binario para el sistema de actualizaciones.
   $latest = Join-Path $installerFolder 'latest.yml'
   if (!(Test-Path -LiteralPath $latest -PathType Leaf)) {
-    throw 'Falta latest.yml: el instalador no se puede actualizar automaticamente.'
+    # electron-builder --publish never puede omitir el canal. Crear
+    # metadata desde ESTE instalador sin publicar ninguna build sin validar.
+    $stream = [IO.File]::OpenRead($installer[0].FullName)
+    $algo = [Security.Cryptography.SHA512]::Create()
+    try {
+      $digest = [Convert]::ToBase64String($algo.ComputeHash($stream))
+    } finally {
+      $stream.Dispose()
+      $algo.Dispose()
+    }
+    $bytes = $installer[0].Length
+    $filename = $installer[0].Name
+    @(
+      "version: $version"
+      "files:"
+      "  - url: $filename"
+      "    sha512: $digest"
+      "    size: $bytes"
+      "path: $filename"
+      "sha512: $digest"
+      ("releaseDate: " + [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
+    ) | Set-Content -LiteralPath $latest -Encoding utf8
   }
   $manifestText = Get-Content -LiteralPath $latest -Raw
   if ($manifestText -notmatch 'sha512:' -or $manifestText -notmatch [regex]::Escape($installer[0].Name)) {
