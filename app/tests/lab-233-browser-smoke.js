@@ -19,18 +19,21 @@ const puppeteer=require("puppeteer-core");
   try{
     browser=await puppeteer.launch({
       executablePath:exe,headless:true,
-      args:["--disable-background-networking","--disable-default-apps",
+      // CI-only, sandbox is disabled ONLY for synthetic offline file:// tests.
+      // Production KAIZEN/Chromium launchers retain their normal sandbox.
+      args:["--no-sandbox","--disable-gpu","--disable-software-rasterizer",
+        "--disable-background-networking","--disable-default-apps",
         "--no-first-run","--no-default-browser-check"]
     });
     const page=await browser.newPage();
     page.on("pageerror",error=>errors.push(String(error?.message||error)));
-    await page.setRequestInterception(true);
+    // Windows Chromium snapshots can stall file:// navigations when Puppeteer
+    // uses request interception. Observe instead; CSP connect-src 'none'
+    // prevents network, and fail the test on any remote request.
     page.on("request",request=>{
-      if(request.url().startsWith("file:")||request.url().startsWith("data:"))
-        request.continue();
-      else {external++;request.abort();}
+      if(/^https?:/i.test(request.url()))external++;
     });
-    await page.goto(site,{waitUntil:"load",timeout:25000});
+    await page.goto(site,{waitUntil:"domcontentloaded",timeout:35000});
     await page.waitForSelector("#test-all");
     let summary=await page.evaluate(()=>({
       received:document.querySelector("#received").textContent,
