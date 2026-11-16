@@ -90,8 +90,8 @@ const puppeteer=require("puppeteer-core");
     assert.equal(await page.$eval("#integration-profile",el=>el.value),"auto",
       "La importación debe sugerir detección automática");
     await page.click("#integration-analyze");
-    assert.equal(await page.$eval("#integration-profile",el=>el.value),"main",
-      "El informe debe identificar el perfil Principal");
+    assert.equal(await page.$eval("#integration-profile",el=>el.value),"auto",
+      "El selector automático debe mantenerse para los siguientes perfiles");
     const compareText=await page.$eval("#integration-summary",el=>el.textContent);
     assert.match(compareText,/MAIN/);
     assert.match(compareText,/233/);
