@@ -1,9 +1,6 @@
-# KAIZEN custom build.
-# Automatic update checks are disabled by app/main.no-updates.js.
-# This metadata no longer points at the upstream appcbl repository, so an
-# accidental future re-enable cannot silently pull upstream builds.
+# Fuente exclusiva de actualización: releases públicos verificados de este repo.
+provider: github
 owner: luis5afp
 repo: PROGRAMA-KAIZEN-PC-EDIT
-provider: github
-private: true
-updaterCacheDirName: kaizen-updater-disabled
+private: false
+updaterCacheDirName: kaizen-pc-updater
