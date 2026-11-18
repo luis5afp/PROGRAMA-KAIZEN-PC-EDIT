@@ -63,6 +63,18 @@ assert.throws(()=>integ.analyze("x".repeat(integ.MAX_REPORT+1),"main"),/límite/
 assert.equal(integ.compare({main}).complete,false);
 const parsed=integ.analyze(JSON.parse(report("main",233,0,233,0,0)).resumen,"main");
 assert.equal(parsed.received,233,"acepta texto sanitizado plano");
+// Compatibilidad con v8: leer exclusivamente contadores agregados de la sección
+// de integridad; no transferir datos ni identificadores de productos.
+const v8=JSON.parse(report("main",9,2,7,2,2));
+v8.version=8;
+v8.resumen+="\nAcceso en objetos descifrados: autorizadas 2 · restringidas 7 · restringidas sin par e/k 7 · restringidas con e 0 · restringidas con k 0";
+v8.resumen+="\nIntegridad de tarjetas autorizadas: lote 1 · pérdida de e 1 · pérdida de k 0 · e nuevos 0 · k nuevos 0";
+const parsedV8=integ.analyze(JSON.stringify(v8),"auto");
+assert.equal(parsedV8.restrictedWithoutPair,7);
+assert.equal(parsedV8.lossEmail,1);
+assert.equal(parsedV8.lossPassword,0);
+assert.equal(main.lossEmail,null,"v7 sin conciliación sigue siendo legible");
+assert(!JSON.stringify(parsedV8).includes("NEVER-EXPOSE-SECRET"));
 
 for(const name of ["kaizen-1542-integration.js","kaizen-1542-integration-ui.js","kaizen-1542-preload.js"]){
   new Function(fs.readFileSync(path.join(base,name),"utf8"));
