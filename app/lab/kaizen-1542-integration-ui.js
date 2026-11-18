@@ -38,6 +38,11 @@
         row(summary,"Etapas ("+profile+")",
           "Ventana: "+p.window+" · Pestaña: "+p.tab+
           " · Sesión: "+p.session+" · Formulario: "+p.form);
+        if(p.restrictedWithoutPair!==null)
+          row(summary,"Sin par e/k en origen ("+profile+")",p.restrictedWithoutPair);
+        if(p.lossEmail!==null&&p.lossPassword!==null)
+          row(summary,"Integridad e/k autorizadas ("+profile+")",
+            "pérdida de e "+p.lossEmail+" · pérdida de k "+p.lossPassword);
         row(summary,"Diagnóstico ("+profile+")",p.diagnosis);
       }
     }
