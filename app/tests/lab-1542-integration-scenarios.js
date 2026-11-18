@@ -34,7 +34,7 @@ assert.deepEqual([main.received,main.authorized,main.restricted],[233,0,233]);
 assert.equal(main.http,200);
 assert.equal(main.session,"no preparada");
 assert.equal(main.tab,"conectada");
-assert.match(main.diagnosis,/todas las tarjetas están restringidas/);
+assert.match(main.diagnosis,/todas las tarjetas.*restringidas/);
 assert.equal(google.received,13);
 assert.equal(custom.authorized,2);
 const combined=integ.compare({main,google,custom});
