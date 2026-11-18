@@ -42,6 +42,21 @@ for(const [folder,name,version] of [
     "Observar red Chromium solo cuando el permiso ya está disponible");
   assert(catalog.includes("Peticiones tras el clic: "),
     "Resumen de tráfico observado al pulsar tarjeta");
+  assert(catalog.includes("Supervisor de API")&&catalog.includes("formatFamily")&&
+    catalog.includes("encodingFamily")&&catalog.includes("sizeGroup"),
+    "Supervisor debe clasificar contenido, compresión y tamaños sin valores");
+  assert(catalog.includes("chrome.webRequest.onHeadersReceived")&&
+    catalog.includes("metadataFromHeaders"),
+    "Observación opcional de metadatos HTTP del navegador");
+  assert(catalog.includes("traza:entry.traza")&&catalog.includes("traza:request.traza")&&
+    catalog.includes("traza,...metadataFromHeaders(response.headers)"),
+    "Relacionar envío y respuesta dentro del mismo transporte");
+  assert(catalog.includes("{version:9,resumen:diagnosis(list),events:list}"),
+    "Exportar diagnóstico supervisor v9");
+  assert(!catalog.includes("requestBody:")&&!catalog.includes("responseBody:"),
+    "El supervisor no debe conservar cuerpos de mensajes");
+  assert(catalog.includes("BOOLEAN_ONLY.has(key)")&&catalog.includes("NUMERIC_ONLY.has(key)"),
+    "No permitir valores de correo, clave, URL o traza en tipos incompatibles");
   assert(!catalog.includes("JSON.stringify(args)")&&!catalog.includes("JSON.stringify(message)"),
     "No exportar argumentos de llamadas ni cuerpos de mensajes");
 

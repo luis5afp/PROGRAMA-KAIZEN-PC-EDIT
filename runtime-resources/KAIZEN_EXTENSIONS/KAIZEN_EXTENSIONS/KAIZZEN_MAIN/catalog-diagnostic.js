@@ -7,7 +7,7 @@
   const LEGACY = "kzDiagnosticSafeEventsV1";
   const PREFIX = "kzDiagnosticSafeEventV2:";
   const TRACE = "kzDiagnosticPendingOpenV2";
-  const MAX = 160;
+  const MAX = 240;
   const SAFE_KEYS = new Set([
     "flujo","transporte","metodo","http","duracionMs","normal","premium",
     "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas","habilitadas","sinParAcceso","bloqueoExplicito","bloqueoPremium","perfil","cliente",
@@ -22,15 +22,36 @@
     "autorizadasOrigen","restringidasOrigen","restringidasSinParOrigen",
     "restringidasConEOrigen","restringidasConKOrigen","autorizadasConParOrigen",
     "autorizadasConParFinal","autorizadasFinal","restringidasFinal","cambioBloqueo",
-    "perdidaEAutorizada","perdidaKAutorizada","gananciaEAutorizada","gananciaKAutorizada"
+    "perdidaEAutorizada","perdidaKAutorizada","gananciaEAutorizada","gananciaKAutorizada",
+    "traza","formato","formatoEnvio","compresion","tamano",
+    "ciclo","productsTipo","sobreTipo","campoProducts","campoHasMore","vinculo"
   ]);
+  // Defensa adicional: estas claves solo representan presencia/estado.
+  // Una cadena que accidentalmente contenga e/k, URL o cookie es descartada.
+  const BOOLEAN_ONLY = new Set([
+    "url","correo","clave","claveCifrada","identificador","dominioCoincide",
+    "d","e","k","proxy","lm","id","isLock","locked","cookie","cifrado","hayMas",
+    "asociada","respuesta","sinCambios"
+  ]);
+  const NUMERIC_ONLY = new Set(["traza","ciclo","http","duracionMs","ventana","pestana"]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
+  let traceSequence = 0;
+  function traceNumber(){traceSequence=traceSequence>=1000000?1:traceSequence+1;return traceSequence;}
   let currentFlow = "";
   let currentFlowAt = 0;
   let currentSource = "sin-asociar";
   let lastProductOwner = {flujo:"",origen:"sin-asociar",asociada:false};
   let productBatch = 0;
   let rawBatch = 0;
+  let cycleSequence = 0;
+  let lastMappedCycle = 0;
+  const responseCandidates = [];
+  function cycleNumber(){cycleSequence=cycleSequence>=1000000?1:cycleSequence+1;return cycleSequence;}
+  function beginCatalogCycle(transport,trace,method){
+    const ciclo=cycleNumber();
+    event("captura-productos-iniciada",{ciclo,traza:trace,transporte:transport,metodo:method});
+    return ciclo;
+  }
   // Solo booleanos transitorios; nunca valores de las credenciales.
   let pendingOrigin = null;
   let visible = false;
@@ -42,6 +63,8 @@
     const safe = {time:new Date().toISOString(),stage:String(stage).slice(0,55)};
     for (const [key,value] of Object.entries(info)) {
       if (!SAFE_KEYS.has(key)) continue;
+      if (BOOLEAN_ONLY.has(key) && typeof value !== "boolean") continue;
+      if (NUMERIC_ONLY.has(key) && typeof value !== "number") continue;
       if (typeof value === "boolean") safe[key] = value;
       else if (typeof value === "number" && Number.isFinite(value)) safe[key] =
         Math.max(0,Math.min(["ventana","pestana"].includes(key)?2147483647:1000000,Math.floor(value)));
@@ -65,6 +88,9 @@
       }).catch(()=>{});
     }
   }
+  // Comenzar a registrar antes de que se inicialice React y antes de
+  // DOMContentLoaded. No inspeccionamos ni copiamos contenidos de red.
+  event("diagnostico-catalogo-iniciado");
   async function keys() {
     if (typeof chrome.storage.local.getKeys !== "function") return [];
     return (await chrome.storage.local.getKeys()).filter(k=>k.startsWith(PREFIX)).sort();
@@ -78,6 +104,12 @@
       all = all.concat(Object.values(found).filter(x=>x && typeof x.stage === "string"));
     }
     return all.sort((a,b)=>String(a.time).localeCompare(String(b.time))).slice(-MAX);
+  }
+  function latestCapture(events){
+    for(let i=events.length-1;i>=0;i--)
+      if(events[i].stage==="diagnostico-catalogo-iniciado")
+        return events.slice(i);
+    return events;
   }
   async function cleanup() {
     const list = await keys();
@@ -125,13 +157,29 @@
     try{return new URL(String(url),location.href).pathname.endsWith("/api/products/getmostusedtool");}
     catch{return false;}
   }
-  function summaryProducts(body,status,transport,duration=0){
-    const source=body&&typeof body==="object"?body:null;
-    event("productos-respuesta",{
-      transporte:transport,http:Number(status)||0,duracionMs:duration,
-      cifrado:typeof source?.products==="string"&&source.products.length>0,
-      hayMas:source?.hasMore===true
+  function summaryProducts(body,status,transport,duration=0,cycle=0,trace=0){
+    // Inspección previa al descifrado: solo estructura externa del JSON,
+    // nunca texto cifrado, valores secretos ni cabeceras HTTP originales.
+    const source=body&&typeof body==="object"&&!Array.isArray(body)?body:null;
+    const productsTipo=!source?"no-objeto":!Object.hasOwn(source,"products")?
+      "ausente":source.products===null?"nulo":typeof source.products==="string"?
+      "texto":Array.isArray(source.products)?"lista":"otro";
+    const cifrado=productsTipo==="texto"&&source.products.length>0;
+    event("productos-sobre-recibido",{
+      ciclo:cycle,traza:trace,transporte:transport,http:Number(status)||0,
+      sobreTipo:source?"objeto":"no-objeto",
+      campoProducts:!!source&&Object.hasOwn(source,"products"),
+      productsTipo,campoHasMore:!!source&&Object.hasOwn(source,"hasMore"),
+      cifrado
     });
+    event("productos-respuesta",{
+      ciclo:cycle,traza:trace,transporte:transport,http:Number(status)||0,duracionMs:duration,
+      cifrado,hayMas:source?.hasMore===true
+    });
+    if(cycle>0){
+      responseCandidates.push({ciclo:cycle,at:Date.now()});
+      while(responseCandidates.length>12)responseCandidates.shift();
+    }
   }
   function flags(p){
     // Solo se admiten booleanos producidos por el bundle; nunca guardar valores.
@@ -153,14 +201,20 @@
     if(!items.every(p=>p&&typeof p==="object"&&
        ORIGIN_FLAGS.every(k=>typeof p[k]==="boolean")))return;
     const lote=++rawBatch;
+    // Solo relación temporal (no identifica el cuerpo cifrado). Si hay
+    // varias respuestas posibles no asociamos un ciclo arbitrariamente.
+    const candidates=responseCandidates.filter(x=>Date.now()-x.at<15000);
+    const ciclo=candidates.length===1?candidates[0].ciclo:0;
+    responseCandidates.length=0;
+    const vinculo=ciclo?"temporal-unico":"no-identificable";
     const count=k=>items.filter(p=>p[k]).length;
     const flags=items.map(p=>({
       locked:p.lockTrue||(p.premium&&!p.lockFalse),
       e:p.eValue,k:p.kValue
     }));
-    pendingOrigin={lote,flags};
+    pendingOrigin={lote,flags,ciclo,vinculo};
     event("origen-tras-descifrado",{
-      lote,cuenta:items.length,
+      lote,ciclo,vinculo,cuenta:items.length,
       eProp:count("eProp"),kProp:count("kProp"),
       eValue:count("eValue"),kValue:count("kValue"),
       eNull:count("eNull"),kNull:count("kNull"),
@@ -185,7 +239,7 @@
     const lote=++productBatch;
     const rows=items.map(flags);
     event("productos-descifrados",{
-      lote,cuenta:rows.length,hayMas:hasMore===true,
+      lote,ciclo:pendingOrigin?.ciclo||0,cuenta:rows.length,hayMas:hasMore===true,
       conUrl:rows.filter(x=>x.d).length,
       conCorreo:rows.filter(x=>x.e).length,
       conClave:rows.filter(x=>x.k).length,
@@ -198,6 +252,7 @@
       sinParAcceso:rows.filter(x=>!x.cookie&&!(x.e&&x.k)).length
     });
     const before=pendingOrigin;
+    lastMappedCycle=before?.ciclo||0;
     pendingOrigin=null;
     // El bundle llama a ambos hooks de forma síncrona y en el mismo orden.
     // Nunca se persisten indicadores individuales de este cruce.
@@ -205,7 +260,7 @@
       const old=before.flags;
       const eligible=(p,i)=>!p.locked&&!old[i].locked;
       event("conciliacion-campos",{
-        lote,cuenta:rows.length,
+        lote,ciclo:before.ciclo,vinculo:before.vinculo,cuenta:rows.length,
         autorizadasOrigen:old.filter(p=>!p.locked).length,
         restringidasOrigen:old.filter(p=>p.locked).length,
         autorizadasFinal:rows.filter(p=>!p.locked).length,
@@ -226,7 +281,9 @@
   };
   globalThis.__kzDiagnosticCardClickFields=function(candidate){
     if(!currentFlow||Date.now()-currentFlowAt>10000)return;
-    event("tarjeta-campos-al-clic",{flujo:currentFlow,...flags(candidate)});
+    event("tarjeta-campos-al-clic",{
+      flujo:currentFlow,lote:productBatch,ciclo:lastMappedCycle,...flags(candidate)
+    });
   };
   function looksPublicPage(url) {
     try {const x=new URL(String(url),location.href);return x.protocol==="https:" || x.protocol==="http:";}
@@ -240,6 +297,69 @@
     }
     return {momento:"carga"};
   }
+  // Supervisor: solo categorías de formato, codificación y tamaño. Las cabeceras
+  // y cuerpos originales NO pasan al almacenamiento ni al informe.
+  function safeHeader(headers,name){
+    try{
+      if(!headers)return "";
+      if(typeof headers.get==="function")return String(headers.get(name)||"").slice(0,160);
+      if(Array.isArray(headers)){
+        // fetch Headers pueden darse como pares; chrome.webRequest devuelve
+        // objetos {name,value}. Solo se devuelve la cabecera solicitada.
+        const found=headers.find(x=>Array.isArray(x)?
+          String(x[0]).toLowerCase()===name:
+          x&&typeof x==="object"&&String(x.name||"").toLowerCase()===name);
+        const value=Array.isArray(found)?found[1]:found?.value;
+        return found?String(value||"").slice(0,160):"";
+      }
+      if(typeof headers==="object"){
+        const key=Object.keys(headers).find(x=>x.toLowerCase()===name);
+        return key?String(headers[key]||"").slice(0,160):"";
+      }
+    }catch{}
+    return "";
+  }
+  function formatFamily(raw){
+    const x=String(raw||"").split(";")[0].trim().toLowerCase();
+    if(!x)return "sin-tipo";
+    if(x==="application/json"||x.endsWith("+json")||x==="application/x-ndjson")return "json";
+    if(x==="text/html"||x==="application/xhtml+xml")return "html";
+    if(x==="text/event-stream")return "sse";
+    if(x==="text/css")return "css";
+    if(x==="application/javascript"||x==="text/javascript")return "javascript";
+    if(x==="application/xml"||x==="text/xml"||x.endsWith("+xml"))return "xml";
+    if(x==="application/x-www-form-urlencoded")return "formulario";
+    if(x==="multipart/form-data")return "multipart";
+    if(x==="application/protobuf"||x==="application/x-protobuf"||
+       x==="application/grpc"||x==="application/grpc+proto")return "protobuf";
+    if(x.startsWith("image/"))return "imagen";
+    if(x.startsWith("audio/"))return "audio";
+    if(x.startsWith("video/"))return "video";
+    if(x.startsWith("text/"))return "texto";
+    if(x==="application/octet-stream"||x==="application/zip"||
+       x==="application/pdf"||x==="application/wasm")return "binario";
+    return "otro";
+  }
+  function encodingFamily(raw){
+    const x=String(raw||"").trim().toLowerCase();
+    return ["gzip","br","deflate","zstd","identity"].includes(x)?x:(x?"otro":"sin-dato");
+  }
+  function sizeGroup(raw){
+    const x=String(raw??"");
+    if(!/^\d{1,15}$/.test(x))return "sin-dato";
+    const n=Number(x);
+    if(n===0)return "cero";
+    if(n<=1024)return "hasta-1kb";
+    if(n<=10240)return "1kb-10kb";
+    if(n<=102400)return "10kb-100kb";
+    if(n<=1048576)return "100kb-1mb";
+    return "mas-1mb";
+  }
+  const metadataFromHeaders=headers=>({
+    formato:formatFamily(safeHeader(headers,"content-type")),
+    compresion:encodingFamily(safeHeader(headers,"content-encoding")),
+    tamano:sizeGroup(safeHeader(headers,"content-length"))
+  });
   // Clasificar solo rutas conocidas del backend: nunca almacenar URL, query,
   // token, headers, bodies, ID de producto, credenciales ni payload cifrado.
   function apiRoute(url){
@@ -258,19 +378,19 @@
       return "api-otro";
     }catch{return "";}
   }
-  function httpSend(ruta,transporte,metodo,context=communicationContext()){
+  function httpSend(ruta,transporte,metodo,context=communicationContext(),metadata={}){
     if(!ruta)return;
     event("comunicacion-http-envio",{
       emisor:"extension-ui",receptor:"servidor-kaizzen",ruta,
-      transporte,metodo,...context
+      transporte,metodo,...context,...metadata
     });
   }
-  function httpReply(ruta,transporte,http,start,ok=true,context=communicationContext()){
+  function httpReply(ruta,transporte,http,start,ok=true,context=communicationContext(),metadata={}){
     if(!ruta)return;
     event(ok?"comunicacion-http-respuesta":"comunicacion-http-error",{
       emisor:"servidor-kaizzen",receptor:"extension-ui",ruta,
       transporte,http:http||0,duracionMs:elapsed(start),
-      ...context
+      ...context,...metadata
     });
   }
   const MESSAGE_ROUTES=new Set([
@@ -332,19 +452,25 @@
         const start=Date.now();
         const ctx=communicationContext();
         const method=String(args[1]?.method||args[0]?.method||"GET").toUpperCase().slice(0,16);
-        httpSend(api,"fetch",method,ctx);
+        const traza=traceNumber();
+        const ciclo=route==="productos"?beginCatalogCycle("fetch",traza,method):0;
+        const envio={traza,formatoEnvio:formatFamily(
+          safeHeader(args[1]?.headers||args[0]?.headers,"content-type"))};
+        httpSend(api,"fetch",method,ctx,envio);
         if(route)event(route+"-envio",{transporte:"fetch",metodo:method});
         let response;
         try{response=await native.apply(this,args);}
         catch(error){
-          httpReply(api,"fetch",0,start,false,ctx);
+          httpReply(api,"fetch",0,start,false,ctx,{traza,formato:"sin-tipo",
+            compresion:"sin-dato",tamano:"sin-dato",tipo:"red"});
           if(route)event(route+"-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});
           throw error;
         }
-        httpReply(api,"fetch",response.status,start,true,ctx);
+        httpReply(api,"fetch",response.status,start,true,ctx,
+          {traza,...metadataFromHeaders(response.headers)});
         if(route)response.clone().json().then(body=>{
           if(route==="catalogo")summary(body,response.status,"fetch",elapsed(start));
-          else summaryProducts(body,response.status,"fetch",elapsed(start));
+          else summaryProducts(body,response.status,"fetch",elapsed(start),ciclo,traza);
         }).catch(()=>event(route+"-respuesta-invalida",{
           transporte:"fetch",http:response.status
         }));
@@ -355,28 +481,42 @@
   try{
     const originalOpen=XMLHttpRequest.prototype.open;
     const originalSend=XMLHttpRequest.prototype.send;
+    const originalSetRequestHeader=XMLHttpRequest.prototype.setRequestHeader;
     const pending=new WeakMap();
     XMLHttpRequest.prototype.open=function(method,url,...rest){
       const route=isCatalog(url)?"catalogo":isProducts(url)?"productos":"";
       const api=apiRoute(url);
       if(route||api){
-        pending.set(this,{route,api,metodo:String(method).toUpperCase().slice(0,16),start:0,failed:false,ctx:null});
-        this.addEventListener("error",()=>{
+        pending.set(this,{route,api,metodo:String(method).toUpperCase().slice(0,16),
+          start:0,failed:false,ctx:null,traza:0,formatoEnvio:"sin-tipo"});
+        const failure=kind=>{
           const info=pending.get(this);
-          if(info){info.failed=true;httpReply(info.api,"xhr",0,info.start||Date.now(),false,info.ctx);}
-          if(route)event(route+"-error",{transporte:"xhr",tipo:"red"});
-        },{once:true});
+          if(info&&!info.failed){
+            info.failed=true;
+            httpReply(info.api,"xhr",0,info.start||Date.now(),false,info.ctx,
+              {traza:info.traza,tipo:kind,formato:"sin-tipo",compresion:"sin-dato",tamano:"sin-dato"});
+            if(route)event(route+"-error",{transporte:"xhr",tipo:kind});
+          }
+        };
+        for(const kind of ["error","timeout","abort"]){
+          this.addEventListener(kind,()=>failure(kind==="error"?"red":kind),{once:true});
+        }
         this.addEventListener("loadend",()=>{
           const request=pending.get(this);
           const duration=request?.start?elapsed(request.start):0;
           if(request?.failed)return;
+          const responseHeaders={get:key=>{
+            try{return typeof this.getResponseHeader==="function"?this.getResponseHeader(key):"";}
+            catch{return "";}
+          }};
           if(request?.api)httpReply(request.api,"xhr",this.status,
-            request.start||Date.now(),this.status!==0,request.ctx);
+            request.start||Date.now(),this.status!==0,request.ctx,
+            {traza:request.traza,...metadataFromHeaders(responseHeaders)});
           if(!route)return;
           try{
             const body=this.responseType==="json"?this.response:JSON.parse(this.responseText);
             if(route==="catalogo")summary(body,this.status,"xhr",duration);
-            else summaryProducts(body,this.status,"xhr",duration);
+            else summaryProducts(body,this.status,"xhr",duration,request?.ciclo||0,request?.traza||0);
           }catch{
             event(route+"-respuesta-invalida",{
               transporte:"xhr",http:this.status,duracionMs:duration});
@@ -385,16 +525,36 @@
       }
       return originalOpen.call(this,method,url,...rest);
     };
+    if(typeof originalSetRequestHeader==="function"){
+      XMLHttpRequest.prototype.setRequestHeader=function(name,value){
+        const request=pending.get(this);
+        if(request&&String(name).toLowerCase()==="content-type")
+          request.formatoEnvio=formatFamily(value);
+        return originalSetRequestHeader.apply(this,arguments);
+      };
+    }
     XMLHttpRequest.prototype.send=function(...args){
       const request=pending.get(this);
       if(request){
         request.start=Date.now();
+        request.traza=traceNumber();
+        request.ciclo=request.route==="productos"?
+          beginCatalogCycle("xhr",request.traza,request.metodo):0;
         request.ctx=communicationContext();
-        httpSend(request.api,"xhr",request.metodo,request.ctx);
+        httpSend(request.api,"xhr",request.metodo,request.ctx,
+          {traza:request.traza,formatoEnvio:request.formatoEnvio});
         if(request.route)event(request.route+"-envio",
           {transporte:"xhr",metodo:request.metodo});
       }
-      return originalSend.apply(this,args);
+      try{return originalSend.apply(this,args);}
+      catch(error){
+        if(request&&!request.failed){
+          request.failed=true;
+          httpReply(request.api,"xhr",0,request.start||Date.now(),false,request.ctx,
+            {traza:request.traza,tipo:"red"});
+        }
+        throw error;
+      }
     };
   }catch{}
 
@@ -417,13 +577,24 @@
         const id=String(details?.requestId||"");
         if(id){
           if(apiRequests.size>80)apiRequests.clear();
-          apiRequests.set(id,{ruta,ctx,at:Date.now()});
+          apiRequests.set(id,{ruta,ctx,at:Date.now(),traza:traceNumber(),
+            formato:"sin-tipo",compresion:"sin-dato",tamano:"sin-dato"});
         }
         event("comunicacion-red-envio",{
           emisor:"chromium",receptor:"servidor-kaizzen",canal:"webrequest",
-          ruta,metodo:String(details?.method||"GET").toUpperCase().slice(0,16),...ctx
+          ruta,metodo:String(details?.method||"GET").toUpperCase().slice(0,16),
+          traza:apiRequests.get(id)?.traza||0,...ctx
         });
       },filter);
+      // Únicamente observar Content-Type, Encoding y Length;
+      // nunca guardar la cabecera completa ni valores sensibles.
+      try{
+        if(chrome.webRequest.onHeadersReceived?.addListener)
+          chrome.webRequest.onHeadersReceived.addListener(details=>{
+            const entry=apiRequests.get(String(details?.requestId||""));
+            if(entry)Object.assign(entry,metadataFromHeaders(details?.responseHeaders));
+          },filter,["responseHeaders"]);
+      }catch{} // Si el navegador no ofrece estas cabeceras, conserva el resto del supervisor.
       const finish=(details,failed)=>{
         const id=String(details?.requestId||"");
         const entry=apiRequests.get(id);
@@ -432,7 +603,9 @@
         event(failed?"comunicacion-red-error":"comunicacion-red-respuesta",{
           emisor:"servidor-kaizzen",receptor:"chromium",canal:"webrequest",
           ruta:entry.ruta,http:failed?0:Number(details?.statusCode)||0,
-          duracionMs:elapsed(entry.at),...entry.ctx
+          duracionMs:elapsed(entry.at),traza:entry.traza,
+          formato:entry.formato,compresion:entry.compresion,tamano:entry.tamano,
+          ...entry.ctx
         });
       };
       chrome.webRequest.onCompleted?.addListener(details=>finish(details,false),filter);
@@ -603,7 +776,8 @@
     },true);
   } catch {}
 
-  function diagnosis(events) {
+  function diagnosis(allEvents) {
+    const events=latestCapture(allEvents);
     const e=events.slice().reverse();
     const recent=stage=>e.find(x=>x.stage===stage);
     const last=e.find(x=>x.stage==="clic-tarjeta"||x.stage==="clic-codigos");
@@ -632,11 +806,54 @@
     const net=last?.flujo?e.filter(x=>
       x.stage==="comunicacion-red-envio"&&x.flujo===last.flujo):[];
     const bool=x=>x===true?"sí":"no";
+    // Son dos observadores que pueden registrar la misma solicitud; NO sumar
+    // sus totales como si fueran peticiones diferentes del servidor.
+    const uiResponses=events.filter(x=>
+      x.stage==="comunicacion-http-respuesta"||x.stage==="comunicacion-http-error");
+    const chromeResponses=events.filter(x=>
+      x.stage==="comunicacion-red-respuesta"||x.stage==="comunicacion-red-error");
+    const classify=xs=>{
+      const types=new Map();
+      for(const x of xs)types.set(x.formato||"sin-tipo",(types.get(x.formato||"sin-tipo")||0)+1);
+      return [...types].sort((a,b)=>b[1]-a[1]).slice(0,7)
+        .map(([name,n])=>name+" "+n).join(" · ")||"sin formato observado";
+    };
+    const problem=xs=>{
+      const auth=xs.filter(x=>x.http===401||x.http===403).length;
+      const rate=xs.filter(x=>x.http===429).length;
+      const server=xs.filter(x=>x.http>=500).length;
+      const red=xs.filter(x=>x.http===0).length;
+      return "401/403 "+auth+" · 429 "+rate+" · 5xx "+server+" · red "+red;
+    };
+    const knownTraces=new Set(events.filter(x=>x.stage==="comunicacion-http-envio")
+      .map(x=>x.traza).filter(x=>Number.isInteger(x)&&x>0));
+    const correlated=uiResponses.filter(x=>knownTraces.has(x.traza)).length;
     return [
       "Cliente de acceso: "+(client?client.cliente+" · perfil "+client.perfil:"sin identificación de extensión"),
+      "Supervisor de API · ventana reciente: "+events.length+
+        " eventos conservados (máximo "+MAX+") · interfaz "+
+        uiResponses.length+" respuestas · Chromium "+chromeResponses.length+
+        " respuestas (pueden corresponder a las mismas peticiones)",
+      "Supervisor · formatos de respuesta: interfaz "+classify(uiResponses)+
+        " · Chromium "+classify(chromeResponses),
+      "Supervisor · alertas HTTP de interfaz: "+problem(uiResponses)+
+        " · trazas emparejadas en ventana "+correlated,
+      "Supervisor · alcance: solo rutas API de KAIZEN observables desde esta extensión; formato/tamaño/compresión son categorías de cabeceras, sin cuerpos, URLs, cookies ni tokens.",
       "Categorías: "+(categories?"HTTP "+categories.http+" · normal "+
         categories.normal+" · premium "+categories.premium+
         " (no representan tarjetas)":"sin respuesta observada"),
+      "Captura del ciclo: "+(origin?
+        "lote "+origin.lote+" · ciclo "+(origin.ciclo||"sin vínculo exacto")+
+        " · relación "+(origin.vinculo||"sin-dato")+
+        " (asociación temporal, nunca prueba del contenido cifrado)":
+        "aún no hay objetos descifrados"),
+      "Sobre de respuesta anterior al descifrado: "+(recent("productos-sobre-recibido")?
+        "HTTP "+recent("productos-sobre-recibido").http+
+        " · contenedor "+recent("productos-sobre-recibido").sobreTipo+
+        " · campo products "+bool(recent("productos-sobre-recibido").campoProducts)+
+        " · tipo "+recent("productos-sobre-recibido").productsTipo+
+        " · campo hasMore "+bool(recent("productos-sobre-recibido").campoHasMore):
+        "sin observación del sobre de respuesta"),
       "Productos (servidor): "+(fetched?"HTTP "+fetched.http+
         " · bloque cifrado "+bool(fetched.cifrado):
         "sin respuesta observada de /api/products/getmostusedtool"),
@@ -681,7 +898,9 @@
         " · e nuevos "+cross.gananciaEAutorizada+
         " · k nuevos "+cross.gananciaKAutorizada+
         " · cambios de bloqueo "+cross.cambioBloqueo+
-        (cross.perdidaEAutorizada||cross.perdidaKAutorizada?
+        (cross.autorizadasOrigen===0&&cross.autorizadasFinal===0?
+          " · no evaluable: ninguna tarjeta autorizada":
+          cross.perdidaEAutorizada||cross.perdidaKAutorizada?
           " · revisar transformación del cliente":
           " · no se observó pérdida de e/k en autorizadas"):
         "pendiente: no se pudo conciliar origen y destino del mismo lote"),
@@ -736,12 +955,12 @@
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
-      "Nota v8: solo contadores y booleanos. Los datos restringidos nunca se usan para iniciar sesión; las diferencias e/k son de presencia, no valores. No contiene correos, claves, IDs, URLs, cuerpos, cookies ni tokens."
+      "Nota v9: captura inicia antes de React, registra sobre cifrado sin contenido y estados posteriores al descifrado. Las relaciones temporales no prueban lo que hizo el backend antes de cifrar. Sin cuerpos, secretos, IPC de Electron o WebSockets."
     ].join("\n");
   }
   async function refresh() {
     if(!visible || !output)return;
-    try {const list=await rows();if(visible)output.textContent=diagnosis(list)+"\n\n"+
+    try {const list=latestCapture(await rows());if(visible)output.textContent=diagnosis(list)+"\n\n"+
       list.map(x=>JSON.stringify(x)).join("\n");}
     catch {output.textContent="No se pudo leer el diagnóstico local.";}
   }
@@ -752,8 +971,8 @@
     btn.style.cssText="position:fixed;bottom:16px;right:16px;z-index:2147483646;background:#164e63;color:white;border:1px solid #67e8f9;border-radius:10px;padding:10px 14px;font:600 13px system-ui;cursor:pointer";
     const panel=document.createElement("section");
     panel.style.cssText="display:none;position:fixed;bottom:62px;right:16px;z-index:2147483647;background:#0b1220;color:#e2e8f0;border:1px solid #64748b;border-radius:12px;padding:14px;width:min(680px,calc(100vw - 32px));max-height:75vh;box-sizing:border-box;font:13px system-ui";
-    const title=document.createElement("strong");title.textContent="Diagnóstico de comunicación · servidor ↔ extensión ↔ tarjeta ↔ formulario";
-    note=document.createElement("p");note.textContent="Solo metadatos: nunca copia direcciones, credenciales, tokens, cookies ni respuestas completas.";
+    const title=document.createElement("strong");title.textContent="Supervisor de comunicación · servidor ↔ extensión ↔ tarjeta ↔ formulario";
+    note=document.createElement("p");note.textContent="Rutas agrupadas, formatos, tiempos y códigos HTTP; nunca guarda direcciones, cabeceras completas, cuerpos, credenciales, tokens ni cookies.";
     note.style.cssText="font-size:12px;color:#cbd5e1";
     output=document.createElement("pre");
     output.style.cssText="white-space:pre-wrap;overflow:auto;max-height:49vh;font:11px/1.5 monospace;background:#111827;padding:8px;border-radius:6px";
@@ -764,8 +983,8 @@
       button.addEventListener("click",callback);actions.appendChild(button);
     };
     add("Copiar informe",async()=>{
-      const list=await rows();
-      const payload=JSON.stringify({version:8,resumen:diagnosis(list),events:list},null,2);
+      const list=latestCapture(await rows());
+      const payload=JSON.stringify({version:9,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
@@ -786,7 +1005,6 @@
     chrome.storage.onChanged.addListener((changes,area)=>{
       if(visible && area==="local" && Object.keys(changes).some(k=>k===LEGACY || k.startsWith(PREFIX)))refresh();
     });
-    event("diagnostico-catalogo-iniciado");
     try {
       const name=chrome.runtime?.getManifest?.()?.name||"";
       const clients={
