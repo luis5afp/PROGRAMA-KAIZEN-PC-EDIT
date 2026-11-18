@@ -52,6 +52,10 @@
     const emailValues=countMatch(text,/Inmediatamente tras descifrar:[^\n]*e con texto\s*(\d+)/i);
     const passwordValues=countMatch(text,/Inmediatamente tras descifrar:[^\n]*k con texto\s*(\d+)/i);
     const explicitLocked=countMatch(text,/Acceso según respuesta:[^\n]*bloqueos explícitos\s*(\d+)/i);
+    // El informe v8 añade contadores agregados; conservar compatibilidad v7.
+    const restrictedWithoutPair=countMatch(text,/Acceso en objetos descifrados:[^\n]*restringidas sin par e\/k\s*(\d+)/i);
+    const lossEmail=countMatch(text,/Integridad de tarjetas autorizadas:[^\n]*pérdida de e\s*(\d+)/i);
+    const lossPassword=countMatch(text,/Integridad de tarjetas autorizadas:[^\n]*pérdida de k\s*(\d+)/i);
     if([decoded,authorized,restricted,emailValues,passwordValues].some(x=>x===null))
       throw Error("El informe no contiene todos los conteos de catálogo descifrado");
     if(authorized+restricted!==decoded)
@@ -91,7 +95,7 @@
     let diagnosis="No se ha recibido una respuesta HTTP de productos.";
     if(http===200&&decoded===0)diagnosis="API conectada; el catálogo descifrado está vacío.";
     else if(http===200&&restricted===decoded&&decoded>0)
-      diagnosis="API conectada; todas las tarjetas están restringidas según el servidor.";
+      diagnosis="API conectada; todas las tarjetas figuran restringidas en el catálogo.";
     else if(http===200&&emailValues===0&&passwordValues===0)
       diagnosis="API conectada; no hay datos e/k disponibles para autocompletar.";
     else if(http===200&&authorized>0&&session==="no preparada")
@@ -104,7 +108,8 @@
     return Object.freeze({
       profile:detected,source:"diagnóstico original de extensión",http,
       received:decoded,authorized,restricted,emailValues,passwordValues,
-      explicitLocked,session,form,tab,window:windowState,diagnosis
+      explicitLocked,restrictedWithoutPair,lossEmail,lossPassword,
+      session,form,tab,window:windowState,diagnosis
     });
   }
   function compare(reports){
