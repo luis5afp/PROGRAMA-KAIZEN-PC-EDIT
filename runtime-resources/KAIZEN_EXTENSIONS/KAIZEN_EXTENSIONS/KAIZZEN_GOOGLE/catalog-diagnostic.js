@@ -765,7 +765,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:7,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:8,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
