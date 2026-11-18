@@ -25,6 +25,14 @@
     "perdidaEAutorizada","perdidaKAutorizada","gananciaEAutorizada","gananciaKAutorizada",
     "traza","formato","formatoEnvio","compresion","tamano"
   ]);
+  // Defensa adicional: estas claves solo representan presencia/estado.
+  // Una cadena que accidentalmente contenga e/k, URL o cookie es descartada.
+  const BOOLEAN_ONLY = new Set([
+    "url","correo","clave","claveCifrada","identificador","dominioCoincide",
+    "d","e","k","proxy","lm","id","isLock","locked","cookie","cifrado","hayMas",
+    "asociada","respuesta","sinCambios"
+  ]);
+  const NUMERIC_ONLY = new Set(["traza","http","duracionMs","ventana","pestana"]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let traceSequence = 0;
   function traceNumber(){traceSequence=traceSequence>=1000000?1:traceSequence+1;return traceSequence;}
@@ -45,6 +53,8 @@
     const safe = {time:new Date().toISOString(),stage:String(stage).slice(0,55)};
     for (const [key,value] of Object.entries(info)) {
       if (!SAFE_KEYS.has(key)) continue;
+      if (BOOLEAN_ONLY.has(key) && typeof value !== "boolean") continue;
+      if (NUMERIC_ONLY.has(key) && typeof value !== "number") continue;
       if (typeof value === "boolean") safe[key] = value;
       else if (typeof value === "number" && Number.isFinite(value)) safe[key] =
         Math.max(0,Math.min(["ventana","pestana"].includes(key)?2147483647:1000000,Math.floor(value)));
