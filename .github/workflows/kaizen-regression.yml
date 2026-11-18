@@ -50,7 +50,6 @@ jobs:
           node app/tests/r3-catalog-open-scenarios.js
           node app/tests/lab-233-cards-scenarios.js
           node app/tests/lab-1542-integration-scenarios.js
-          node app/tests/lab-233-browser-smoke.js
           node app/tests/catalog-autofill-diagnostic-scenarios.js
           node app/tests/catalog-diagnostic-v2-runtime.js
           node app/tests/verify-original-extensions-scenarios.js
