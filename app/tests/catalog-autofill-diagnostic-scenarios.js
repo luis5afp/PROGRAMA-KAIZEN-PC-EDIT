@@ -55,6 +55,8 @@ for(const [folder,name,version] of [
     "Exportar diagnóstico supervisor v9");
   assert(!catalog.includes("requestBody:")&&!catalog.includes("responseBody:"),
     "El supervisor no debe conservar cuerpos de mensajes");
+  assert(catalog.includes("BOOLEAN_ONLY.has(key)")&&catalog.includes("NUMERIC_ONLY.has(key)"),
+    "No permitir valores de correo, clave, URL o traza en tipos incompatibles");
   assert(!catalog.includes("JSON.stringify(args)")&&!catalog.includes("JSON.stringify(message)"),
     "No exportar argumentos de llamadas ni cuerpos de mensajes");
 
