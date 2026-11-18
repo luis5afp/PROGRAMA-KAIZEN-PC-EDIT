@@ -18,14 +18,14 @@ class FakeUpdater extends EventEmitter {
     this.checks++;
     if(this.mode==="offline")throw Error("network offline");
     if(this.mode==="available"||this.mode==="broken-download")
-      this.emit("update-available",{version:"1.5.42"});
-    else this.emit("update-not-available",{version:"1.5.41"});
+      this.emit("update-available",{version:"1.5.44"});
+    else this.emit("update-not-available",{version:"1.5.43"});
     return {};
   }
   async downloadUpdate(){
     this.downloads++;
     if(this.mode==="broken-download")throw Error("download failed");
-    this.emit("update-downloaded",{version:"1.5.42"});
+    this.emit("update-downloaded",{version:"1.5.44"});
     return ["test-installer"];
   }
   quitAndInstall(...args){this.installs.push(args);}
