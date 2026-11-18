@@ -69,6 +69,7 @@ const {app,BrowserWindow,Menu,MenuItem}=require("electron");
 const path=require("node:path");
 const KAIZEN_VERSION=require("./package.json").version;
 let diagWindow=null;
+let labWindow=null;
 function openDiagnosticsWindow(){
   if(diagWindow&&!diagWindow.isDestroyed()){diagWindow.show();diagWindow.focus();return;}
   diagWindow=new BrowserWindow({
@@ -82,6 +83,79 @@ function openDiagnosticsWindow(){
   diagWindow.loadFile(path.join(__dirname,"kaizen-diagnostics-1.5.24.html"));
   diagWindow.on("closed",()=>diagWindow=null);
 }
+// 1.5.42 laboratory and opt-in metadata diagnostics, separate in-memory
+// Electron session. No preload bridge, IPC, real catalogue or credentials.
+// The HTML CSP additionally blocks network connections and form submission.
+function openLaboratoryWindow(){
+  if(labWindow&&!labWindow.isDestroyed()){
+    labWindow.show();
+    labWindow.focus();
+    return;
+  }
+  const labFile=path.join(__dirname,"lab","index.html");
+  const allowedUrl=require("node:url").pathToFileURL(labFile).href;
+  labWindow=new BrowserWindow({
+    width:1140,height:880,minWidth:760,minHeight:620,
+    title:"KAIZEN PC "+KAIZEN_VERSION+" · Laboratorio + Diagnóstico real",
+    autoHideMenuBar:true,
+    webPreferences:{
+      partition:"kaizen-1542-lab-memory-only",
+      preload:path.join(__dirname,"lab","kaizen-1542-preload.js"),
+      contextIsolation:true,
+      nodeIntegration:false,
+      sandbox:true,
+      webSecurity:true
+    }
+  });
+  labWindow.webContents.setWindowOpenHandler(()=>({action:"deny"}));
+  labWindow.webContents.on("will-navigate",(event,url)=>{
+    if(url!==allowedUrl)event.preventDefault();
+  });
+  labWindow.webContents.session.setPermissionRequestHandler((_wc,_perm,answer)=>answer(false));
+  labWindow.webContents.session.setPermissionCheckHandler(()=>false);
+  labWindow.loadFile(labFile).catch(()=>{
+    if(labWindow&&!labWindow.isDestroyed())labWindow.close();
+  });
+  labWindow.on("closed",()=>{labWindow=null;});
+}
+// The main KAIZEN window is frameless and auto-hides its native menu.
+// Give the renderer a narrowly scoped way to open ONLY the synthetic lab.
+ipcMain.handle("kaizen-lab-open",async event=>{
+  if(!authorize(event))return {ok:false,message:"Origen no autorizado"};
+  openLaboratoryWindow();
+  return {ok:true};
+});
+// Only the lab's top-level window can ask for an explicit read-only probe.
+// The API token stays in the main process; no credentials or raw JSON are sent
+// to the laboratory. This checks desktop-session APIs, NOT extension roles.
+let lastLabApiProbe=0;
+let labApiProbeRunning=false;
+ipcMain.handle("kaizen-lab-live-probe",async event=>{
+  if(!labWindow||labWindow.isDestroyed()||
+      event.sender!==labWindow.webContents||
+      event.senderFrame!==labWindow.webContents.mainFrame)
+    return {ok:false,message:"Ventana no autorizada"};
+  const now=Date.now();
+  if(labApiProbeRunning||now-lastLabApiProbe<15000)
+    return {ok:false,message:"Una consulta está en curso o se realizó hace pocos segundos."};
+  lastLabApiProbe=now;
+  labApiProbeRunning=true;
+  let token="";
+  try{
+    const win=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&
+      String(w.webContents.getURL()||"").replace(/\\/g,"/").includes("/app_view/dist/index.html"));
+    if(!win)return {ok:false,message:"Abre e inicia sesión en la ventana principal de KAIZEN PC."};
+    token=await win.webContents.executeJavaScript("window.localStorage.getItem('token') || ''",true);
+    if(typeof token!=="string"||!token||token.length>8192)
+      return {ok:false,message:"La ventana principal de KAIZEN PC no tiene una sesión iniciada. El acceso a KAIZZEN-GOOGLE es independiente. Puedes comparar los informes sin iniciar sesión en el escritorio."};
+    return await diagnostics.remoteChecks(token);
+  }catch(_){
+    return {ok:false,message:"No se pudo obtener una respuesta de la sesión del escritorio."};
+  }finally{
+    token="";
+    labApiProbeRunning=false;
+  }
+});
 function authorizedDiagnosticsWindow(event){
   return diagWindow&&!diagWindow.isDestroyed()&&event.sender===diagWindow.webContents;
 }
@@ -109,6 +183,7 @@ function installDiagnosticMenu(){
   if(!menu.items.some(item=>item.label==="KAIZEN "+KAIZEN_VERSION)){
     menu.append(new MenuItem({label:"KAIZEN "+KAIZEN_VERSION,submenu:[
       {label:"Diagnóstico integral",accelerator:"CmdOrCtrl+Shift+D",click:openDiagnosticsWindow},
+      {label:"Laboratorio 233 tarjetas · SOLO PRUEBAS",accelerator:"CmdOrCtrl+Shift+L",click:openLaboratoryWindow},
       {label:"Abrir lista de perfiles",click:()=>{
         const w=BrowserWindow.getAllWindows().find(w=>!w.isDestroyed()&&
            String(w.webContents.getURL()||"").replace(/\\/g,"/").includes("/app_view/dist/index.html"));
