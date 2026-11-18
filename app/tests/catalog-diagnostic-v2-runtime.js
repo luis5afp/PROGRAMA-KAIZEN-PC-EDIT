@@ -19,7 +19,7 @@ for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identif
   "catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
   "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic",
   "diagnostico-cliente","bloqueoExplicito","bloqueoPremium","origen-tras-descifrado",
-  "conciliacion-campos",
+  "conciliacion-campos","captura-productos-iniciada","productos-sobre-recibido",
   "comunicacion-http-envio","comunicacion-http-respuesta",
   "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta",
   "comunicacion-red-envio","comunicacion-red-respuesta"])
@@ -164,6 +164,9 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   target.globalThis=target;
   vm.runInNewContext(catalog,target,{filename:"catalog-diagnostic.js"});
   assert.equal(typeof handlers.click,"function");
+  await flush();
+  assert(store.events().some(x=>x.stage==="diagnostico-catalogo-iniciado"),
+    "La captura debe iniciarse antes de DOMContentLoaded y antes del catálogo");
   // Simulación de metadatos ANTES del mapeo React. Sin datos sensibles.
   const base={eProp:false,kProp:false,eValue:false,kValue:false,
     eNull:false,kNull:false,eEmpty:false,kEmpty:false,eSpaces:false,
@@ -223,6 +226,17 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert(events.some(x=>x.stage==="pestana-vinculada"&&x.pestana===456));
   assert(events.some(x=>x.stage==="script-formulario-activo"&&x.pestana===456));
   assert(events.some(x=>x.stage==="productos-respuesta"&&x.cifrado===true));
+  const sobre=events.find(x=>x.stage==="productos-sobre-recibido");
+  assert(sobre,"Debe registrar la estructura externa antes del descifrado");
+  assert.equal(sobre.sobreTipo,"objeto");
+  assert.equal(sobre.productsTipo,"texto");
+  assert.equal(sobre.campoProducts,true);
+  assert.equal(sobre.campoHasMore,true);
+  assert.equal(sobre.cifrado,true);
+  assert.equal(sobre.traza>0,true);
+  assert(events.some(x=>x.stage==="captura-productos-iniciada"&&
+    x.ciclo===sobre.ciclo&&x.traza===sobre.traza),
+    "Deben vincularse el inicio de captura y el sobre cifrado");
   // HTTP y background: solo etiquetas, respuestas y correlación del clic.
   const sourceFlow=events.find(x=>x.stage==="clic-tarjeta")?.flujo;
   await target.fetch("https://www.kaizzen.org/s/vHwxhS39x9wSS393xxhS3xhS9wxwxx3hh9wx9wxhS39/api/products/activitystatus/add?token=DONT_LOG_TOKEN");
@@ -367,6 +381,34 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert.equal(crossLoss.autorizadasConParOrigen,1);
   assert.equal(crossLoss.autorizadasConParFinal,0);
   assert(!JSON.stringify(crossLoss).includes("example.com"),"No exportar dominios");
+
+  // Después de consumir peticiones previas, una nueva respuesta única
+  // puede enlazarse temporalmente con el lote y el clic. No usa credenciales.
+  await target.fetch("https://www.kaizzen.org/s/test/api/products/getmostusedtool?token=PRIVATE_LINK");
+  for(let i=0;i<6;i++)await flush();
+  const newestEnvelope=store.events().filter(x=>x.stage==="productos-sobre-recibido").at(-1);
+  target.__kzDiagnosticRawBatch([{
+    ...base,eProp:true,kProp:true,eNull:true,kNull:true,
+    lockTrue:true,lockFalse:false,premium:true
+  }]);
+  target.__kzDiagnosticProductBatch([{
+    d:true,e:false,k:false,proxy:false,lm:true,cookie:false,
+    id:true,isLock:true,locked:true
+  }],false);
+  handlers.click({target:{closest:()=>({querySelector:()=>({})})}});
+  target.__kzDiagnosticCardClickFields({
+    d:true,e:false,k:false,proxy:false,lm:true,cookie:false,
+    id:true,isLock:true,locked:true
+  });
+  await flush();
+  const lastRaw=store.events().filter(x=>x.stage==="origen-tras-descifrado").at(-1);
+  const lastClick=store.events().filter(x=>x.stage==="tarjeta-campos-al-clic").at(-1);
+  assert.equal(lastRaw.vinculo,"temporal-unico");
+  assert.equal(lastRaw.ciclo,newestEnvelope.ciclo);
+  assert.equal(lastClick.ciclo,newestEnvelope.ciclo);
+  assert.equal(lastClick.e,false);
+  assert.equal(lastClick.k,false);
+  assert(!JSON.stringify(store.events()).includes("PRIVATE_LINK"));
   listeners.removed[0](456);
   listeners.windowsRemoved[0](123);
   console.log("KAIZEN 1.5.41: auditoría v8 de integridad autorizada y privacidad PASS; KAIZEN 1.5.36: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
