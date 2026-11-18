@@ -7,7 +7,7 @@
   const LEGACY = "kzDiagnosticSafeEventsV1";
   const PREFIX = "kzDiagnosticSafeEventV2:";
   const TRACE = "kzDiagnosticPendingOpenV2";
-  const MAX = 160;
+  const MAX = 240;
   const SAFE_KEYS = new Set([
     "flujo","transporte","metodo","http","duracionMs","normal","premium",
     "conUrl","conCorreo","conClave","conProxy","modoCookie","bloqueadas","habilitadas","sinParAcceso","bloqueoExplicito","bloqueoPremium","perfil","cliente",
@@ -22,9 +22,12 @@
     "autorizadasOrigen","restringidasOrigen","restringidasSinParOrigen",
     "restringidasConEOrigen","restringidasConKOrigen","autorizadasConParOrigen",
     "autorizadasConParFinal","autorizadasFinal","restringidasFinal","cambioBloqueo",
-    "perdidaEAutorizada","perdidaKAutorizada","gananciaEAutorizada","gananciaKAutorizada"
+    "perdidaEAutorizada","perdidaKAutorizada","gananciaEAutorizada","gananciaKAutorizada",
+    "traza","formato","formatoEnvio","compresion","tamano"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
+  let traceSequence = 0;
+  function traceNumber(){traceSequence=traceSequence>=1000000?1:traceSequence+1;return traceSequence;}
   let currentFlow = "";
   let currentFlowAt = 0;
   let currentSource = "sin-asociar";
@@ -240,6 +243,64 @@
     }
     return {momento:"carga"};
   }
+  // Supervisor: solo categorías de formato, codificación y tamaño. Las cabeceras
+  // y cuerpos originales NO pasan al almacenamiento ni al informe.
+  function safeHeader(headers,name){
+    try{
+      if(!headers)return "";
+      if(typeof headers.get==="function")return String(headers.get(name)||"").slice(0,160);
+      if(Array.isArray(headers)){
+        const found=headers.find(x=>Array.isArray(x)&&String(x[0]).toLowerCase()===name);
+        return found?String(found[1]||"").slice(0,160):"";
+      }
+      if(typeof headers==="object"){
+        const key=Object.keys(headers).find(x=>x.toLowerCase()===name);
+        return key?String(headers[key]||"").slice(0,160):"";
+      }
+    }catch{}
+    return "";
+  }
+  function formatFamily(raw){
+    const x=String(raw||"").split(";")[0].trim().toLowerCase();
+    if(!x)return "sin-tipo";
+    if(x==="application/json"||x.endsWith("+json")||x==="application/x-ndjson")return "json";
+    if(x==="text/html"||x==="application/xhtml+xml")return "html";
+    if(x==="text/event-stream")return "sse";
+    if(x==="text/css")return "css";
+    if(x==="application/javascript"||x==="text/javascript")return "javascript";
+    if(x==="application/xml"||x==="text/xml"||x.endsWith("+xml"))return "xml";
+    if(x==="application/x-www-form-urlencoded")return "formulario";
+    if(x==="multipart/form-data")return "multipart";
+    if(x==="application/protobuf"||x==="application/x-protobuf"||
+       x==="application/grpc"||x==="application/grpc+proto")return "protobuf";
+    if(x.startsWith("image/"))return "imagen";
+    if(x.startsWith("audio/"))return "audio";
+    if(x.startsWith("video/"))return "video";
+    if(x.startsWith("text/"))return "texto";
+    if(x==="application/octet-stream"||x==="application/zip"||
+       x==="application/pdf"||x==="application/wasm")return "binario";
+    return "otro";
+  }
+  function encodingFamily(raw){
+    const x=String(raw||"").trim().toLowerCase();
+    return ["gzip","br","deflate","zstd","identity"].includes(x)?x:(x?"otro":"sin-dato");
+  }
+  function sizeGroup(raw){
+    const x=String(raw??"");
+    if(!/^\d{1,15}$/.test(x))return "sin-dato";
+    const n=Number(x);
+    if(n===0)return "cero";
+    if(n<=1024)return "hasta-1kb";
+    if(n<=10240)return "1kb-10kb";
+    if(n<=102400)return "10kb-100kb";
+    if(n<=1048576)return "100kb-1mb";
+    return "mas-1mb";
+  }
+  const metadataFromHeaders=headers=>({
+    formato:formatFamily(safeHeader(headers,"content-type")),
+    compresion:encodingFamily(safeHeader(headers,"content-encoding")),
+    tamano:sizeGroup(safeHeader(headers,"content-length"))
+  });
   // Clasificar solo rutas conocidas del backend: nunca almacenar URL, query,
   // token, headers, bodies, ID de producto, credenciales ni payload cifrado.
   function apiRoute(url){
@@ -258,19 +319,19 @@
       return "api-otro";
     }catch{return "";}
   }
-  function httpSend(ruta,transporte,metodo,context=communicationContext()){
+  function httpSend(ruta,transporte,metodo,context=communicationContext(),metadata={}){
     if(!ruta)return;
     event("comunicacion-http-envio",{
       emisor:"extension-ui",receptor:"servidor-kaizzen",ruta,
-      transporte,metodo,...context
+      transporte,metodo,...context,...metadata
     });
   }
-  function httpReply(ruta,transporte,http,start,ok=true,context=communicationContext()){
+  function httpReply(ruta,transporte,http,start,ok=true,context=communicationContext(),metadata={}){
     if(!ruta)return;
     event(ok?"comunicacion-http-respuesta":"comunicacion-http-error",{
       emisor:"servidor-kaizzen",receptor:"extension-ui",ruta,
       transporte,http:http||0,duracionMs:elapsed(start),
-      ...context
+      ...context,...metadata
     });
   }
   const MESSAGE_ROUTES=new Set([
@@ -332,16 +393,21 @@
         const start=Date.now();
         const ctx=communicationContext();
         const method=String(args[1]?.method||args[0]?.method||"GET").toUpperCase().slice(0,16);
-        httpSend(api,"fetch",method,ctx);
+        const traza=traceNumber();
+        const envio={traza,formatoEnvio:formatFamily(
+          safeHeader(args[1]?.headers||args[0]?.headers,"content-type"))};
+        httpSend(api,"fetch",method,ctx,envio);
         if(route)event(route+"-envio",{transporte:"fetch",metodo:method});
         let response;
         try{response=await native.apply(this,args);}
         catch(error){
-          httpReply(api,"fetch",0,start,false,ctx);
+          httpReply(api,"fetch",0,start,false,ctx,{traza,formato:"sin-tipo",
+            compresion:"sin-dato",tamano:"sin-dato",tipo:"red"});
           if(route)event(route+"-error",{transporte:"fetch",tipo:"red",duracionMs:elapsed(start)});
           throw error;
         }
-        httpReply(api,"fetch",response.status,start,true,ctx);
+        httpReply(api,"fetch",response.status,start,true,ctx,
+          {traza,...metadataFromHeaders(response.headers)});
         if(route)response.clone().json().then(body=>{
           if(route==="catalogo")summary(body,response.status,"fetch",elapsed(start));
           else summaryProducts(body,response.status,"fetch",elapsed(start));
@@ -355,23 +421,37 @@
   try{
     const originalOpen=XMLHttpRequest.prototype.open;
     const originalSend=XMLHttpRequest.prototype.send;
+    const originalSetRequestHeader=XMLHttpRequest.prototype.setRequestHeader;
     const pending=new WeakMap();
     XMLHttpRequest.prototype.open=function(method,url,...rest){
       const route=isCatalog(url)?"catalogo":isProducts(url)?"productos":"";
       const api=apiRoute(url);
       if(route||api){
-        pending.set(this,{route,api,metodo:String(method).toUpperCase().slice(0,16),start:0,failed:false,ctx:null});
-        this.addEventListener("error",()=>{
+        pending.set(this,{route,api,metodo:String(method).toUpperCase().slice(0,16),
+          start:0,failed:false,ctx:null,traza:0,formatoEnvio:"sin-tipo"});
+        const failure=kind=>{
           const info=pending.get(this);
-          if(info){info.failed=true;httpReply(info.api,"xhr",0,info.start||Date.now(),false,info.ctx);}
-          if(route)event(route+"-error",{transporte:"xhr",tipo:"red"});
-        },{once:true});
+          if(info&&!info.failed){
+            info.failed=true;
+            httpReply(info.api,"xhr",0,info.start||Date.now(),false,info.ctx,
+              {traza:info.traza,tipo:kind,formato:"sin-tipo",compresion:"sin-dato",tamano:"sin-dato"});
+            if(route)event(route+"-error",{transporte:"xhr",tipo:kind});
+          }
+        };
+        for(const kind of ["error","timeout","abort"]){
+          this.addEventListener(kind,()=>failure(kind==="error"?"red":kind),{once:true});
+        }
         this.addEventListener("loadend",()=>{
           const request=pending.get(this);
           const duration=request?.start?elapsed(request.start):0;
           if(request?.failed)return;
+          const responseHeaders={get:key=>{
+            try{return typeof this.getResponseHeader==="function"?this.getResponseHeader(key):"";}
+            catch{return "";}
+          }};
           if(request?.api)httpReply(request.api,"xhr",this.status,
-            request.start||Date.now(),this.status!==0,request.ctx);
+            request.start||Date.now(),this.status!==0,request.ctx,
+            {traza:request.traza,...metadataFromHeaders(responseHeaders)});
           if(!route)return;
           try{
             const body=this.responseType==="json"?this.response:JSON.parse(this.responseText);
@@ -385,16 +465,34 @@
       }
       return originalOpen.call(this,method,url,...rest);
     };
+    if(typeof originalSetRequestHeader==="function"){
+      XMLHttpRequest.prototype.setRequestHeader=function(name,value){
+        const request=pending.get(this);
+        if(request&&String(name).toLowerCase()==="content-type")
+          request.formatoEnvio=formatFamily(value);
+        return originalSetRequestHeader.apply(this,arguments);
+      };
+    }
     XMLHttpRequest.prototype.send=function(...args){
       const request=pending.get(this);
       if(request){
         request.start=Date.now();
+        request.traza=traceNumber();
         request.ctx=communicationContext();
-        httpSend(request.api,"xhr",request.metodo,request.ctx);
+        httpSend(request.api,"xhr",request.metodo,request.ctx,
+          {traza:request.traza,formatoEnvio:request.formatoEnvio});
         if(request.route)event(request.route+"-envio",
           {transporte:"xhr",metodo:request.metodo});
       }
-      return originalSend.apply(this,args);
+      try{return originalSend.apply(this,args);}
+      catch(error){
+        if(request&&!request.failed){
+          request.failed=true;
+          httpReply(request.api,"xhr",0,request.start||Date.now(),false,request.ctx,
+            {traza:request.traza,tipo:"red"});
+        }
+        throw error;
+      }
     };
   }catch{}
 
@@ -417,13 +515,22 @@
         const id=String(details?.requestId||"");
         if(id){
           if(apiRequests.size>80)apiRequests.clear();
-          apiRequests.set(id,{ruta,ctx,at:Date.now()});
+          apiRequests.set(id,{ruta,ctx,at:Date.now(),traza:traceNumber(),
+            formato:"sin-tipo",compresion:"sin-dato",tamano:"sin-dato"});
         }
         event("comunicacion-red-envio",{
           emisor:"chromium",receptor:"servidor-kaizzen",canal:"webrequest",
-          ruta,metodo:String(details?.method||"GET").toUpperCase().slice(0,16),...ctx
+          ruta,metodo:String(details?.method||"GET").toUpperCase().slice(0,16),
+          traza:apiRequests.get(id)?.traza||0,...ctx
         });
       },filter);
+      // Únicamente observar Content-Type, Encoding y Length;
+      // nunca guardar la cabecera completa ni valores sensibles.
+      if(chrome.webRequest.onHeadersReceived?.addListener)
+        chrome.webRequest.onHeadersReceived.addListener(details=>{
+          const entry=apiRequests.get(String(details?.requestId||""));
+          if(entry)Object.assign(entry,metadataFromHeaders(details?.responseHeaders));
+        },filter,["responseHeaders"]);
       const finish=(details,failed)=>{
         const id=String(details?.requestId||"");
         const entry=apiRequests.get(id);
@@ -432,7 +539,9 @@
         event(failed?"comunicacion-red-error":"comunicacion-red-respuesta",{
           emisor:"servidor-kaizzen",receptor:"chromium",canal:"webrequest",
           ruta:entry.ruta,http:failed?0:Number(details?.statusCode)||0,
-          duracionMs:elapsed(entry.at),...entry.ctx
+          duracionMs:elapsed(entry.at),traza:entry.traza,
+          formato:entry.formato,compresion:entry.compresion,tamano:entry.tamano,
+          ...entry.ctx
         });
       };
       chrome.webRequest.onCompleted?.addListener(details=>finish(details,false),filter);
@@ -632,8 +741,39 @@
     const net=last?.flujo?e.filter(x=>
       x.stage==="comunicacion-red-envio"&&x.flujo===last.flujo):[];
     const bool=x=>x===true?"sí":"no";
+    // Son dos observadores que pueden registrar la misma solicitud; NO sumar
+    // sus totales como si fueran peticiones diferentes del servidor.
+    const uiResponses=events.filter(x=>
+      x.stage==="comunicacion-http-respuesta"||x.stage==="comunicacion-http-error");
+    const chromeResponses=events.filter(x=>
+      x.stage==="comunicacion-red-respuesta"||x.stage==="comunicacion-red-error");
+    const classify=xs=>{
+      const types=new Map();
+      for(const x of xs)types.set(x.formato||"sin-tipo",(types.get(x.formato||"sin-tipo")||0)+1);
+      return [...types].sort((a,b)=>b[1]-a[1]).slice(0,7)
+        .map(([name,n])=>name+" "+n).join(" · ")||"sin formato observado";
+    };
+    const problem=xs=>{
+      const auth=xs.filter(x=>x.http===401||x.http===403).length;
+      const rate=xs.filter(x=>x.http===429).length;
+      const server=xs.filter(x=>x.http>=500).length;
+      const red=xs.filter(x=>x.http===0).length;
+      return "401/403 "+auth+" · 429 "+rate+" · 5xx "+server+" · red "+red;
+    };
+    const knownTraces=new Set(events.filter(x=>x.stage==="comunicacion-http-envio")
+      .map(x=>x.traza).filter(x=>Number.isInteger(x)&&x>0));
+    const correlated=uiResponses.filter(x=>knownTraces.has(x.traza)).length;
     return [
       "Cliente de acceso: "+(client?client.cliente+" · perfil "+client.perfil:"sin identificación de extensión"),
+      "Supervisor de API · ventana reciente: "+events.length+
+        " eventos conservados (máximo "+MAX+") · interfaz "+
+        uiResponses.length+" respuestas · Chromium "+chromeResponses.length+
+        " respuestas (pueden corresponder a las mismas peticiones)",
+      "Supervisor · formatos de respuesta: interfaz "+classify(uiResponses)+
+        " · Chromium "+classify(chromeResponses),
+      "Supervisor · alertas HTTP de interfaz: "+problem(uiResponses)+
+        " · trazas emparejadas en ventana "+correlated,
+      "Supervisor · alcance: solo rutas API de KAIZEN observables desde esta extensión; formato/tamaño/compresión son categorías de cabeceras, sin cuerpos, URLs, cookies ni tokens.",
       "Categorías: "+(categories?"HTTP "+categories.http+" · normal "+
         categories.normal+" · premium "+categories.premium+
         " (no representan tarjetas)":"sin respuesta observada"),
@@ -736,7 +876,7 @@
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
-      "Nota v8: solo contadores y booleanos. Los datos restringidos nunca se usan para iniciar sesión; las diferencias e/k son de presencia, no valores. No contiene correos, claves, IDs, URLs, cuerpos, cookies ni tokens."
+      "Nota v9: supervisor de metadatos, contadores y booleanos, sin inspección de cuerpos ni valores secretos. No incluye IPC interno Electron, tráfico ajeno a KAIZEN ni contenido de WebSockets."
     ].join("\n");
   }
   async function refresh() {
@@ -765,7 +905,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:8,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:9,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });
