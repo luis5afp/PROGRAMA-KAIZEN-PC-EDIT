@@ -23,7 +23,8 @@
     "restringidasConEOrigen","restringidasConKOrigen","autorizadasConParOrigen",
     "autorizadasConParFinal","autorizadasFinal","restringidasFinal","cambioBloqueo",
     "perdidaEAutorizada","perdidaKAutorizada","gananciaEAutorizada","gananciaKAutorizada",
-    "traza","formato","formatoEnvio","compresion","tamano"
+    "traza","formato","formatoEnvio","compresion","tamano",
+    "ciclo","productsTipo","sobreTipo","campoProducts","campoHasMore","vinculo"
   ]);
   // Defensa adicional: estas claves solo representan presencia/estado.
   // Una cadena que accidentalmente contenga e/k, URL o cookie es descartada.
@@ -32,7 +33,7 @@
     "d","e","k","proxy","lm","id","isLock","locked","cookie","cifrado","hayMas",
     "asociada","respuesta","sinCambios"
   ]);
-  const NUMERIC_ONLY = new Set(["traza","http","duracionMs","ventana","pestana"]);
+  const NUMERIC_ONLY = new Set(["traza","ciclo","http","duracionMs","ventana","pestana"]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let traceSequence = 0;
   function traceNumber(){traceSequence=traceSequence>=1000000?1:traceSequence+1;return traceSequence;}
@@ -42,6 +43,15 @@
   let lastProductOwner = {flujo:"",origen:"sin-asociar",asociada:false};
   let productBatch = 0;
   let rawBatch = 0;
+  let cycleSequence = 0;
+  let lastMappedCycle = 0;
+  const responseCandidates = [];
+  function cycleNumber(){cycleSequence=cycleSequence>=1000000?1:cycleSequence+1;return cycleSequence;}
+  function beginCatalogCycle(transport,trace,method){
+    const ciclo=cycleNumber();
+    event("captura-productos-iniciada",{ciclo,traza:trace,transporte:transport,metodo:method});
+    return ciclo;
+  }
   // Solo booleanos transitorios; nunca valores de las credenciales.
   let pendingOrigin = null;
   let visible = false;
@@ -78,6 +88,9 @@
       }).catch(()=>{});
     }
   }
+  // Comenzar a registrar antes de que se inicialice React y antes de
+  // DOMContentLoaded. No inspeccionamos ni copiamos contenidos de red.
+  event("diagnostico-catalogo-iniciado");
   async function keys() {
     if (typeof chrome.storage.local.getKeys !== "function") return [];
     return (await chrome.storage.local.getKeys()).filter(k=>k.startsWith(PREFIX)).sort();
@@ -91,6 +104,12 @@
       all = all.concat(Object.values(found).filter(x=>x && typeof x.stage === "string"));
     }
     return all.sort((a,b)=>String(a.time).localeCompare(String(b.time))).slice(-MAX);
+  }
+  function latestCapture(events){
+    for(let i=events.length-1;i>=0;i--)
+      if(events[i].stage==="diagnostico-catalogo-iniciado")
+        return events.slice(i);
+    return events;
   }
   async function cleanup() {
     const list = await keys();
@@ -138,13 +157,29 @@
     try{return new URL(String(url),location.href).pathname.endsWith("/api/products/getmostusedtool");}
     catch{return false;}
   }
-  function summaryProducts(body,status,transport,duration=0){
-    const source=body&&typeof body==="object"?body:null;
-    event("productos-respuesta",{
-      transporte:transport,http:Number(status)||0,duracionMs:duration,
-      cifrado:typeof source?.products==="string"&&source.products.length>0,
-      hayMas:source?.hasMore===true
+  function summaryProducts(body,status,transport,duration=0,cycle=0,trace=0){
+    // Inspección previa al descifrado: solo estructura externa del JSON,
+    // nunca texto cifrado, valores secretos ni cabeceras HTTP originales.
+    const source=body&&typeof body==="object"&&!Array.isArray(body)?body:null;
+    const productsTipo=!source?"no-objeto":!Object.hasOwn(source,"products")?
+      "ausente":source.products===null?"nulo":typeof source.products==="string"?
+      "texto":Array.isArray(source.products)?"lista":"otro";
+    const cifrado=productsTipo==="texto"&&source.products.length>0;
+    event("productos-sobre-recibido",{
+      ciclo:cycle,traza:trace,transporte:transport,http:Number(status)||0,
+      sobreTipo:source?"objeto":"no-objeto",
+      campoProducts:!!source&&Object.hasOwn(source,"products"),
+      productsTipo,campoHasMore:!!source&&Object.hasOwn(source,"hasMore"),
+      cifrado
     });
+    event("productos-respuesta",{
+      ciclo:cycle,traza:trace,transporte:transport,http:Number(status)||0,duracionMs:duration,
+      cifrado,hayMas:source?.hasMore===true
+    });
+    if(cycle>0){
+      responseCandidates.push({ciclo:cycle,at:Date.now()});
+      while(responseCandidates.length>12)responseCandidates.shift();
+    }
   }
   function flags(p){
     // Solo se admiten booleanos producidos por el bundle; nunca guardar valores.
@@ -166,14 +201,20 @@
     if(!items.every(p=>p&&typeof p==="object"&&
        ORIGIN_FLAGS.every(k=>typeof p[k]==="boolean")))return;
     const lote=++rawBatch;
+    // Solo relación temporal (no identifica el cuerpo cifrado). Si hay
+    // varias respuestas posibles no asociamos un ciclo arbitrariamente.
+    const candidates=responseCandidates.filter(x=>Date.now()-x.at<15000);
+    const ciclo=candidates.length===1?candidates[0].ciclo:0;
+    responseCandidates.length=0;
+    const vinculo=ciclo?"temporal-unico":"no-identificable";
     const count=k=>items.filter(p=>p[k]).length;
     const flags=items.map(p=>({
       locked:p.lockTrue||(p.premium&&!p.lockFalse),
       e:p.eValue,k:p.kValue
     }));
-    pendingOrigin={lote,flags};
+    pendingOrigin={lote,flags,ciclo,vinculo};
     event("origen-tras-descifrado",{
-      lote,cuenta:items.length,
+      lote,ciclo,vinculo,cuenta:items.length,
       eProp:count("eProp"),kProp:count("kProp"),
       eValue:count("eValue"),kValue:count("kValue"),
       eNull:count("eNull"),kNull:count("kNull"),
@@ -198,7 +239,7 @@
     const lote=++productBatch;
     const rows=items.map(flags);
     event("productos-descifrados",{
-      lote,cuenta:rows.length,hayMas:hasMore===true,
+      lote,ciclo:pendingOrigin?.ciclo||0,cuenta:rows.length,hayMas:hasMore===true,
       conUrl:rows.filter(x=>x.d).length,
       conCorreo:rows.filter(x=>x.e).length,
       conClave:rows.filter(x=>x.k).length,
@@ -211,6 +252,7 @@
       sinParAcceso:rows.filter(x=>!x.cookie&&!(x.e&&x.k)).length
     });
     const before=pendingOrigin;
+    lastMappedCycle=before?.ciclo||0;
     pendingOrigin=null;
     // El bundle llama a ambos hooks de forma síncrona y en el mismo orden.
     // Nunca se persisten indicadores individuales de este cruce.
@@ -218,7 +260,7 @@
       const old=before.flags;
       const eligible=(p,i)=>!p.locked&&!old[i].locked;
       event("conciliacion-campos",{
-        lote,cuenta:rows.length,
+        lote,ciclo:before.ciclo,vinculo:before.vinculo,cuenta:rows.length,
         autorizadasOrigen:old.filter(p=>!p.locked).length,
         restringidasOrigen:old.filter(p=>p.locked).length,
         autorizadasFinal:rows.filter(p=>!p.locked).length,
@@ -239,7 +281,9 @@
   };
   globalThis.__kzDiagnosticCardClickFields=function(candidate){
     if(!currentFlow||Date.now()-currentFlowAt>10000)return;
-    event("tarjeta-campos-al-clic",{flujo:currentFlow,...flags(candidate)});
+    event("tarjeta-campos-al-clic",{
+      flujo:currentFlow,lote:productBatch,ciclo:lastMappedCycle,...flags(candidate)
+    });
   };
   function looksPublicPage(url) {
     try {const x=new URL(String(url),location.href);return x.protocol==="https:" || x.protocol==="http:";}
@@ -409,6 +453,7 @@
         const ctx=communicationContext();
         const method=String(args[1]?.method||args[0]?.method||"GET").toUpperCase().slice(0,16);
         const traza=traceNumber();
+        const ciclo=route==="productos"?beginCatalogCycle("fetch",traza,method):0;
         const envio={traza,formatoEnvio:formatFamily(
           safeHeader(args[1]?.headers||args[0]?.headers,"content-type"))};
         httpSend(api,"fetch",method,ctx,envio);
@@ -425,7 +470,7 @@
           {traza,...metadataFromHeaders(response.headers)});
         if(route)response.clone().json().then(body=>{
           if(route==="catalogo")summary(body,response.status,"fetch",elapsed(start));
-          else summaryProducts(body,response.status,"fetch",elapsed(start));
+          else summaryProducts(body,response.status,"fetch",elapsed(start),ciclo,traza);
         }).catch(()=>event(route+"-respuesta-invalida",{
           transporte:"fetch",http:response.status
         }));
@@ -471,7 +516,7 @@
           try{
             const body=this.responseType==="json"?this.response:JSON.parse(this.responseText);
             if(route==="catalogo")summary(body,this.status,"xhr",duration);
-            else summaryProducts(body,this.status,"xhr",duration);
+            else summaryProducts(body,this.status,"xhr",duration,request?.ciclo||0,request?.traza||0);
           }catch{
             event(route+"-respuesta-invalida",{
               transporte:"xhr",http:this.status,duracionMs:duration});
@@ -493,6 +538,8 @@
       if(request){
         request.start=Date.now();
         request.traza=traceNumber();
+        request.ciclo=request.route==="productos"?
+          beginCatalogCycle("xhr",request.traza,request.metodo):0;
         request.ctx=communicationContext();
         httpSend(request.api,"xhr",request.metodo,request.ctx,
           {traza:request.traza,formatoEnvio:request.formatoEnvio});
@@ -729,7 +776,8 @@
     },true);
   } catch {}
 
-  function diagnosis(events) {
+  function diagnosis(allEvents) {
+    const events=latestCapture(allEvents);
     const e=events.slice().reverse();
     const recent=stage=>e.find(x=>x.stage===stage);
     const last=e.find(x=>x.stage==="clic-tarjeta"||x.stage==="clic-codigos");
@@ -794,6 +842,18 @@
       "Categorías: "+(categories?"HTTP "+categories.http+" · normal "+
         categories.normal+" · premium "+categories.premium+
         " (no representan tarjetas)":"sin respuesta observada"),
+      "Captura del ciclo: "+(origin?
+        "lote "+origin.lote+" · ciclo "+(origin.ciclo||"sin vínculo exacto")+
+        " · relación "+(origin.vinculo||"sin-dato")+
+        " (asociación temporal, nunca prueba del contenido cifrado)":
+        "aún no hay objetos descifrados"),
+      "Sobre de respuesta anterior al descifrado: "+(recent("productos-sobre-recibido")?
+        "HTTP "+recent("productos-sobre-recibido").http+
+        " · contenedor "+recent("productos-sobre-recibido").sobreTipo+
+        " · campo products "+bool(recent("productos-sobre-recibido").campoProducts)+
+        " · tipo "+recent("productos-sobre-recibido").productsTipo+
+        " · campo hasMore "+bool(recent("productos-sobre-recibido").campoHasMore):
+        "sin observación del sobre de respuesta"),
       "Productos (servidor): "+(fetched?"HTTP "+fetched.http+
         " · bloque cifrado "+bool(fetched.cifrado):
         "sin respuesta observada de /api/products/getmostusedtool"),
@@ -838,7 +898,9 @@
         " · e nuevos "+cross.gananciaEAutorizada+
         " · k nuevos "+cross.gananciaKAutorizada+
         " · cambios de bloqueo "+cross.cambioBloqueo+
-        (cross.perdidaEAutorizada||cross.perdidaKAutorizada?
+        (cross.autorizadasOrigen===0&&cross.autorizadasFinal===0?
+          " · no evaluable: ninguna tarjeta autorizada":
+          cross.perdidaEAutorizada||cross.perdidaKAutorizada?
           " · revisar transformación del cliente":
           " · no se observó pérdida de e/k en autorizadas"):
         "pendiente: no se pudo conciliar origen y destino del mismo lote"),
@@ -893,12 +955,12 @@
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
-      "Nota v9: supervisor de metadatos, contadores y booleanos, sin inspección de cuerpos ni valores secretos. No incluye IPC interno Electron, tráfico ajeno a KAIZEN ni contenido de WebSockets."
+      "Nota v9: captura inicia antes de React, registra sobre cifrado sin contenido y estados posteriores al descifrado. Las relaciones temporales no prueban lo que hizo el backend antes de cifrar. Sin cuerpos, secretos, IPC de Electron o WebSockets."
     ].join("\n");
   }
   async function refresh() {
     if(!visible || !output)return;
-    try {const list=await rows();if(visible)output.textContent=diagnosis(list)+"\n\n"+
+    try {const list=latestCapture(await rows());if(visible)output.textContent=diagnosis(list)+"\n\n"+
       list.map(x=>JSON.stringify(x)).join("\n");}
     catch {output.textContent="No se pudo leer el diagnóstico local.";}
   }
@@ -921,7 +983,7 @@
       button.addEventListener("click",callback);actions.appendChild(button);
     };
     add("Copiar informe",async()=>{
-      const list=await rows();
+      const list=latestCapture(await rows());
       const payload=JSON.stringify({version:9,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
@@ -943,7 +1005,6 @@
     chrome.storage.onChanged.addListener((changes,area)=>{
       if(visible && area==="local" && Object.keys(changes).some(k=>k===LEGACY || k.startsWith(PREFIX)))refresh();
     });
-    event("diagnostico-catalogo-iniciado");
     try {
       const name=chrome.runtime?.getManifest?.()?.name||"";
       const clients={
