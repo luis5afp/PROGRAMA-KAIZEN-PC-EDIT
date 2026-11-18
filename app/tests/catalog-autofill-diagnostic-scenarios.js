@@ -74,6 +74,14 @@ for(const [folder,name,version] of [
   assert(bundle.includes('active_users:')&&bundle.includes("JSON.parse(await "),
     "Mantener la transformación original y el descifrado");
   assert(catalog.includes("origen-tras-descifrado"),"Comparación de valores presentes antes del mapeo");
+  assert(catalog.includes("conciliacion-campos")&&
+    catalog.includes("perdidaEAutorizada")&&catalog.includes("perdidaKAutorizada"),
+    "Comparar la integridad de e/k en tarjetas autorizadas del mismo lote");
+  assert(catalog.includes("restringidasSinParOrigen")&&
+    catalog.includes("restringidasConEOrigen")&&catalog.includes("restringidasConKOrigen"),
+    "Registrar solo contadores agregados de tarjetas restringidas");
+  assert(catalog.includes("Integridad de tarjetas autorizadas:"),
+    "Presentar el resultado de la conciliación en el panel de diagnóstico");
   assert(bundle.includes('eAlias:["email","correo"')&&bundle.includes('kAlias:["password","clave"'),
     "Detectar nombres alternativos sin copiar credenciales");
   assert(bundle.includes('ekPresente:typeof p?.ek==="string"'),
