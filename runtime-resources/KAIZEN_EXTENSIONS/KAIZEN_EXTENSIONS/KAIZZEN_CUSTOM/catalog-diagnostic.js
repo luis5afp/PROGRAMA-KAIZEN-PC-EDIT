@@ -526,11 +526,13 @@
       },filter);
       // Únicamente observar Content-Type, Encoding y Length;
       // nunca guardar la cabecera completa ni valores sensibles.
-      if(chrome.webRequest.onHeadersReceived?.addListener)
-        chrome.webRequest.onHeadersReceived.addListener(details=>{
-          const entry=apiRequests.get(String(details?.requestId||""));
-          if(entry)Object.assign(entry,metadataFromHeaders(details?.responseHeaders));
-        },filter,["responseHeaders"]);
+      try{
+        if(chrome.webRequest.onHeadersReceived?.addListener)
+          chrome.webRequest.onHeadersReceived.addListener(details=>{
+            const entry=apiRequests.get(String(details?.requestId||""));
+            if(entry)Object.assign(entry,metadataFromHeaders(details?.responseHeaders));
+          },filter,["responseHeaders"]);
+      }catch{} // Si el navegador no ofrece estas cabeceras, conserva el resto del supervisor.
       const finish=(details,failed)=>{
         const id=String(details?.requestId||"");
         const entry=apiRequests.get(id);
@@ -892,8 +894,8 @@
     btn.style.cssText="position:fixed;bottom:16px;right:16px;z-index:2147483646;background:#164e63;color:white;border:1px solid #67e8f9;border-radius:10px;padding:10px 14px;font:600 13px system-ui;cursor:pointer";
     const panel=document.createElement("section");
     panel.style.cssText="display:none;position:fixed;bottom:62px;right:16px;z-index:2147483647;background:#0b1220;color:#e2e8f0;border:1px solid #64748b;border-radius:12px;padding:14px;width:min(680px,calc(100vw - 32px));max-height:75vh;box-sizing:border-box;font:13px system-ui";
-    const title=document.createElement("strong");title.textContent="Diagnóstico de comunicación · servidor ↔ extensión ↔ tarjeta ↔ formulario";
-    note=document.createElement("p");note.textContent="Solo metadatos: nunca copia direcciones, credenciales, tokens, cookies ni respuestas completas.";
+    const title=document.createElement("strong");title.textContent="Supervisor de comunicación · servidor ↔ extensión ↔ tarjeta ↔ formulario";
+    note=document.createElement("p");note.textContent="Rutas agrupadas, formatos, tiempos y códigos HTTP; nunca guarda direcciones, cabeceras completas, cuerpos, credenciales, tokens ni cookies.";
     note.style.cssText="font-size:12px;color:#cbd5e1";
     output=document.createElement("pre");
     output.style.cssText="white-space:pre-wrap;overflow:auto;max-height:49vh;font:11px/1.5 monospace;background:#111827;padding:8px;border-radius:6px";
