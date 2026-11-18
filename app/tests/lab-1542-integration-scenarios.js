@@ -71,7 +71,7 @@ const html=fs.readFileSync(path.join(base,"index.html"),"utf8");
 const ui=fs.readFileSync(path.join(base,"kaizen-1542-integration-ui.js"),"utf8");
 const preload=fs.readFileSync(path.join(base,"kaizen-1542-preload.js"),"utf8");
 const electron=fs.readFileSync(path.join(__dirname,"..","main.kaizen-1.5.24.js"),"utf8");
-assert(html.includes("KAIZEN PC · LABORATORIO + DIAGNÓSTICO REAL · 1.5.42"));
+assert(html.includes("KAIZEN PC · LABORATORIO + DIAGNÓSTICO REAL · 1.5.43"));
 assert(html.includes('id="integration-report"'));
 assert(html.includes('<option value="auto" selected>Detectar perfil automáticamente'));
 assert(ui.includes('reports[outcome.profile]=outcome'),"El informe se guarda según su perfil detectado");
