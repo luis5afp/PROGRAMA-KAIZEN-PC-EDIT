@@ -19,6 +19,7 @@ for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identif
   "catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
   "productos-respuesta","productos-descifrados","producto-campos","tarjeta-campos-al-clic",
   "diagnostico-cliente","bloqueoExplicito","bloqueoPremium","origen-tras-descifrado",
+  "conciliacion-campos",
   "comunicacion-http-envio","comunicacion-http-respuesta",
   "comunicacion-mensaje-envio","comunicacion-mensaje-respuesta",
   "comunicacion-red-envio","comunicacion-red-respuesta"])
@@ -178,6 +179,11 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert.equal(raw.eAlias,1);
   assert.equal(raw.kAlias,1);
   assert.equal(raw.ekPresente,1);
+  assert.equal(raw.autorizadasOrigen,1);
+  assert.equal(raw.restringidasOrigen,2);
+  assert.equal(raw.restringidasSinParOrigen,2);
+  assert.equal(raw.restringidasConEOrigen,0);
+  assert.equal(raw.restringidasConKOrigen,0);
   // El lote simula el contrato reducido del bundle: solo booleanos.
   target.__kzDiagnosticProductBatch([
     {d:true,e:true,k:true,proxy:false,lm:true,cookie:false,id:true,isLock:false,locked:false},
@@ -252,6 +258,19 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   assert.equal(prod.bloqueoExplicito,1);
   assert.equal(prod.bloqueoPremium,1);
   assert.equal(prod.sinParAcceso,2);
+  const cross=events.find(x=>x.stage==="conciliacion-campos");
+  assert(cross,"Falta conciliación en el mismo lote");
+  assert.equal(cross.cuenta,3);
+  assert.equal(cross.autorizadasOrigen,1);
+  assert.equal(cross.autorizadasFinal,1);
+  assert.equal(cross.restringidasOrigen,2);
+  assert.equal(cross.restringidasFinal,2);
+  assert.equal(cross.restringidasSinParOrigen,2);
+  assert.equal(cross.cambioBloqueo,0);
+  assert.equal(cross.autorizadasConParOrigen,1);
+  assert.equal(cross.autorizadasConParFinal,1);
+  assert.equal(cross.perdidaEAutorizada,0);
+  assert.equal(cross.perdidaKAutorizada,0);
   const selected=events.find(x=>x.stage==="tarjeta-campos-al-clic");
   assert.equal(selected.d,true);
   assert.equal(selected.e,true);
@@ -299,7 +318,23 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   await store.local.remove("product");
   for(const secret of ["CIFRADO_SIN_CLAVE","example.com/login"])
     assert(!JSON.stringify(store.events()).includes(secret),"No registrar secretos de CÓDIGOS");
+  // Caso simulado: una tarjeta autorizada pierde e en el mapeo.
+  // No se almacenan credenciales ni identificadores; solo flags booleanos.
+  target.__kzDiagnosticRawBatch([{...base,lockTrue:false,lockFalse:true,
+    eProp:true,kProp:true,eValue:true,kValue:true}]);
+  target.__kzDiagnosticProductBatch([
+    {d:true,e:false,k:true,proxy:false,lm:false,cookie:false,
+      id:true,isLock:false,locked:false}
+  ],false);
+  for(let i=0;i<6;i++)await flush();
+  const crossLoss=store.events().filter(x=>x.stage==="conciliacion-campos").at(-1);
+  assert(crossLoss,"Debe guardar la conciliación del segundo lote");
+  assert.equal(crossLoss.perdidaEAutorizada,1);
+  assert.equal(crossLoss.perdidaKAutorizada,0);
+  assert.equal(crossLoss.autorizadasConParOrigen,1);
+  assert.equal(crossLoss.autorizadasConParFinal,0);
+  assert(!JSON.stringify(crossLoss).includes("example.com"),"No exportar dominios");
   listeners.removed[0](456);
   listeners.windowsRemoved[0](123);
-  console.log("KAIZEN 1.5.36: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
+  console.log("KAIZEN 1.5.41: auditoría v8 de integridad autorizada y privacidad PASS; KAIZEN 1.5.36: estado de acceso y separar CÓDIGOS/product y categorías/productos, clic, tab/window, callback, promesa y privacidad PASS");
 })().catch(err=>{console.error(err);process.exitCode=1});

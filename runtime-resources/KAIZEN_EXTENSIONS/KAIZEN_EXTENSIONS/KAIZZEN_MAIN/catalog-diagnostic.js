@@ -18,7 +18,11 @@
     "d","e","k","proxy","lm","id","isLock","locked","cookie",
     "eProp","kProp","eValue","kValue","eNull","kNull","eEmpty","kEmpty",
     "eSpaces","kSpaces","eOther","kOther","lockProp","lockTrue","lockFalse",
-    "lockOther","premium","camposOrigen","sinCambios","eAlias","kAlias","ekPresente"
+    "lockOther","premium","camposOrigen","sinCambios","eAlias","kAlias","ekPresente",
+    "autorizadasOrigen","restringidasOrigen","restringidasSinParOrigen",
+    "restringidasConEOrigen","restringidasConKOrigen","autorizadasConParOrigen",
+    "autorizadasConParFinal","autorizadasFinal","restringidasFinal","cambioBloqueo",
+    "perdidaEAutorizada","perdidaKAutorizada","gananciaEAutorizada","gananciaKAutorizada"
   ]);
   const nonempty = v => typeof v === "string" ? v.trim().length > 0 : v != null && v !== "";
   let currentFlow = "";
@@ -27,6 +31,8 @@
   let lastProductOwner = {flujo:"",origen:"sin-asociar",asociada:false};
   let productBatch = 0;
   let rawBatch = 0;
+  // Solo booleanos transitorios; nunca valores de las credenciales.
+  let pendingOrigin = null;
   let visible = false;
   let output = null;
   let note = null;
@@ -148,6 +154,11 @@
        ORIGIN_FLAGS.every(k=>typeof p[k]==="boolean")))return;
     const lote=++rawBatch;
     const count=k=>items.filter(p=>p[k]).length;
+    const flags=items.map(p=>({
+      locked:p.lockTrue||(p.premium&&!p.lockFalse),
+      e:p.eValue,k:p.kValue
+    }));
+    pendingOrigin={lote,flags};
     event("origen-tras-descifrado",{
       lote,cuenta:items.length,
       eProp:count("eProp"),kProp:count("kProp"),
@@ -160,7 +171,13 @@
       lockFalse:count("lockFalse"),lockOther:count("lockOther"),
       premium:count("premium"),
       eAlias:count("eAlias"),kAlias:count("kAlias"),
-      ekPresente:count("ekPresente")
+      ekPresente:count("ekPresente"),
+      autorizadasOrigen:flags.filter(p=>!p.locked).length,
+      restringidasOrigen:flags.filter(p=>p.locked).length,
+      restringidasSinParOrigen:flags.filter(p=>p.locked&&!(p.e&&p.k)).length,
+      restringidasConEOrigen:flags.filter(p=>p.locked&&p.e).length,
+      restringidasConKOrigen:flags.filter(p=>p.locked&&p.k).length,
+      autorizadasConParOrigen:flags.filter(p=>!p.locked&&p.e&&p.k).length
     });
   };
   globalThis.__kzDiagnosticProductBatch=function(items,hasMore){
@@ -180,6 +197,31 @@
       bloqueoPremium:rows.filter(x=>x.locked&&!x.isLock).length,
       sinParAcceso:rows.filter(x=>!x.cookie&&!(x.e&&x.k)).length
     });
+    const before=pendingOrigin;
+    pendingOrigin=null;
+    // El bundle llama a ambos hooks de forma síncrona y en el mismo orden.
+    // Nunca se persisten indicadores individuales de este cruce.
+    if(before&&before.lote===lote&&before.flags.length===rows.length){
+      const old=before.flags;
+      const eligible=(p,i)=>!p.locked&&!old[i].locked;
+      event("conciliacion-campos",{
+        lote,cuenta:rows.length,
+        autorizadasOrigen:old.filter(p=>!p.locked).length,
+        restringidasOrigen:old.filter(p=>p.locked).length,
+        autorizadasFinal:rows.filter(p=>!p.locked).length,
+        restringidasFinal:rows.filter(p=>p.locked).length,
+        cambioBloqueo:rows.filter((p,i)=>p.locked!==old[i].locked).length,
+        autorizadasConParOrigen:old.filter(p=>!p.locked&&p.e&&p.k).length,
+        autorizadasConParFinal:rows.filter(p=>!p.locked&&p.e&&p.k).length,
+        perdidaEAutorizada:rows.filter((p,i)=>eligible(p,i)&&old[i].e&&!p.e).length,
+        perdidaKAutorizada:rows.filter((p,i)=>eligible(p,i)&&old[i].k&&!p.k).length,
+        gananciaEAutorizada:rows.filter((p,i)=>eligible(p,i)&&!old[i].e&&p.e).length,
+        gananciaKAutorizada:rows.filter((p,i)=>eligible(p,i)&&!old[i].k&&p.k).length,
+        restringidasSinParOrigen:old.filter(p=>p.locked&&!(p.e&&p.k)).length,
+        restringidasConEOrigen:old.filter(p=>p.locked&&p.e).length,
+        restringidasConKOrigen:old.filter(p=>p.locked&&p.k).length
+      });
+    }
     rows.slice(0,30).forEach((o,i)=>event("producto-campos",{lote,indice:i+1,...o}));
   };
   globalThis.__kzDiagnosticCardClickFields=function(candidate){
@@ -573,6 +615,7 @@
     const fetched=recent("productos-respuesta");
     const decoded=recent("productos-descifrados");
     const origin=decoded?e.find(x=>x.stage==="origen-tras-descifrado"&&x.lote===decoded.lote):recent("origen-tras-descifrado");
+    const cross=decoded?e.find(x=>x.stage==="conciliacion-campos"&&x.lote===decoded.lote):null;
     const selected=source==="tarjeta"?tracked("tarjeta-campos-al-clic"):null;
     const orphanSession=recent("sesion-temporal-preparada");
     const opening=tracked("apertura-confirmada");
@@ -617,6 +660,13 @@
         ", clave con nombre alternativo "+origin.kAlias+
         ", clave cifrada ek "+origin.ekPresente:
         "sin observación antes de map"),
+      "Acceso en objetos descifrados: "+(origin?
+        "autorizadas "+origin.autorizadasOrigen+
+        " · restringidas "+origin.restringidasOrigen+
+        " · restringidas sin par e/k "+origin.restringidasSinParOrigen+
+        " · restringidas con e "+origin.restringidasConEOrigen+
+        " · restringidas con k "+origin.restringidasConKOrigen:
+        "sin medición de permisos al origen"),
       "Comparación descifrado → catálogo: "+(origin&&decoded?
         (origin.cuenta===decoded.cuenta&&
          origin.eValue===decoded.conCorreo&&
@@ -625,6 +675,16 @@
          "conteos de e/k/isLock sin diferencias observadas":
          "conteos distintos: revisar tipos y transformación de productos"):
         "pendiente de ambos puntos de observación"),
+      "Integridad de tarjetas autorizadas: "+(cross?
+        "lote "+cross.lote+" · pérdida de e "+cross.perdidaEAutorizada+
+        " · pérdida de k "+cross.perdidaKAutorizada+
+        " · e nuevos "+cross.gananciaEAutorizada+
+        " · k nuevos "+cross.gananciaKAutorizada+
+        " · cambios de bloqueo "+cross.cambioBloqueo+
+        (cross.perdidaEAutorizada||cross.perdidaKAutorizada?
+          " · revisar transformación del cliente":
+          " · no se observó pérdida de e/k en autorizadas"):
+        "pendiente: no se pudo conciliar origen y destino del mismo lote"),
       "Veredicto de origen: "+(origin&&decoded?
         (origin.cuenta===decoded.cuenta&&origin.eValue===0&&origin.kValue===0&&
          origin.eAlias===0&&origin.kAlias===0?
@@ -676,7 +736,7 @@
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
-      "Nota: origen-tras-descifrado distingue propiedades ausentes, vacías o nulas, alias conocidos y ek presente; no incluye valores, IDs, nombres de producto, URLs, cuerpos, cookies ni tokens."
+      "Nota v8: solo contadores y booleanos. Los datos restringidos nunca se usan para iniciar sesión; las diferencias e/k son de presencia, no valores. No contiene correos, claves, IDs, URLs, cuerpos, cookies ni tokens."
     ].join("\n");
   }
   async function refresh() {
@@ -705,7 +765,7 @@
     };
     add("Copiar informe",async()=>{
       const list=await rows();
-      const payload=JSON.stringify({version:7,resumen:diagnosis(list),events:list},null,2);
+      const payload=JSON.stringify({version:8,resumen:diagnosis(list),events:list},null,2);
       try {await navigator.clipboard.writeText(payload);note.textContent="Informe copiado sin credenciales.";}
       catch {note.textContent="No se pudo copiar automáticamente; selecciona el texto mostrado.";}
     });

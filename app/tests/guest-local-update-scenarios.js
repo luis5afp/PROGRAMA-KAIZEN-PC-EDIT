@@ -11,7 +11,11 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-assert(pkg.version === '1.5.40', 'expected KAIZEN 1.5.40')
+const [major, minor, patch] = String(pkg.version).split('.').map(Number)
+assert(/^\d+\.\d+\.\d+$/.test(pkg.version) &&
+  Number.isSafeInteger(major) && Number.isSafeInteger(minor) && Number.isSafeInteger(patch) &&
+  (major > 1 || (major === 1 && (minor > 5 || (minor === 5 && patch >= 40)))),
+  'expected KAIZEN 1.5.40 or newer')
 assert(main.includes("ensurePersistentKaizenStorage"), 'persistent storage bootstrap missing')
 assert(main.includes("KAIZEN-Logistica"), 'persistent logistics root missing')
 assert(main.includes("guestRecoverAccidentalResourcesProfile"), 'resources recovery missing')

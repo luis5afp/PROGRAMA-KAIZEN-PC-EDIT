@@ -1,4 +1,4 @@
-name: KAIZEN 1.5.40 - Verificar instalador completo sin publicarlo
+name: KAIZEN - Verificar instalador completo sin publicarlo
 on:
   pull_request:
     paths:
@@ -31,7 +31,8 @@ jobs:
             if($parseErrors.Count -gt 0) { throw "Sintaxis invalida en $script : $($parseErrors -join '; ')" }
           }
           $version=(Get-Content app/package.json -Raw | ConvertFrom-Json).version
-          if($version -ne '1.5.40') { throw "Se esperaba 1.5.40, encontrado $version" }
+          if($version -notmatch '^\d+\.\d+\.\d+$') { throw "Versión SemVer inválida: $version" }
+          "PACKAGE_VERSION=$version" >> $env:GITHUB_ENV
           node app/tests/silent-auto-update-scenarios.js
           node app/tests/browser-executable-unification-scenarios.js
           node app/tests/embedded-extension-integration-scenarios.js
@@ -112,18 +113,20 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $setup=@(Get-ChildItem -LiteralPath 'dist/installer' -Filter 'KAIZEN-PC-v1.5.40-Setup-x64.exe' -File)
-          if($setup.Count -ne 1) { throw 'No se encontró el Setup completo 1.5.40' }
+          $version=$env:PACKAGE_VERSION
+          $installerName="KAIZEN-PC-v$version-Setup-x64.exe"
+          $setup=@(Get-ChildItem -LiteralPath 'dist/installer' -Filter $installerName -File)
+          if($setup.Count -ne 1) { throw "No se encontró el Setup completo $version" }
           $hash=(Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash *$($setup[0].Name)" | Set-Content -LiteralPath ($setup[0].FullName+'.sha256') -Encoding ascii
           @(
-            'KAIZEN PC 1.5.40 - INSTALADOR DE PRUEBA SIN FIRMA'
+            "KAIZEN PC $version - INSTALADOR DE PRUEBA SIN FIRMA"
             'Compilacion completa con Chromium y extensiones verificadas en CI.'
             'Uso personal/manual exclusivamente. No es una version publicada.'
             'Windows SmartScreen puede mostrar advertencias porque no tiene certificado.'
             'Esta compilacion sin editor verificado NO instala actualizaciones automaticas.'
             'Cierra KAIZEN y guarda una copia de tus perfiles antes de instalar.'
-            'Ejecuta KAIZEN-PC-v1.5.40-Setup-x64.exe para instalar.'
+            "Ejecuta $installerName para instalar."
             'SHA256 incluido para verificar integridad del archivo.'
           ) | Set-Content -LiteralPath 'dist/installer/LEER-ANTES-DE-INSTALAR.txt' -Encoding UTF8
           Write-Host 'PASS: Setup manual preparado, SHA256 generado.'
@@ -131,10 +134,10 @@ jobs:
       - name: Guardar instalador validado como descarga de GitHub Actions
         uses: actions/upload-artifact@v4
         with:
-          name: KAIZEN-PC-v1.5.40-Setup-x64-PRUEBA-SIN-FIRMA
+          name: KAIZEN-PC-v${{ env.PACKAGE_VERSION }}-Setup-x64-PRUEBA-SIN-FIRMA
           path: |
-            dist/installer/KAIZEN-PC-v1.5.40-Setup-x64.exe
-            dist/installer/KAIZEN-PC-v1.5.40-Setup-x64.exe.sha256
+            dist/installer/KAIZEN-PC-v${{ env.PACKAGE_VERSION }}-Setup-x64.exe
+            dist/installer/KAIZEN-PC-v${{ env.PACKAGE_VERSION }}-Setup-x64.exe.sha256
             dist/installer/LEER-ANTES-DE-INSTALAR.txt
           if-no-files-found: error
           compression-level: 0
