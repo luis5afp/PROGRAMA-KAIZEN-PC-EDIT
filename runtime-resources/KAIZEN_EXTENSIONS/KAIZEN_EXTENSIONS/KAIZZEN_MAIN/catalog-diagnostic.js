@@ -250,8 +250,13 @@
       if(!headers)return "";
       if(typeof headers.get==="function")return String(headers.get(name)||"").slice(0,160);
       if(Array.isArray(headers)){
-        const found=headers.find(x=>Array.isArray(x)&&String(x[0]).toLowerCase()===name);
-        return found?String(found[1]||"").slice(0,160):"";
+        // fetch Headers pueden darse como pares; chrome.webRequest devuelve
+        // objetos {name,value}. Solo se devuelve la cabecera solicitada.
+        const found=headers.find(x=>Array.isArray(x)?
+          String(x[0]).toLowerCase()===name:
+          x&&typeof x==="object"&&String(x.name||"").toLowerCase()===name);
+        const value=Array.isArray(found)?found[1]:found?.value;
+        return found?String(value||"").slice(0,160):"";
       }
       if(typeof headers==="object"){
         const key=Object.keys(headers).find(x=>x.toLowerCase()===name);
