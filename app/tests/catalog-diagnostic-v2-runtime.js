@@ -98,6 +98,7 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     storage:{local:store.local,onChanged:store.onChanged},
     webRequest:{
       onBeforeRequest:{addListener:fn=>{networkEvents.before=fn;}},
+      onHeadersReceived:{addListener:fn=>{networkEvents.headers=fn;}},
       onCompleted:{addListener:fn=>{networkEvents.completed=fn;}},
       onErrorOccurred:{addListener:fn=>{networkEvents.failed=fn;}}
     },
@@ -127,7 +128,12 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
     }
   };
   const target={
-    fetch:async(url)=>({status:200,clone:()=>({
+    fetch:async(url)=>({
+      headers:{get:key=>({
+        "content-type":"application/json; charset=utf-8; secret=PRIVATE_TOKEN_NEVER_LOG",
+        "content-encoding":"gzip","content-length":"2048",
+        "set-cookie":"PRIVATE_COOKIE_NEVER_LOG"
+      })[key]||""},status:200,clone:()=>({
       json:async()=>String(url).includes("/api/products/getmostusedtool")?
         {products:"ENCRYPTED_TEST_PAYLOAD",hasMore:false}:
         {data:{normal:[{d:"https://secret",e:"user@example.com",k:"SECRET",isLock:false}],premium:[]}}
@@ -142,6 +148,12 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
         this.callbacks={};
       }
       open(){}
+      setRequestHeader(name,value){}
+      getResponseHeader(key){return ({
+        "content-type":"application/problem+json; charset=utf-8",
+        "content-encoding":"br","content-length":"8192",
+        "set-cookie":"PRIVATE_COOKIE_NEVER_LOG"
+      })[key.toLowerCase()]||"";}
       send(){for(const fn of this.callbacks.loadend||[])fn();}
       addEventListener(name,fn){
         (this.callbacks[name]??=[]).push(fn);
@@ -216,10 +228,18 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   await target.fetch("https://www.kaizzen.org/s/vHwxhS39x9wSS393xxhS3xhS9wxwxx3hh9wx9wxhS39/api/products/activitystatus/add?token=DONT_LOG_TOKEN");
   const xhr=new target.XMLHttpRequest();
   xhr.open("GET","https://www.kaizzen.org/s/known/api/products/getmostusedtool?token=NOLOG_XHR");
+  xhr.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+  xhr.setRequestHeader("Authorization","Bearer PRIVATE_TOKEN_NEVER_LOG");
   xhr.send();
   assert.equal(typeof networkEvents.before,"function");
   networkEvents.before({url:"https://www.kaizzen.org/s/test/api/products/getmostusedtool?token=NETWORK_SECRET",
     requestId:"network-test",method:"GET",initiator:""});
+  assert.equal(typeof networkEvents.headers,"function");
+  networkEvents.headers({requestId:"network-test",responseHeaders:[
+    {name:"Content-Type",value:"application/xml; private=DO_NOT_LOG"},
+    {name:"Content-Encoding",value:"zstd"},
+    {name:"Content-Length",value:"34567"},
+    {name:"Set-Cookie",value:"PRIVATE_COOKIE_NEVER_LOG"}]});
   networkEvents.completed({requestId:"network-test",statusCode:200});
   await chrome.runtime.sendMessage({ref:"track_tool_domain",domain:"secret.test"});
   let callbackOk=false;
@@ -248,6 +268,19 @@ async function flush(){await new Promise(resolve=>setImmediate(resolve));}
   await flush();
   events=store.events();
   assert(events.some(x=>x.stage==="comunicacion-http-envio"&&x.ruta==="login"));
+  const observed=events.filter(x=>x.stage==="comunicacion-http-respuesta");
+  assert(observed.some(x=>x.transporte==="fetch"&&x.formato==="json"&&
+    x.compresion==="gzip"&&x.tamano==="1kb-10kb"&&x.traza>0));
+  assert(observed.some(x=>x.transporte==="xhr"&&x.formato==="json"&&
+    x.compresion==="br"&&x.tamano==="1kb-10kb"&&x.traza>0));
+  assert(events.some(x=>x.stage==="comunicacion-http-envio"&&
+    x.transporte==="xhr"&&x.formatoEnvio==="formulario"));
+  assert(events.some(x=>x.stage==="comunicacion-red-respuesta"&&
+    x.formato==="xml"&&x.compresion==="zstd"&&x.tamano==="10kb-100kb"));
+  const snapshotSupervisor=JSON.stringify(events);
+  assert(!snapshotSupervisor.includes("PRIVATE_TOKEN_NEVER_LOG"));
+  assert(!snapshotSupervisor.includes("PRIVATE_COOKIE_NEVER_LOG"));
+  assert(!snapshotSupervisor.includes("NETWORK_SECRET"));
 
   const prod=events.find(x=>x.stage==="productos-descifrados");
   assert.equal(prod.cuenta,3);
