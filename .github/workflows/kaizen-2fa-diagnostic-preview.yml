@@ -1,0 +1,68 @@
+name: Publicar preview Windows con diagnostico 2FA
+on:
+  push:
+    branches:
+      - feature/diagnostico-2fa-metodos-20261121
+    paths:
+      - .github/workflows/kaizen-2fa-diagnostic-preview.yml
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-validated-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que el instalador proviene de pruebas Windows exitosas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=44901928793
+          expected_sha=d13e2889090dbba891d76b784a104a8625eab033
+          conclusion="$(gh api "repos/$REPO/actions/runs/$run_id" --jq .conclusion)"
+          source_sha="$(gh api "repos/$REPO/actions/runs/$run_id" --jq .head_sha)"
+          test "$conclusion" = "success"
+          test "$source_sha" = "$expected_sha"
+          echo "PASS: instalador verificado en Windows en el commit $expected_sha"
+
+      - name: Descargar exactamente el instalador validado
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 44901928793 \
+            --repo "$REPO" \
+            --name KAIZEN-PC-v1.5.41-Setup-x64-PRUEBA-SIN-FIRMA \
+            --dir dist-preview
+          cd dist-preview
+          test -s KAIZEN-PC-v1.5.41-Setup-x64.exe
+          test -s KAIZEN-PC-v1.5.41-Setup-x64.exe.sha256
+          test -s LEER-ANTES-DE-INSTALAR.txt
+          sha256sum --check KAIZEN-PC-v1.5.41-Setup-x64.exe.sha256
+          bytes="$(stat -c%s KAIZEN-PC-v1.5.41-Setup-x64.exe)"
+          if (( bytes < 100000000 )); then
+            echo "Instalador incompleto: $bytes bytes" >&2
+            exit 1
+          fi
+          echo "PASS: instalador completo y SHA-256 coincidente ($bytes bytes)"
+
+      - name: Publicar preliminar manual sin firma ni auto-update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v1.5.41-2fa-preview.1 \
+            dist-preview/KAIZEN-PC-v1.5.41-Setup-x64.exe \
+            dist-preview/KAIZEN-PC-v1.5.41-Setup-x64.exe.sha256 \
+            dist-preview/LEER-ANTES-DE-INSTALAR.txt \
+            --repo "$REPO" \
+            --target d13e2889090dbba891d76b784a104a8625eab033 \
+            --title "KAIZEN PC 1.5.41 - Diagnostico de metodos 2FA (preview)" \
+            --notes "Instalador Windows x64 de prueba, sin firma ni actualizaciones automaticas. Incluye diagnostico 2FA de solo lectura que muestra los metodos anunciados por el servidor y si permite configurar la app autenticadora. No altera permisos, rol, login ni 2FA. Construido e instalado en GitHub Actions Windows #44901928793. Haz copia de seguridad de tus perfiles antes de instalar. Este build corresponde al codigo base 1.5.41 mas el diagnostico, no a la preview 1.5.42." \
+            --prerelease
