@@ -48,6 +48,9 @@ jobs:
           node app/tests/silent-auto-update-scenarios.js
           node app/tests/browser-executable-unification-scenarios.js
           node app/tests/r3-catalog-open-scenarios.js
+          node app/tests/catalog-diagnostic-scenarios.js
+          node app/tests/member-role-compatibility-scenarios.js
+          node app/tests/authorized-field-aliases-scenarios.js
           node app/tests/catalog-autofill-diagnostic-scenarios.js
           node app/tests/catalog-diagnostic-v2-runtime.js
           node app/tests/verify-original-extensions-scenarios.js
