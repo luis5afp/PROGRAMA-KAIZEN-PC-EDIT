@@ -116,6 +116,20 @@ for(const [folder,name,version] of [
   assert(form.includes("script-formulario-activo") && form.includes("formulario-observado"));
   assert(form.includes("comunicacion-formulario-recibida"),"Confirmar recepción en pestaña");
   assert(form.includes("correoConContenido") && form.includes("claveConContenido"));
+  assert(form.includes('event("formulario-envio-observado"'),
+    "Registrar intentos de envío HTML sin capturar las credenciales");
+  assert(form.includes('motivo:"aceptacion-no-verificada"'),
+    "El envío no debe interpretarse como acceso exitoso");
+  assert(form.includes('document.addEventListener("submit"'),
+    "Observar envío sin modificar el formulario");
+  assert(catalog.includes("Autocompletado (última acción): ") &&
+    catalog.includes("Intento de ingreso: ") &&
+    catalog.includes("Resultado del sitio: no verificable automáticamente"),
+    "El panel debe separar relleno, envío y aceptación externa");
+  assert(catalog.includes('tracked("formulario-envio-observado")') &&
+    catalog.includes('tracked("formulario-tiempo-agotado")'),
+    "Los eventos de formulario deben vincularse al flujo de apertura");
+
   assert(!catalog.includes("JSON.stringify(data)"),"No copiar la respuesta íntegra");
   assert(!/\.value\s*=(?!=)/.test(form),"No escribir valores en campos");
   assert(!/JSON\.stringify\s*\(\s*(product|state)\s*\)/.test(form),"No serializar sesiones");
