@@ -116,6 +116,10 @@ for(const [folder,name,version] of [
   assert(form.includes("script-formulario-activo") && form.includes("formulario-observado"));
   assert(form.includes("comunicacion-formulario-recibida"),"Confirmar recepción en pestaña");
   assert(form.includes("correoConContenido") && form.includes("claveConContenido"));
+  assert(form.includes('event("formulario-intento-envio"'),
+    "Capturar clic en botones HTML submit sin leer credenciales");
+  assert(catalog.includes('tracked("formulario-intento-envio")'),
+    "El panel debe distinguir un intento de un submit confirmado");
   assert(form.includes('event("formulario-envio-observado"'),
     "Registrar intentos de envío HTML sin capturar las credenciales");
   assert(form.includes('motivo:"aceptacion-no-verificada"'),
