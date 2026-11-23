@@ -628,6 +628,7 @@
     const filled=tracked("formulario-con-campos-rellenos");
     const timedOut=tracked("formulario-tiempo-agotado");
     const submitted=tracked("formulario-envio-observado");
+    const attempted=tracked("formulario-intento-envio");
     const formError=tracked("formulario-diagnostico-error");
     const httpCalls=last?.flujo?e.filter(x=>
       x.stage==="comunicacion-http-envio"&&x.flujo===last.flujo):[];
@@ -754,6 +755,7 @@
       "Intento de ingreso: "+(submitted?
         "envío de formulario observado · correo con contenido "+bool(submitted.correoConContenido)+
         " · clave con contenido "+bool(submitted.claveConContenido):
+        attempted?"clic en botón de envío observado; sin submit HTML confirmado":
         "sin envío HTML observado; algunos sitios envían con JavaScript"),
       "Resultado del sitio: no verificable automáticamente: detectar campos o envío no confirma que el sitio haya aceptado el acceso.",
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
