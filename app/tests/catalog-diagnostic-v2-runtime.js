@@ -14,6 +14,22 @@ for(const folder of folders){
 }
 new Function(catalog);
 new Function(form);
+// La vigencia indicada por el diagnóstico debe coincidir con contentScript.js.
+// La extensión acepta hasta ~60 s en uso normal y ~120 s en modo fb.
+const freshSource=form.match(/  function freshProduct\(product\)\{[\s\S]*?\n  \}/)?.[0];
+assert(freshSource,"No se pudo localizar freshProduct en el diagnóstico");
+const fixedNow=1700000000000;
+const freshProduct=vm.runInNewContext(freshSource+"\nfreshProduct",{Date:{now:()=>fixedNow}});
+for(const [seconds,fb,expected] of [
+  [30,false,true],[60,false,true],[61,false,false],[90,false,false],
+  [90,true,true],[120,true,true],[121,true,false]
+]){
+  assert.equal(freshProduct({t:fixedNow-seconds*1000,fb}).ok,expected,
+    "Diagnóstico de vigencia incorrecto a "+seconds+" s, fb="+fb);
+}
+assert.equal(freshProduct(null).ok,false);
+assert.equal(freshProduct({t:"fecha"}).ok,false);
+assert.equal(freshProduct({t:fixedNow+6000}).ok,false);
 assert(catalog.includes('event(route+"-envio"') && catalog.includes('event(route+"-error"'));
 for(const stage of ["apertura-solicitada","apertura-confirmada","pestana-identificada","pestana-vinculada",
   "catalogo-respuesta","sesion-temporal-preparada","clic-tarjeta",
