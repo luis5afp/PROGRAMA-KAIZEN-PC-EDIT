@@ -625,6 +625,10 @@
     const active=tracked("script-formulario-activo");
     const noSession=tracked("formulario-sin-sesion");
     const form=tracked("formulario-observado");
+    const filled=tracked("formulario-con-campos-rellenos");
+    const timedOut=tracked("formulario-tiempo-agotado");
+    const submitted=tracked("formulario-envio-observado");
+    const formError=tracked("formulario-diagnostico-error");
     const httpCalls=last?.flujo?e.filter(x=>
       x.stage==="comunicacion-http-envio"&&x.flujo===last.flujo):[];
     const messages=last?.flujo?e.filter(x=>
@@ -735,6 +739,23 @@
         noSession?"observador activo; "+noSession.motivo:"sin observación asociada"),
       "Campos del formulario: "+(form?"correo "+form.camposCorreo+
         ", contraseña "+form.camposClave:"sin información observada"),
+      "Autocompletado (última acción): "+(!last?"sin prueba de apertura":
+        selected?.locked?"no iniciado: el servidor entregó la tarjeta restringida":
+        noTab?"observador de pestaña sin respuesta":
+        noSession?"detenido: no existe sesión product vigente ("+noSession.motivo+")":
+        formError?"error del observador del formulario":
+        !active?"pendiente: aún no se confirmó una sesión con formulario":
+        !active.dominioCoincide?"la página abierta no coincide con el dominio de la tarjeta":
+        !active.credencialesCompletas?"la sesión carece de datos completos para rellenar correo y clave":
+        filled?"ambos campos tienen contenido; no se puede atribuir el origen al autocompletado":
+        timedOut?"no se observaron ambos campos rellenos antes del límite de tiempo":
+        form?"formulario observado; falta confirmar contenido en ambos campos":
+        "observador activo; esperando detección de formulario"),
+      "Intento de ingreso: "+(submitted?
+        "envío de formulario observado · correo con contenido "+bool(submitted.correoConContenido)+
+        " · clave con contenido "+bool(submitted.claveConContenido):
+        "sin envío HTML observado; algunos sitios envían con JavaScript"),
+      "Resultado del sitio: no verificable automáticamente: detectar campos o envío no confirma que el sitio haya aceptado el acceso.",
       "Alcance: HTTP de la interfaz, webRequest de Chromium cuando esté disponible, mensajes UI a background, product y pestaña. webRequest puede incluir solicitudes UI y no identifica con certeza el proceso de origen; no incluye IPC interno de Electron.",
       "Nota v8: solo contadores y booleanos. Los datos restringidos nunca se usan para iniciar sesión; las diferencias e/k son de presencia, no valores. No contiene correos, claves, IDs, URLs, cuerpos, cookies ni tokens."
     ].join("\n");
