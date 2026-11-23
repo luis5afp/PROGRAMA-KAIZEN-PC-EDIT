@@ -50,6 +50,8 @@ jobs:
           node app/tests/r3-catalog-open-scenarios.js
           node app/tests/catalog-autofill-diagnostic-scenarios.js
           node app/tests/catalog-diagnostic-v2-runtime.js
+          node app/tests/extension-session-identity-diagnostic-scenarios.js
+          node --check app/scripts/compare-extension-session-reports.js
           node app/tests/verify-original-extensions-scenarios.js
           node app/tests/original-extension-importer-scenarios.js
           node app/scripts/verify-uploaded-original-extensions.js runtime-resources/KAIZEN_EXTENSIONS
