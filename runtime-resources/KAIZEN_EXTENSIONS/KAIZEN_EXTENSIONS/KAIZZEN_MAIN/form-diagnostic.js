@@ -38,7 +38,10 @@
     if(!product||typeof product!=="object")return {ok:false,motivo:"ausente"};
     if(typeof product.t!=="number"||!Number.isFinite(product.t))
       return {ok:false,motivo:"fecha-invalida"};
-    if(Date.now()-product.t>120000||product.t>Date.now()+5000)
+    // Igual que contentScript.js: 60 s normal, 120 s para el modo fb.
+    // Solo diagnóstico: no cambia ni prolonga sesiones reales.
+    if(Math.floor((Date.now()-product.t)/1000)>(product.fb?120:60)||
+       product.t>Date.now()+5000)
       return {ok:false,motivo:"caducada"};
     return {ok:true};
   }
