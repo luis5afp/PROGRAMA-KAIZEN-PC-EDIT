@@ -58,7 +58,7 @@ async function run({profile="KAIZZEN-MAIN",token=jwt("abc"),user={id:"abc",role:
   await check.onclick();
   assert.equal(input.value,"","Private comparison phrase must be cleared");
   const report=JSON.parse(output.textContent);
-  assert(!output.textContent.includes(token));
+  if (token) assert(!output.textContent.includes(token));
   assert(!output.textContent.includes(phrase));
   assert(!output.textContent.includes('"id"'));
   return {report,calls};
