@@ -86,8 +86,9 @@ pulsada**:
   falta o caducidad de `product`, pestaña no vinculada, observador activo,
   dominio distinto, credenciales de formulario incompletas, ausencia de campos,
   tiempo agotado y campos que muestran contenido.
-- **Intento de ingreso**: registra si el navegador emitió un evento HTML
-  `submit`, únicamente con presencia de contenido y conteos de campos.
+- **Intento de ingreso**: diferencia un clic en un botón HTML de envío
+  del evento `submit` confirmado, únicamente con presencia de contenido y
+  conteos de campos. No registra los valores.
 - **Resultado del sitio**: siempre aclara que no se confirma el éxito del
   inicio de sesión. Un formulario con contenido o enviado **no prueba**
   autenticación aceptada ni supera un segundo factor.
