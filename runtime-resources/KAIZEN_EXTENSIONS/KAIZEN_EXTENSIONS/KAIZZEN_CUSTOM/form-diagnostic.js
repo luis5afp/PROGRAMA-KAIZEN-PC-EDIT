@@ -92,6 +92,15 @@
         motivo:"aceptacion-no-verificada"
       });
     },true);
+    // Algunos formularios usan JavaScript y no emiten submit; observar solo
+    // pulsaciones de controles HTML submit como señal de intento, sin valores.
+    document.addEventListener("click",ev=>{
+      const button=ev.target?.closest?.("button,input[type=submit]");
+      if(!button||button.type!=="submit"||!button.form)return;
+      event("formulario-intento-envio",{
+        ...ctx,dominioCoincide:domainMatch,motivo:"aceptacion-no-verificada"
+      });
+    },true);
     // Solo contar campos, nunca registrar su valor.
     let last="",attempts=0,timer=null;
     const scan=()=>{
