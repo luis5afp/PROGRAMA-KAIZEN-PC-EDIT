@@ -76,3 +76,39 @@ El test de ejecución incluye dos lotes simulados de metadatos: uno con
 campos autorizados conservados y otro con pérdida deliberada de `e`
 en una tarjeta autorizada. También comprueba que ningún dato sensible
 de la simulación aparezca en el registro.
+
+## Diagnóstico de autocompletado en uso real (rama de pruebas)
+
+El panel de MAIN, GOOGLE o CUSTOM añade estas líneas para **la última tarjeta
+pulsada**:
+
+- **Autocompletado (última acción)**: distingue tarjeta restringida,
+  falta o caducidad de `product`, pestaña no vinculada, observador activo,
+  dominio distinto, credenciales de formulario incompletas, ausencia de campos,
+  tiempo agotado y campos que muestran contenido.
+- **Intento de ingreso**: diferencia un clic en un botón HTML de envío
+  del evento `submit` confirmado, únicamente con presencia de contenido y
+  conteos de campos. No registra los valores.
+- **Resultado del sitio**: siempre aclara que no se confirma el éxito del
+  inicio de sesión. Un formulario con contenido o enviado **no prueba**
+  autenticación aceptada ni supera un segundo factor.
+
+### Ensayo en Windows contra la sesión de prueba ya existente
+
+1. Utilizar una compilación de prueba que incluya esta rama; el cambio en
+   GitHub **no instala automáticamente** la versión en el PC.
+2. Abrir KAIZEN PC y la extensión elegida. En Diagnóstico, borrar eventos.
+3. Iniciar sesión normalmente con la cuenta de prueba y recargar el catálogo.
+4. Abrir una tarjeta **ya autorizada**. Dejar que se abra la página y observar
+   su formulario; si procede, efectuar el envío manualmente. No se hacen
+   solicitudes adicionales ni intentos automáticos al servidor.
+5. En Diagnóstico, usar **Copiar informe**. Repetir con GOOGLE y CUSTOM
+   si se requiere comparar perfiles. Nunca publicar cookies, tokens o
+   contraseñas: solo el JSON saneado.
+
+Si la tarjeta está restringida o no proporciona una sesión de producto,
+el panel indica que el autocompletado no pudo comenzar. Esa observación
+no justifica modificar `isLock` ni sustituir credenciales de otras cuentas.
+El envío puede no detectarse en formularios SPA que no emiten `submit`;
+en esos casos la ausencia de evento no prueba que no hubo intento.
+

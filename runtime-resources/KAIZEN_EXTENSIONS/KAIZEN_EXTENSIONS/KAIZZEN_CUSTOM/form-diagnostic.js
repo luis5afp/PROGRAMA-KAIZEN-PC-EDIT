@@ -72,6 +72,35 @@
       claveDisponible:plain,claveCifradaDisponible:encrypted,
       credencialesCompletas:email&&(plain||encrypted),sesionRespaldo:respaldo
     });
+    // Observar el intento de envío, nunca enviar ni leer valores de credenciales.
+    // Un submit no confirma que el sitio haya aceptado el inicio de sesión.
+    if(typeof document.addEventListener==="function")document.addEventListener("submit",ev=>{
+      const target=ev.target;
+      if(!target||typeof target.querySelectorAll!=="function")return;
+      const inputs=Array.from(target.querySelectorAll("input"));
+      const passes=inputs.filter(n=>(n.type||"").toLowerCase()==="password");
+      const mails=inputs.filter(n=>{
+        const type=(n.type||"").toLowerCase();
+        const desc=[n.name,n.id,n.autocomplete,n.placeholder].join(" ");
+        return type==="email"||(type==="text"&&/email|correo|login|usuario|user|account|identifier/i.test(desc));
+      });
+      event("formulario-envio-observado",{
+        ...ctx,dominioCoincide:domainMatch,
+        camposCorreo:mails.length,camposClave:passes.length,
+        correoConContenido:mails.some(n=>!!n.value),
+        claveConContenido:passes.some(n=>!!n.value),
+        motivo:"aceptacion-no-verificada"
+      });
+    },true);
+    // Algunos formularios usan JavaScript y no emiten submit; observar solo
+    // pulsaciones de controles HTML submit como señal de intento, sin valores.
+    if(typeof document.addEventListener==="function")document.addEventListener("click",ev=>{
+      const button=ev.target?.closest?.("button,input[type=submit]");
+      if(!button||button.type!=="submit"||!button.form)return;
+      event("formulario-intento-envio",{
+        ...ctx,dominioCoincide:domainMatch,motivo:"aceptacion-no-verificada"
+      });
+    },true);
     // Solo contar campos, nunca registrar su valor.
     let last="",attempts=0,timer=null;
     const scan=()=>{
