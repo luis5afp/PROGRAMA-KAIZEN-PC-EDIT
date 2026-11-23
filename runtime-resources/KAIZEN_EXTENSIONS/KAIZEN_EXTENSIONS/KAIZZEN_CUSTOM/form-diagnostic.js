@@ -74,7 +74,7 @@
     });
     // Observar el intento de envío, nunca enviar ni leer valores de credenciales.
     // Un submit no confirma que el sitio haya aceptado el inicio de sesión.
-    document.addEventListener("submit",ev=>{
+    if(typeof document.addEventListener==="function")document.addEventListener("submit",ev=>{
       const target=ev.target;
       if(!target||typeof target.querySelectorAll!=="function")return;
       const inputs=Array.from(target.querySelectorAll("input"));
@@ -94,7 +94,7 @@
     },true);
     // Algunos formularios usan JavaScript y no emiten submit; observar solo
     // pulsaciones de controles HTML submit como señal de intento, sin valores.
-    document.addEventListener("click",ev=>{
+    if(typeof document.addEventListener==="function")document.addEventListener("click",ev=>{
       const button=ev.target?.closest?.("button,input[type=submit]");
       if(!button||button.type!=="submit"||!button.form)return;
       event("formulario-intento-envio",{
