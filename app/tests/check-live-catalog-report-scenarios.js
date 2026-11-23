@@ -20,4 +20,4 @@ assert.equal(analyze(report([{stage:"productos-respuesta",http:200,cifrado:true}
 assert.throws(()=>analyze({version:7,events:[]}));
 const malicious=analyze(report([...events,{stage:"irrelevante",secret:"MUST_NOT_LEAK",token:"MUST_NOT_LEAK"}]));
 assert(!JSON.stringify(malicious).includes("MUST_NOT_LEAK"));
-console.log("KAIZEN: analizador de informe real y privacidad PASS (9 casos)");
+console.log("KAIZEN: analizador de informe real y privacidad PASS (10 casos)");
