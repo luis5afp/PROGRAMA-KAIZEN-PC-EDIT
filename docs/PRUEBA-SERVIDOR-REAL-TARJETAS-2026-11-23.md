@@ -9,6 +9,10 @@ Este procedimiento utiliza **las tarjetas y credenciales de prueba que ya admini
 - Al menos una tarjeta de prueba autorizada para ese usuario; si no existe, el diagnóstico señalará bloqueo pero no lo cambiará.
 - Windows/Chromium en el equipo en que se ejecuta KAIZEN. La inspección del repositorio o los tests unitarios no sustituyen la prueba de esa sesión.
 
+## Comprobación previa de la aplicación Electron
+
+En **KAIZEN PC → Diagnóstico integral**, ejecutar las comprobaciones remotas **desde la sesión legítima de prueba**. El panel ya prueba `/api/verify-token`, `/api/browser/get`, `/api/browser/group/get`, `/api/browser/variant-profiles` y `/api/products/getmostusedtool` y devuelve solo estados HTTP y conteos. Registrar si `/api/verify-token` reconoce la sesión; una respuesta HTTP 200 en productos **no autoriza individualmente** cada tarjeta. Si aparece `2fa-required` o un 401/403, completar el flujo oficial en lugar de alterar el cliente.
+
 ## Ejecutar la prueba sin exponer credenciales
 
 Para cada variante que corresponda (MAIN, GOOGLE y CUSTOM):
